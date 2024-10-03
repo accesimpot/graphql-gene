@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import eslint from '@eslint/js'
 import { includeIgnoreFile } from '@eslint/compat'
 import tseslint from 'typescript-eslint'
+import unusedImports from 'eslint-plugin-unused-imports'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -15,16 +16,25 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
 
   {
+    plugins: {
+      'unused-imports': unusedImports,
+    },
     rules: {
       '@typescript-eslint/no-unused-expressions': ['error', { allowTernary: true }],
-      '@typescript-eslint/no-unused-vars': [
-        'error',
+      '@typescript-eslint/no-unused-vars': 'off',
+      'unused-imports/no-unused-imports': 'warn',
+      'unused-imports/no-unused-vars': [
+        'warn',
         {
-          argsIgnorePattern: '^_',
-          caughtErrorsIgnorePattern: '^_',
+          vars: 'all',
           varsIgnorePattern: '^_',
+          args: 'after-used',
+          argsIgnorePattern: '^_',
         },
       ],
+      // 'sort-imports': 'warn', // Autofix doesn't work
+
+      'no-empty': ['error', { allowEmptyCatch: true }],
     },
   },
   {
