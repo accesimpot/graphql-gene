@@ -1,27 +1,54 @@
 {
   "private": true,
-  "name": "@graphql-gene/core",
+  "name": "graphql-gene",
   "main": "./dist/index.js",
   "type": "module",
   "scripts": {
-    "dev": "NODE_ENV=development concurrently --kill-others -p=none \"pnpm build --watch --emptyOutDir=false\" \"nodemon --inspect --watch ./dist -e js dist/test/fixtures/custom/server/index.js\"",
-    "console": "node dist/test/fixtures/custom/console.js",
+    "dev": "NODE_ENV=development pnpm build --watch --emptyOutDir=false",
     "build": "NODE_ENV=${NODE_ENV:-development} vite build",
-    "start": "node dist/test/fixtures/custom/server/index.js",
     "types:check": "tsc --project tsconfig.lint.json"
   },
   "imports": {
     "#src/*": "./src/*"
   },
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./utils": {
+      "import": {
+        "types": "./dist/utils.d.ts",
+        "default": "./dist/utils.js"
+      },
+      "require": {
+        "types": "./dist/utils.d.ts",
+        "default": "./dist/utils.cjs"
+      }
+    },
+    "./context": {
+      "types": "./dist/types/extendable/context.d.ts",
+      "default": "./dist/types/extendable/context.js"
+    },
+    "./schema": {
+      "types": "./dist/types/extendable/schema.d.ts",
+      "default": "./dist/types/extendable/schema.js"
+    }
+  },
   "dependencies": {
-    "dev-utils": "workspace:*",
-    "graphql": "^16.9.0",
-    "graphql-lookahead": "^1.1.2",
-    "graphql-scalars": "^1.23.0"
+    "graphql-lookahead": "^1.1.2"
   },
   "devDependencies": {
     "@types/node": "^20.14.15",
     "concurrently": "^8.2.2",
+    "dev-utils": "workspace:*",
+    "graphql": "^16.9.0",
     "nodemon": "^3.1.4",
     "typescript": "^5.6.2",
     "vite": "^5.4.1"

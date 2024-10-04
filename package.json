@@ -1,5 +1,5 @@
 {
-  "name": "graphql-gene",
+  "name": "graphql-gene-monorepo",
   "version": "0.1.0",
   "description": "Generates automatically an executable schema out of your ORM models",
   "repository": "accesimpot/graphql-gene",
@@ -35,10 +35,11 @@
     "test": "vitest --run",
     "test:watch": "vitest",
     "dev-utils": "bash -c 'nx ${0} dev-utils $@'",
-    "main": "bash -c 'nx ${0} main $@'",
-    "main:": "pnpm -F=main",
-    "playground": "bash -c 'nx ${0} playground $@'",
-    "playground:": "pnpm -F=playground"
+    "dev-utils:": "pnpm -F=dev-utils",
+    "core": "bash -c 'nx ${0} graphql-gene $@'",
+    "core:": "pnpm -F=graphql-gene",
+    "sequelize": "bash -c 'nx ${0} @graphql-gene/plugin-sequelize $@'",
+    "sequelize:": "pnpm -F=@graphql-gene/plugin-sequelize"
   },
   "exports": {
     ".": {
