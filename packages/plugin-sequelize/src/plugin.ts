@@ -1,4 +1,4 @@
-import type { GenePlugin, PluginSettings } from 'graphql-gene'
+import type { GenePlugin, PluginSettings, PrototypeOrNot } from 'graphql-gene'
 import type { InferAttributes } from 'sequelize'
 import { Model } from 'sequelize-typescript'
 import { defaultResolver } from './defaultResolver'
@@ -8,9 +8,12 @@ import type { GeneModel } from './constants'
 declare module 'graphql-gene/plugin-settings' {
   export interface GenePluginSettings<M> {
     sequelize: PluginSettings<{
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      isMatching: M extends { sequelize: any } ? true : false
-      fieldName: M extends Model ? (keyof InferAttributes<M> extends string ? string : 'id') : 'id'
+      isMatching: PrototypeOrNot<M> extends Model ? true : false
+      fieldName: PrototypeOrNot<M> extends Model
+        ? keyof InferAttributes<PrototypeOrNot<M>> extends string
+          ? keyof InferAttributes<PrototypeOrNot<M>>
+          : 'id'
+        : 'id'
     }>
   }
 }

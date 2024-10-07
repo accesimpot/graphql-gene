@@ -3,12 +3,12 @@ import {
   AND_OR_OPERATORS,
   isListType,
   QUERY_ORDER_VALUES,
-  type GeneContext,
   type GeneDefaultResolverArgs,
   type GeneTypeConfig,
   type GraphqlToTypescript,
   type ValueOf,
 } from 'graphql-gene'
+import type { GeneContext } from 'graphql-gene/context'
 import type { FindOptions, ModelStatic, OrderItem } from 'sequelize'
 import { Model } from 'sequelize-typescript'
 import { getQueryInclude } from './utils'
