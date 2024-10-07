@@ -5,12 +5,13 @@ import {
   type GenePlugin,
 } from 'graphql-gene'
 import { DataTypes, HasMany } from 'sequelize'
-import { Model } from 'sequelize-typescript'
 import {
   GeneModel,
   SEQUELIZE_TYPE_TO_GRAPHQL,
   SEQUELIZE_TYPE_TO_GRAPHQL_WITH_DATE_AS_STRING,
 } from './constants'
+
+type GetTypeDefOptions = Parameters<GenePlugin<typeof GeneModel>['getTypeDef']>[0]
 
 export const getTypeDef: GenePlugin<typeof GeneModel>['getTypeDef'] = options => {
   const typeDefObject = getDefaultTypeDefLinesObject()
@@ -54,13 +55,21 @@ export const getTypeDef: GenePlugin<typeof GeneModel>['getTypeDef'] = options =>
     }
   })
 
-  generateAssociationFields({ model: options.model, lines: typeDefObject.lines })
+  generateAssociationFields({
+    model: options.model,
+    isFieldIncluded: options.isFieldIncluded,
+    lines: typeDefObject.lines,
+  })
 
   return typeDefObject
 }
 
-function generateAssociationFields(options: { model: typeof Model; lines: FieldLines }) {
+function generateAssociationFields(
+  options: Pick<GetTypeDefOptions, 'model' | 'isFieldIncluded'> & { lines: FieldLines }
+) {
   Object.entries(options.model.associations).forEach(([attributeKey, association]) => {
+    if (!options.isFieldIncluded(attributeKey)) return
+
     const associationModelName = association.target.name
     let graphqlType = associationModelName
 

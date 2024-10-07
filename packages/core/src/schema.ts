@@ -279,7 +279,7 @@ function generateTypeDefs<M, SchemaTypes extends AnyObject>(options: {
   const typeDef = options.plugin.getTypeDef({
     model: options.model,
     typeName: options.modelKey,
-    isFieldIncluded: (fieldKey: string) => !geneConfig || isFieldIncluded(geneConfig, fieldKey),
+    isFieldIncluded: (fieldKey: string) => isFieldIncluded(geneConfig, fieldKey),
     schemaOptions: options,
   })
   if (!typeDef) return

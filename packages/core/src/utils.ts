@@ -232,24 +232,29 @@ export function getGeneConfigFromOptions<M>(options: {
   )
 }
 
-export function isFieldIncluded<M>(geneConfig: GeneConfig<M>, fieldKey: string): boolean {
-  const check = (filters: NonNullable<(typeof geneConfig)['include']>) => {
+export function isFieldIncluded<M>(
+  geneConfig: GeneConfig<M> | undefined,
+  fieldKey: string
+): boolean {
+  const config = geneConfig || {}
+
+  const check = (filters: NonNullable<(typeof config)['include']>) => {
     for (const keyOrRegex of filters) {
       if (typeof keyOrRegex === 'string' && keyOrRegex === fieldKey) return true
       if (keyOrRegex instanceof RegExp && keyOrRegex.test(fieldKey)) return true
     }
   }
-  if (geneConfig.include && !check(geneConfig.include)) return false
+  if (config.include && !check(config.include)) return false
 
   let extraExclude = new Set(['createdAt' as const, 'updatedAt' as const])
 
-  if (Array.isArray(geneConfig.includeTimestamps)) {
-    geneConfig.includeTimestamps.forEach(timestamp => extraExclude.delete(timestamp))
-  } else if (geneConfig.includeTimestamps === true) {
+  if (Array.isArray(config.includeTimestamps)) {
+    config.includeTimestamps.forEach(timestamp => extraExclude.delete(timestamp))
+  } else if (config.includeTimestamps === true) {
     extraExclude = new Set([])
   }
 
-  const exclude = [...(geneConfig.exclude || []), ...extraExclude]
+  const exclude = [...(config.exclude || []), ...extraExclude]
   if (check(exclude)) return false
 
   return true
