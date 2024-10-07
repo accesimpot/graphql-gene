@@ -225,7 +225,7 @@ export function getGeneConfigFromOptions<M>(options: {
   return (
     options.geneConfig ||
     (options.model &&
-      typeof options.model === 'object' &&
+      (typeof options.model === 'object' || typeof options.model === 'function') &&
       'geneConfig' in options.model &&
       options.model.geneConfig) ||
     undefined
