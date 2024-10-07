@@ -1,8 +1,8 @@
 import type { GraphQLSchema, DocumentNode, GraphQLResolveInfo } from 'graphql'
+import type { GeneContext } from 'graphql-gene/context'
 import type { GeneDefaultResolverArgs, GeneTypeConfig } from '../defineConfig'
 import type { AnyObject } from './typeUtils'
 import type { GraphQLVarType } from './graphql'
-import type { GeneContext } from './extendable'
 import type { GraphqlToTypescript } from './graphqlToTypescript'
 
 export type PluginSettings<

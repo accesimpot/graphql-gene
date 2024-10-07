@@ -16,13 +16,8 @@ import {
   type GraphQLNamedType,
   type GraphQLOutputType,
 } from 'graphql'
-import type {
-  FieldLines,
-  GeneContext,
-  GraphqlReturnTypes,
-  TypeDefLines,
-  ValidGraphqlType,
-} from './types'
+import type { GeneContext } from 'graphql-gene/context'
+import type { FieldLines, GraphqlReturnTypes, TypeDefLines, ValidGraphqlType } from './types'
 import type { GeneConfig, GeneTypeConfig } from './defineConfig'
 
 type GraphQLOutputObjectType = GraphQLObjectType | GraphQLInterfaceType

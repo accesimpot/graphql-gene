@@ -1,6 +1,6 @@
 import type { GraphQLFieldResolver } from 'graphql'
+import type { GeneContext } from 'graphql-gene/context'
 import type {
-  GeneContext,
   GraphQLFieldName,
   GraphqlReturnTypes,
   GraphqlToTypescript,

@@ -12,6 +12,7 @@
     "vitest*",
     "__mocks__",
     "./src/types/context.ts",
+    "./src/types/pluginSettings.ts",
     "./src/types/schema.ts"
   ]
 }

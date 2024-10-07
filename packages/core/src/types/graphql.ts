@@ -1,5 +1,5 @@
 import type { BASIC_GRAPHQL_TYPES } from '@/constants'
-import type { GeneSchema } from './extendable'
+import type { GeneSchema } from 'graphql-gene/schema'
 
 export type GraphQLVarType = 'type' | 'enum' | 'interface' | 'input' | 'scalar' | 'union'
 

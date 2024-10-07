@@ -7,6 +7,7 @@ import {
   parseType,
 } from 'graphql'
 import type { DocumentNode, GraphQLFieldResolver } from 'graphql'
+import type { GeneContext } from 'graphql-gene/context'
 import { type GeneConfig, type GeneConfigTypes, type GeneDirectiveConfig } from './defineConfig'
 import type { AnyObject, Mutable } from './types/typeUtils'
 import {
@@ -31,7 +32,6 @@ import type {
   BasicGraphqlType,
   DirectiveDefs,
   FieldLines,
-  GeneContext,
   GenePlugin,
   GenerateSchemaOptions,
   GraphQLFieldName,

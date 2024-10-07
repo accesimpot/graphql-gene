@@ -1,4 +1,3 @@
-export * from './extendable'
 export * from './graphql'
 export * from './graphqlToTypescript'
 export * from './operators'
