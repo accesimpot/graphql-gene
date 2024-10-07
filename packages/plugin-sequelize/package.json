@@ -12,8 +12,16 @@
     "#src/*": "./src/*"
   },
   "exports": {
-    ".": "./dist/index.js",
-    "./sequelize": "./dist/sequelize.js"
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.cjs"
+      }
+    }
   },
   "dependencies": {
     "graphql-lookahead": "^1.1.2"
