@@ -36,7 +36,7 @@ export type GenePlugin<M = object> = {
   /**
    * Function receiving the model and returning true if the plugin should run.
    */
-  include: (model: M) => boolean
+  isMatching: (model: M) => boolean
 
   /**
    * Return an object with the field name as key and the GraphQL type definition as value

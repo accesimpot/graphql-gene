@@ -36,6 +36,10 @@
       "types": "./dist/types/extendable/context.d.ts",
       "default": "./dist/types/extendable/context.js"
     },
+    "./plugin-settings": {
+      "types": "./dist/types/extendable/pluginSettings.d.ts",
+      "default": "./dist/types/extendable/pluginSettings.js"
+    },
     "./schema": {
       "types": "./dist/types/extendable/schema.d.ts",
       "default": "./dist/types/extendable/schema.js"

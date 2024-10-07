@@ -9,6 +9,9 @@ export enum BASIC_GRAPHQL_TYPES {
   JSON = 'JSON',
 }
 
+export const BASIC_GRAPHQL_TYPE_VALUES: `${BASIC_GRAPHQL_TYPES}`[] =
+  Object.values(BASIC_GRAPHQL_TYPES)
+
 export const PAGE_ARG_DEFAULT = 1
 export const PER_PAGE_ARG_DEFAULT = 10
 

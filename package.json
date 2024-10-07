@@ -41,29 +41,6 @@
     "sequelize": "bash -c 'nx ${0} @graphql-gene/plugin-sequelize $@'",
     "sequelize:": "pnpm -F=@graphql-gene/plugin-sequelize"
   },
-  "exports": {
-    ".": {
-      "import": {
-        "types": "./packages/graphql-gene/dist/index.d.ts",
-        "default": "./packages/graphql-gene/dist/index.js"
-      },
-      "require": {
-        "types": "./packages/graphql-gene/dist/index.d.ts",
-        "default": "./packages/graphql-gene/dist/index.cjs"
-      }
-    },
-    "./utils": {
-      "import": {
-        "types": "./packages/graphql-gene/dist/utils/generic.d.ts",
-        "default": "./packages/graphql-gene/dist/utils/generic.js"
-      },
-      "require": {
-        "types": "./packages/graphql-gene/dist/utils/generic.d.ts",
-        "default": "./packages/graphql-gene/dist/utils/generic.cjs"
-      }
-    }
-  },
-  "types": "./packages/graphql-gene/dist/index.d.ts",
   "files": [
     "packages/graphql-gene/dist"
   ],

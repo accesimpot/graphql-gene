@@ -1,3 +1,6 @@
 export interface GeneSchema {
-  _types: object
+  _types: {
+    Query: object
+    Mutation: object
+  }
 }

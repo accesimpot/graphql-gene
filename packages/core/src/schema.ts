@@ -7,21 +7,12 @@ import {
   parseType,
 } from 'graphql'
 import type { DocumentNode, GraphQLFieldResolver } from 'graphql'
-// import { DataTypes, HasMany } from '@graphqlsequelize'
-import type { GeneGraphqlContext } from '@/gene'
-import {
-  SEQUELIZE_TYPE_TO_GRAPHQL,
-  PAGE_ARG_DEFAULT,
-  PER_PAGE_ARG_DEFAULT,
-  QUERY_ORDER_VALUES,
-  BASIC_GRAPHQL_TYPES,
-} from '../../plugin-sequelize/src/constants'
+import { SEQUELIZE_TYPE_TO_GRAPHQL } from '../../plugin-sequelize/src/constants'
 import {
   type GeneConfig,
   type GeneConfigTypes,
   type GeneDirectiveConfig,
   type GeneModel,
-  type GraphQLVarType,
 } from './defineConfig'
 import type { AnyObject, Mutable } from './types/typeUtils'
 import {
@@ -37,17 +28,27 @@ import {
   isObjectFieldConfig,
   getDefaultTypeDefLinesObject,
   getDefaultFieldLinesObject,
+  getGeneConfigFromOptions,
 } from './utils'
 import { addResolversToSchema } from './resolvers'
 import SCHEMA_TEMPLATE_HTML from './schema.html?raw'
 import type {
   DirectiveDefs,
+  FieldLines,
+  GeneContext,
   GenePlugin,
   GenerateSchemaOptions,
   GraphQLFieldName,
   GraphQLTypeName,
+  GraphQLVarType,
   TypeDefLines,
 } from './types'
+import {
+  BASIC_GRAPHQL_TYPE_VALUES,
+  PAGE_ARG_DEFAULT,
+  PER_PAGE_ARG_DEFAULT,
+  QUERY_ORDER_VALUES,
+} from './constants'
 
 const VALID_RETURN_TYPES_FOR_WHERE = [
   'String',
@@ -116,7 +117,7 @@ export function generateSchema<
         GraphQLTypeName,
         Record<
           GraphQLFieldName,
-          GraphQLFieldResolver<Record<string, unknown> | undefined, GeneGraphqlContext>
+          GraphQLFieldResolver<Record<string, unknown> | undefined, GeneContext>
         >
       > = {}
 
@@ -151,8 +152,8 @@ function generateGeneTypeDefs<SchemaTypes extends AnyObject, DataTypes extends A
     let hasUsedPlugin = false
 
     for (const plugin of options.plugins || []) {
-      const isIncluded = plugin.include(fieldConfigs)
-      if (!isIncluded) continue
+      const isMatching = plugin.isMatching(fieldConfigs)
+      if (!isMatching) continue
 
       forEachModel({
         directiveDefs,
@@ -235,16 +236,13 @@ function forEachModel<M, SchemaTypes extends AnyObject>(options: {
   hasDateScalars?: boolean
   dataTypeMap?: Partial<typeof SEQUELIZE_TYPE_TO_GRAPHQL>
 }) {
-  generateFieldLines(options)
+  generateTypeDefs(options)
   generateAdditionalTypeDefs(options)
 
-  Object.entries(options.model.geneConfig?.aliases || {}).forEach(([aliasKey, geneConfig]) => {
-    generateFieldLines({
-      ...options,
-      geneConfig,
-      modelKey: aliasKey,
-    })
-    generateFieldLinesForAssociations({ ...options, geneConfig, modelKey: aliasKey })
+  const geneConfig = getGeneConfigFromOptions(options)
+
+  Object.entries(geneConfig?.aliases || {}).forEach(([aliasKey, geneConfig]) => {
+    generateTypeDefs({ ...options, geneConfig, modelKey: aliasKey })
     generateAdditionalTypeDefs({ ...options, geneConfig })
   })
 }
@@ -256,12 +254,14 @@ function forEachModelOnTypeDefCompleted<M>(options: {
 }) {
   generateQueryFilterTypeDefs(options)
 
-  Object.entries(options.model.geneConfig?.aliases || {}).forEach(([, geneConfig]) => {
+  const geneConfig = getGeneConfigFromOptions(options)
+
+  Object.entries(geneConfig?.aliases || {}).forEach(([, geneConfig]) => {
     generateQueryFilterTypeDefs({ ...options, geneConfig })
   })
 }
 
-function generateFieldLines<M, SchemaTypes extends AnyObject>(options: {
+function generateTypeDefs<M, SchemaTypes extends AnyObject>(options: {
   directiveDefs: DirectiveDefs
   typeDefLines: TypeDefLines
   types: SchemaTypes
@@ -276,22 +276,16 @@ function generateFieldLines<M, SchemaTypes extends AnyObject>(options: {
   const typeDef = options.plugin.getTypeDef({
     model: options.model,
     typeName: options.modelKey,
+    exclude: [],
     schemaOptions: options,
   })
   if (!typeDef) return
 
-  const geneConfig: GeneConfig<M> =
-    options.geneConfig ||
-    (options.model &&
-      typeof options.model === 'object' &&
-      'geneConfig' in options.model &&
-      options.model.geneConfig) ||
-    {}
-
   options.typeDefLines[options.modelKey] = { ...getDefaultTypeDefLinesObject(), ...typeDef }
+  const geneConfig = getGeneConfigFromOptions(options)
 
   registerDirectives({
-    configs: geneConfig.directives,
+    configs: geneConfig?.directives,
     defs: options.directiveDefs,
     each: ({ directiveDef }) => {
       options.typeDefLines[options.modelKey].directives.add(directiveDef)
@@ -299,14 +293,17 @@ function generateFieldLines<M, SchemaTypes extends AnyObject>(options: {
   })
 }
 
-function generateAdditionalTypeDefs<M extends typeof GeneModel>(options: {
+/**
+ * Generate type definition object from `geneConfig.types`
+ */
+function generateAdditionalTypeDefs<M>(options: {
   directiveDefs: DirectiveDefs
   typeDefLines: TypeDefLines
   modelKey: string
   model: M
-  geneConfig?: M['geneConfig']
+  geneConfig?: GeneConfig<M>
 }) {
-  const geneConfig = options.geneConfig || options.model.geneConfig
+  const geneConfig = getGeneConfigFromOptions(options)
   if (!geneConfig?.types) return
 
   Object.entries(geneConfig.types).forEach(([graphqlType, fieldConfigs]) => {
@@ -377,6 +374,8 @@ function generateTypeDefLines(options: {
       })
     } else if (normalizedFieldConfig.args) {
       Object.entries(normalizedFieldConfig.args).forEach(([argKey, argDef]) => {
+        if (typeof argDef !== 'string') return
+
         fieldLineConfig.argsDef[argKey] = fieldLineConfig.argsDef[argKey] || new Set<string>([])
         fieldLineConfig.argsDef[argKey].add(argDef)
       })
@@ -393,13 +392,13 @@ function generateTypeDefLines(options: {
   })
 }
 
-function generateQueryFilterTypeDefs<M extends typeof GeneModel>(options: {
+function generateQueryFilterTypeDefs<M>(options: {
   typeDefLines: TypeDefLines
   modelKey: string
   model: M
-  geneConfig?: M['geneConfig']
+  geneConfig?: GeneConfig<M>
 }) {
-  const geneConfig = options.geneConfig || options.model.geneConfig
+  const geneConfig = getGeneConfigFromOptions(options)
   if (!geneConfig?.types) return
 
   Object.entries(geneConfig.types).forEach(([graphqlType, fieldConfigs]) => {
@@ -432,7 +431,7 @@ function generateQueryFilterTypeDefs<M extends typeof GeneModel>(options: {
 
       const returnTypeName = findTypeNameFromTypeNode(parseType(normalizedFieldConfig.returnType))
 
-      if (returnTypeName && BASIC_GRAPHQL_TYPES.includes(returnTypeName as 'ID')) return
+      if (returnTypeName && BASIC_GRAPHQL_TYPE_VALUES.includes(returnTypeName as 'ID')) return
 
       if (!(returnTypeName in options.typeDefLines)) {
         throw new Error(`Cannot find "${returnTypeName}" definition used as "returnType".`)

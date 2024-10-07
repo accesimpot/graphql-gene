@@ -17,7 +17,7 @@ import type { GENE_RESOLVER_TEMPLATES, QUERY_ORDER_ENUM } from './constants'
 export type GeneConfigTypes<
   TSource = Record<string, unknown> | undefined,
   TContext = GeneContext,
-  TArgDefs = Record<string, string> | undefined,
+  TArgDefs extends Record<string, string> | undefined = undefined,
   TReturnType extends string | unknown = unknown,
 > =
   | readonly string[]
@@ -31,12 +31,18 @@ export interface GeneConfig<
   M = unknown,
   TSource = Record<string, unknown> | undefined,
   TContext = GeneContext,
-  TArgDefs = Record<string, string> | undefined,
+  TArgDefs extends Record<string, unknown> | undefined = undefined,
   TReturnType extends string | unknown = unknown,
   TVarType extends GraphQLVarType = 'type',
 > {
   // include?: (keyof InferAttributes<M> | RegExp)[]
+  /**
+   * @todo Should be inferred!!
+   */
+  include?: (string | RegExp)[]
   // exclude?: (keyof InferAttributes<M> | RegExp)[]
+  exclude?: (string | RegExp)[]
+
   includeTimestamps?: boolean | ('createdAt' | 'updatedAt')[]
 
   varType?: TVarType
@@ -75,7 +81,12 @@ export interface GeneConfig<
   types?: {
     [k in 'Query' | 'Mutation']?: Record<
       GraphQLFieldName,
-      FieldConfig<TSource, TContext, TArgDefs, TReturnType>
+      FieldConfig<
+        TSource,
+        TContext,
+        TArgDefs,
+        TReturnType extends unknown ? GraphqlReturnTypes<ValidGraphqlType> : TReturnType
+      >
     >
   }
 }
@@ -83,7 +94,7 @@ export interface GeneConfig<
 export type GeneTypeConfig<
   TSource = Record<string, unknown> | undefined,
   TContext = GeneContext,
-  TArgDefs = undefined,
+  TArgDefs extends Record<string, unknown> | undefined = undefined,
   TReturnType extends string | unknown = unknown,
 > = {
   directives?: GeneDirectiveConfig[]
@@ -94,7 +105,7 @@ export type GeneTypeConfig<
         TSource,
         TContext,
         TArgDefs extends undefined
-          ? unknown
+          ? Record<string, unknown> | undefined
           : {
               [k in keyof TArgDefs]: TArgDefs[k] extends string
                 ? GraphqlToTypescript<TArgDefs[k]>
@@ -108,7 +119,7 @@ export type GeneTypeConfig<
 export type FieldConfig<
   TSource = Record<string, unknown> | undefined,
   TContext = GeneContext,
-  TArgDefs = Record<string, string> | undefined,
+  TArgDefs extends Record<string, unknown> | undefined = undefined,
   TReturnType extends string | unknown = unknown,
 > =
   | GraphqlReturnTypes<ValidGraphqlType>
@@ -195,7 +206,7 @@ export class GeneModel {
 /**
  * Provide typing and default values to GeneConfig. You need to pass the model class as the first
  * argument to ensure accurate types for "include" and "exclude" options (they only accept regular
- * expressions or one of the model attribute as string).
+ * expressions or one of the model field name as string).
  *
  * @default geneConfig.exclude - ['createdAt', 'updatedAt']
  */
@@ -203,7 +214,7 @@ export function defineGraphqlGeneConfig<
   M = unknown,
   TSource = Record<string, unknown> | undefined,
   TContext = GeneContext,
-  TArgDefs = Record<string, string> | undefined,
+  TArgDefs extends Record<string, unknown> | undefined = undefined,
 >(_model: M, options: GeneConfig<M, TSource, TContext, TArgDefs>) {
   return options
 }

@@ -169,7 +169,7 @@ export function printSchemaWithDirectives(schema: GraphQLSchema) {
 export function isUsingDefaultResolver<
   TSource = Record<string, unknown> | undefined,
   TContext = GeneContext,
-  TArgDefs = Record<string, string> | undefined,
+  TArgDefs extends Record<string, string> | undefined = undefined,
   TReturnType = unknown,
 >(fieldConfig: GeneTypeConfig<TSource, TContext, TArgDefs, TReturnType>): boolean {
   return !!(fieldConfig.resolver && fieldConfig.resolver === 'default')
@@ -202,11 +202,11 @@ export function isObjectFieldConfig<T>(
 export function normalizeFieldConfig<
   TSource = Record<string, unknown> | undefined,
   TContext = GeneContext,
-  TArgDefs = Record<string, string> | undefined,
+  TArgDefs extends Record<string, unknown> | undefined = undefined,
   TReturnType = unknown,
 >(
   fieldConfig:
-    | GraphqlReturnTypes<ValidGraphqlType>
+    | GraphqlReturnTypes<ValidGraphqlType | ''>
     | GeneTypeConfig<TSource, TContext, TArgDefs, TReturnType>
 ) {
   return typeof fieldConfig === 'object'
@@ -235,4 +235,27 @@ export function getGeneConfigFromOptions<M>(options: {
       options.model.geneConfig) ||
     undefined
   )
+}
+
+export function isFieldIncluded<M>(geneConfig: GeneConfig<M>, attributeKey: string): boolean {
+  const check = (filters: NonNullable<(typeof geneConfig)['include']>) => {
+    for (const keyOrRegex of filters) {
+      if (typeof keyOrRegex === 'string' && keyOrRegex === attributeKey) return true
+      if (keyOrRegex instanceof RegExp && keyOrRegex.test(attributeKey)) return true
+    }
+  }
+  if (geneConfig.include && !check(geneConfig.include)) return false
+
+  let extraExclude = new Set(['createdAt' as const, 'updatedAt' as const])
+
+  if (Array.isArray(geneConfig.includeTimestamps)) {
+    geneConfig.includeTimestamps.forEach(timestamp => extraExclude.delete(timestamp))
+  } else if (geneConfig.includeTimestamps === true) {
+    extraExclude = new Set([])
+  }
+
+  const exclude = [...(geneConfig.exclude || []), ...extraExclude]
+  if (check(exclude)) return false
+
+  return true
 }
