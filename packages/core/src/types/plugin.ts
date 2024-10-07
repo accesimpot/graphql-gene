@@ -40,7 +40,8 @@ export type GenerateSchemaOptions<
   dataTypeMap?: DataTypes
 }
 
-export type GenePlugin<M = object> = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type GenePlugin<M = any> = {
   /**
    * Function receiving the model and returning true if the plugin should run.
    */

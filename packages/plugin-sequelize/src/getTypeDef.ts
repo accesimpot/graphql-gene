@@ -66,6 +66,7 @@ function generateAssociationFields(options: { model: typeof Model; lines: FieldL
 
     if (association instanceof HasMany) graphqlType = `[${graphqlType}!]`
 
+    options.lines[attributeKey] = options.lines[attributeKey] || getDefaultFieldLinesObject()
     options.lines[attributeKey].typeDef = graphqlType
   })
 }

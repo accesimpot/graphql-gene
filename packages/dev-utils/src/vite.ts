@@ -49,7 +49,8 @@ export function generateViteConfig(options: {
   const absoluteSrcDir = path.resolve(absoluteRootDir, srcDir)
   const absoluteDistDir = path.resolve(absoluteRootDir, distDir)
 
-  const tsconfigPath = options.tsconfigPath || path.resolve(absoluteRootDir, 'tsconfig.compiler.json')
+  const tsconfigPath =
+    options.tsconfigPath || path.resolve(absoluteRootDir, 'tsconfig.compiler.json')
 
   const plugins: PluginOption[] = []
 
@@ -141,6 +142,8 @@ function getDependenciesFromPackageJson(absoluteRootDir: string): string[] {
     ...pkgJson.peerDependencies,
     ...pkgJson.devDependencies,
   })
-    .filter(([, versionRange]) => /^workspace:/.test(versionRange))
+    .filter(
+      ([pkgName, versionRange]) => !(/^dev-/.test(pkgName) && /^workspace:/.test(versionRange))
+    )
     .map(([pkgName]) => pkgName)
 }

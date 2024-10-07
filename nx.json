@@ -1,5 +1,12 @@
 {
   "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "tasksRunnerOptions": {
+    "default": {
+      "options": {
+        "runtimeCacheInputs": ["node -v", "echo ${NODE_ENV:-development}"]
+      }
+    }
+  },
   "targetDefaults": {
     "build": {
       "dependsOn": ["^build"],
