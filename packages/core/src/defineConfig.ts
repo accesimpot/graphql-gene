@@ -1,6 +1,4 @@
 import type { GraphQLFieldResolver } from 'graphql'
-// import type { ModelStatic, InferAttributes, WhereOptions } from 'sequelize'
-// import { Model } from 'sequelize-typescript'
 import type {
   GeneContext,
   GraphQLFieldName,
@@ -8,6 +6,7 @@ import type {
   GraphqlToTypescript,
   GraphqlTypeName,
   GraphQLVarType,
+  InferFields,
   OperatorInputs,
   SomeRequired,
   ValidGraphqlType,
@@ -35,13 +34,8 @@ export interface GeneConfig<
   TReturnType extends string | unknown = unknown,
   TVarType extends GraphQLVarType = 'type',
 > {
-  // include?: (keyof InferAttributes<M> | RegExp)[]
-  /**
-   * @todo Should be inferred!!
-   */
-  include?: (string | RegExp)[]
-  // exclude?: (keyof InferAttributes<M> | RegExp)[]
-  exclude?: (string | RegExp)[]
+  include?: (InferFields<M> | RegExp)[]
+  exclude?: (InferFields<M> | RegExp)[]
 
   includeTimestamps?: boolean | ('createdAt' | 'updatedAt')[]
 

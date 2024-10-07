@@ -1,10 +1,14 @@
 import type { GraphQLSchema, DocumentNode, GraphQLResolveInfo } from 'graphql'
 import type { GeneDefaultResolverArgs, GeneTypeConfig } from '../defineConfig'
-import type { isFieldIncluded } from '../utils'
 import type { AnyObject } from './typeUtils'
 import type { GraphQLVarType } from './graphql'
 import type { GeneContext } from './extendable'
 import type { GraphqlToTypescript } from './graphqlToTypescript'
+
+export type PluginSettings<
+  T extends { isMatching: boolean; fieldName: TField extends string ? string : never },
+  TField extends string | number | symbol = string,
+> = T
 
 export type GraphQLTypeName = string
 export type GraphQLFieldName = string

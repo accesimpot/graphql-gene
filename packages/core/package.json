@@ -22,16 +22,6 @@
         "default": "./dist/index.cjs"
       }
     },
-    "./utils": {
-      "import": {
-        "types": "./dist/utils.d.ts",
-        "default": "./dist/utils.js"
-      },
-      "require": {
-        "types": "./dist/utils.d.ts",
-        "default": "./dist/utils.cjs"
-      }
-    },
     "./context": {
       "types": "./dist/types/extendable/context.d.ts",
       "default": "./dist/types/extendable/context.js"
