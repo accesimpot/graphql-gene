@@ -1,252 +1,151 @@
-// import { defaultFieldResolver, GraphQLError, parseType } from 'graphql'
-// import { GraphQLSchema, type GraphQLResolveInfo } from 'graphql'
-// import type { FindOptions, OrderItem, WhereAttributeHash, WhereOptions } from 'sequelize'
-// import type { GeneDefaultResolverArgs, GeneModel, GeneTypeConfig } from './defineConfig'
-// import type { AnyObject, ValueOf } from './types/typeUtils'
-// import {
-//   lookDeepInSchema,
-//   isListType,
-//   isUsingDefaultResolver,
-//   normalizeFieldConfig,
-//   getQueryInclude,
-//   isArrayFieldConfig,
-// } from './utils'
-// import {
-//   GENE_TO_SEQUELIZE_OPERATORS,
-//   PAGE_ARG_DEFAULT,
-//   PER_PAGE_ARG_DEFAULT,
-//   QUERY_ORDER_VALUES,
-//   AND_OR_OPERATORS,
-// } from '../../plugin-sequelize/src/constants'
-// import type { GeneGraphqlContext } from '@/gene'
+import { defaultFieldResolver, GraphQLSchema } from 'graphql'
+import type { GeneConfig, GeneDefaultResolverArgs } from './defineConfig'
+import {
+  lookDeepInSchema,
+  isUsingDefaultResolver,
+  normalizeFieldConfig,
+  isArrayFieldConfig,
+  getGeneConfigFromOptions,
+} from './utils'
+import type { GenePlugin, AnyObject } from './types'
+import { PAGE_ARG_DEFAULT, PER_PAGE_ARG_DEFAULT } from './constants'
 
-// type GeneWhereOptions = {
-//   [k in keyof WhereAttributeHash<AnyObject> | symbol]: k extends symbol
-//     ? WhereAttributeHash<AnyObject>[]
-//     : WhereAttributeHash<AnyObject>[k extends symbol ? never : k]
-// }
+export function addResolversToSchema<SchemaTypes extends AnyObject>(options: {
+  schema: GraphQLSchema
+  plugins: GenePlugin[]
+  types: SchemaTypes
+}) {
+  let schema = options.schema
 
-// export function addResolversToSchema<SchemaTypes extends AnyObject>(options: {
-//   schema: GraphQLSchema
-//   types: SchemaTypes
-// }) {
-//   let schema = options.schema
+  Object.entries(options.types).forEach(([modelKey, model]) => {
+    const geneConfig = getGeneConfigFromOptions({ model })
 
-//   Object.entries(options.types).forEach(([modelKey, model]) => {
-//     const modifiedSchema = forEachModel({ schema, modelKey, model, geneConfig: model.geneConfig })
-//     if (modifiedSchema) schema = modifiedSchema
+    for (const plugin of options.plugins) {
+      const modifiedSchema = forEachModel({
+        schema,
+        plugin,
+        modelKey,
+        model,
+        geneConfig,
+      })
+      if (modifiedSchema) schema = modifiedSchema
+    }
+  })
+  return schema
+}
 
-//     Object.entries(model.geneConfig?.aliases || {}).forEach(([aliasKey, geneConfig]) => {
-//       const modifiedSchema = forEachModel({ schema, modelKey: aliasKey, model, geneConfig })
-//       if (modifiedSchema) schema = modifiedSchema
-//     })
-//   })
-//   return schema
-// }
+function forEachModel<M>(options: {
+  geneConfig?: GeneConfig<M>
+  schema: GraphQLSchema
+  plugin: GenePlugin<M>
+  modelKey: string
+  model: M
+}): GraphQLSchema | undefined {
+  const geneConfig = getGeneConfigFromOptions(options)
+  let modifiedSchema = defineResolvers(options)
 
-// function forEachModel<M extends typeof GeneModel>(options: {
-//   geneConfig: M['geneConfig']
-//   schema: GraphQLSchema
-//   modelKey: string
-//   model: M
-// }): GraphQLSchema | undefined {
-//   if (!options.geneConfig) return
+  Object.entries(geneConfig?.aliases || {}).forEach(([aliasKey, geneConfig]) => {
+    modifiedSchema = defineResolvers({ ...options, geneConfig, modelKey: aliasKey })
+  })
+  return modifiedSchema
+}
 
-//   const typeConfig = options.geneConfig.types || {}
-//   const typeLevelDirectiveConfigs = options.geneConfig.directives
+function defineResolvers<M>(options: {
+  geneConfig?: GeneConfig<M>
+  schema: GraphQLSchema
+  plugin: GenePlugin<M>
+  modelKey: string
+  model: M
+}): GraphQLSchema | undefined {
+  if (!options.geneConfig) return
 
-//   lookDeepInSchema({
-//     schema: options.schema,
-//     each({ type, field, fieldDef, parentType }) {
-//       const isFieldInTypeConfig = () =>
-//         parentType in typeConfig &&
-//         typeConfig[parentType as 'Query'] &&
-//         field in typeConfig[parentType as 'Query']!
+  const typeConfig = options.geneConfig.types || {}
+  const typeLevelDirectiveConfigs = options.geneConfig.directives
 
-//       if (type !== options.modelKey && !isFieldInTypeConfig()) return
+  lookDeepInSchema({
+    schema: options.schema,
+    each({ type, field, fieldDef, parentType }) {
+      const isFieldInTypeConfig = () =>
+        parentType in typeConfig &&
+        typeConfig[parentType as 'Query'] &&
+        field in typeConfig[parentType as 'Query']!
 
-//       const directiveConfigs: typeof typeLevelDirectiveConfigs = []
+      if (type !== options.modelKey && !isFieldInTypeConfig()) return
 
-//       if (type === options.modelKey && typeLevelDirectiveConfigs) {
-//         directiveConfigs.push(...typeLevelDirectiveConfigs)
-//       }
+      const directiveConfigs: typeof typeLevelDirectiveConfigs = []
 
-//       resolverDefinition: {
-//         if (!isFieldInTypeConfig()) break resolverDefinition
+      if (type === options.modelKey && typeLevelDirectiveConfigs) {
+        directiveConfigs.push(...typeLevelDirectiveConfigs)
+      }
 
-//         const currentTypeConfig = typeConfig[parentType as keyof typeof typeConfig]
-//         if (!currentTypeConfig || isArrayFieldConfig(currentTypeConfig)) break resolverDefinition
+      resolverDefinition: {
+        if (!isFieldInTypeConfig()) break resolverDefinition
 
-//         const config = (
-//           currentTypeConfig as Record<string, Parameters<typeof normalizeFieldConfig>[0]>
-//         )[field]
-//         const normalizedConfig = normalizeFieldConfig(config)
+        const currentTypeConfig = typeConfig[parentType as keyof typeof typeConfig]
+        if (!currentTypeConfig || isArrayFieldConfig(currentTypeConfig)) break resolverDefinition
 
-//         if (normalizedConfig.resolver) {
-//           fieldDef.resolve = async (source, args, context, info) => {
-//             if (normalizedConfig.resolver && typeof normalizedConfig.resolver !== 'string') {
-//               return normalizedConfig.resolver({
-//                 source,
-//                 args: args as object,
-//                 context,
-//                 info,
-//               })
-//             }
+        const config = (
+          currentTypeConfig as Record<string, Parameters<typeof normalizeFieldConfig>[0]>
+        )[field]
+        const normalizedConfig = normalizeFieldConfig(config)
 
-//             if (isUsingDefaultResolver(normalizedConfig)) {
-//               return await runDefaultResolver({
-//                 model: options.model,
-//                 config: normalizedConfig,
-//                 args: args as GeneDefaultResolverArgs<typeof GeneModel>,
-//                 info,
-//               })
-//             }
-//           }
-//         }
-//         if (normalizedConfig.directives) directiveConfigs.push(...normalizedConfig.directives)
-//       }
+        if (normalizedConfig.resolver) {
+          fieldDef.resolve = async (source, args, context, info) => {
+            if (normalizedConfig.resolver && typeof normalizedConfig.resolver !== 'string') {
+              return normalizedConfig.resolver({ source, args, context, info })
+            }
 
-//       // Register directives at the type or field level
-//       if (directiveConfigs.length) {
-//         // Reverse the order so that the first directive you defined will be executed first
-//         // (middleware pattern).
-//         const reversedConfigs = [...directiveConfigs].reverse()
+            if (isUsingDefaultResolver(normalizedConfig)) {
+              const providedArgs = args as Partial<GeneDefaultResolverArgs<M>>
+              const page = (providedArgs.page || PAGE_ARG_DEFAULT) - 1
+              const perPage = providedArgs.perPage || PER_PAGE_ARG_DEFAULT
 
-//         reversedConfigs.forEach(directive => {
-//           fieldDef.resolve = fieldDef.resolve || defaultFieldResolver
-//           const previousResolve = fieldDef.resolve
+              return await options.plugin.defaultResolver({
+                model: options.model,
+                modelKey: options.modelKey,
+                config: normalizedConfig,
+                args: { ...args, page, perPage } as GeneDefaultResolverArgs<M>,
+                info,
+              })
+            }
+          }
+        }
+        if (normalizedConfig.directives) directiveConfigs.push(...normalizedConfig.directives)
+      }
 
-//           fieldDef.resolve = async (source, args, context, info) => {
-//             let hasCalledResolve = false
-//             let result: unknown
+      // Register directives at the type or field level
+      if (directiveConfigs.length) {
+        // Reverse the order so that the first directive you defined will be executed first
+        // (middleware pattern).
+        const reversedConfigs = [...directiveConfigs].reverse()
 
-//             const resolve = async () => {
-//               hasCalledResolve = true
-//               result = await previousResolve(source, args, context, info)
-//               return result
-//             }
-//             await directive.handler({
-//               source,
-//               args,
-//               context,
-//               info,
-//               resolve,
-//             })
-//             if (!hasCalledResolve) await resolve()
+        reversedConfigs.forEach(directive => {
+          fieldDef.resolve = fieldDef.resolve || defaultFieldResolver
+          const previousResolve = fieldDef.resolve
 
-//             return result
-//           }
-//         })
-//       }
-//     },
-//   })
-//   return options.schema
-// }
+          fieldDef.resolve = async (source, args, context, info) => {
+            let hasCalledResolve = false
+            let result: unknown
 
-// async function runDefaultResolver<
-//   M extends typeof GeneModel,
-//   TSource = Record<string, unknown> | undefined,
-//   TContext = GeneGraphqlContext,
-//   TArgDefs = Record<string, string> | undefined,
-// >(options: {
-//   model: M
-//   config: GeneTypeConfig<TSource, TContext, TArgDefs>
-//   args: GeneDefaultResolverArgs<M>
-//   info: GraphQLResolveInfo
-// }) {
-//   const includeOptions = getQueryInclude(options.info)
+            const resolve = async () => {
+              hasCalledResolve = true
+              result = await previousResolve(source, args, context, info)
+              return result
+            }
+            await directive.handler({
+              source,
+              args,
+              context,
+              info,
+              resolve,
+            })
+            if (!hasCalledResolve) await resolve()
 
-//   const isList = isListType(parseType(options.config.returnType))
-//   const findFn = isList ? 'findAll' : 'findOne'
-
-//   const findOptions: Omit<FindOptions, 'where' | 'order'> & {
-//     where?: {
-//       [k in keyof WhereAttributeHash<AnyObject> | symbol]: k extends symbol
-//         ? WhereAttributeHash<AnyObject>[]
-//         : WhereAttributeHash<AnyObject>[k extends symbol ? never : k]
-//     }
-//     order?: OrderItem[]
-//   } = {}
-//   const { args } = options
-
-//   if (isList) {
-//     const page = (args.page || PAGE_ARG_DEFAULT) - 1
-//     const perPage = args.perPage || PER_PAGE_ARG_DEFAULT
-
-//     findOptions.offset = page * perPage
-//     findOptions.limit = args.perPage
-//   } else if (args.id) {
-//     findOptions.where = findOptions.where || {}
-//     findOptions.where.id = args.id
-//   }
-
-//   if (args.where) {
-//     findOptions.where = findOptions.where || {}
-//     const whereOptions = findOptions.where
-//     populateWhereOptions(args.where, whereOptions)
-//   }
-
-//   if (args.order) {
-//     findOptions.order = findOptions.order || []
-//     const orderOptions = findOptions.order
-
-//     args.order.forEach(fieldOrderValue => {
-//       const [, field, orderValue] =
-//         fieldOrderValue.match(new RegExp(`^(.+)_(${QUERY_ORDER_VALUES.join('|')})$`)) || []
-//       if (field && orderValue) {
-//         orderOptions.push([field, orderValue])
-//       } else {
-//         throw new GraphQLError('Invalid order value.')
-//       }
-//     })
-//   }
-//   return await options.model[findFn]({ ...findOptions, ...includeOptions })
-// }
-
-// function populateWhereOptions<M extends typeof GeneModel>(
-//   whereArgs: GeneDefaultResolverArgs<M>['where'],
-//   state: GeneWhereOptions
-// ) {
-//   for (const attr in whereArgs) {
-//     const parseOperators = (
-//       operator: string,
-//       value:
-//         | (typeof whereArgs)[keyof typeof whereArgs]
-//         | (typeof whereArgs)[keyof typeof whereArgs][]
-//     ) => {
-//       if (!(operator in GENE_TO_SEQUELIZE_OPERATORS)) return
-
-//       const findOptionsGetter =
-//         GENE_TO_SEQUELIZE_OPERATORS[operator as keyof typeof GENE_TO_SEQUELIZE_OPERATORS]
-//       return findOptionsGetter(value as string)
-//     }
-
-//     if (AND_OR_OPERATORS.includes(attr)) {
-//       const nestedWheres: ValueOf<GeneWhereOptions>[] = []
-//       const parsedOperators = parseOperators(attr, nestedWheres)
-
-//       if (parsedOperators) {
-//         const [op] = parsedOperators
-//         state[op] = nestedWheres as (typeof state)[symbol]
-
-//         if (Array.isArray(state[op]) && Array.isArray(whereArgs[attr])) {
-//           whereArgs[attr].forEach((nestedWhereArgs: typeof whereArgs) => {
-//             const nextState = {} as GeneWhereOptions
-//             state[op].push(nextState)
-//             populateWhereOptions(nestedWhereArgs, nextState)
-//           })
-//         }
-//       }
-//     } else {
-//       state[attr] = state[attr] || {}
-
-//       Object.entries(whereArgs[attr]).forEach(([operator, value]) => {
-//         const parsedOperators = parseOperators(operator, value)
-//         if (!parsedOperators) return
-
-//         const [op, opValue] = parsedOperators
-//         state[attr][op] = opValue
-//       })
-//     }
-//   }
-// }
+            return result
+          }
+        })
+      }
+    },
+  })
+  return options.schema
+}

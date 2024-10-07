@@ -202,7 +202,7 @@ export function isObjectFieldConfig<T>(
 export function normalizeFieldConfig<
   TSource = Record<string, unknown> | undefined,
   TContext = GeneContext,
-  TArgDefs extends Record<string, unknown> | undefined = undefined,
+  TArgDefs extends Record<string, string> | undefined = undefined,
   TReturnType = unknown,
 >(
   fieldConfig:
@@ -237,11 +237,11 @@ export function getGeneConfigFromOptions<M>(options: {
   )
 }
 
-export function isFieldIncluded<M>(geneConfig: GeneConfig<M>, attributeKey: string): boolean {
+export function isFieldIncluded<M>(geneConfig: GeneConfig<M>, fieldKey: string): boolean {
   const check = (filters: NonNullable<(typeof geneConfig)['include']>) => {
     for (const keyOrRegex of filters) {
-      if (typeof keyOrRegex === 'string' && keyOrRegex === attributeKey) return true
-      if (keyOrRegex instanceof RegExp && keyOrRegex.test(attributeKey)) return true
+      if (typeof keyOrRegex === 'string' && keyOrRegex === fieldKey) return true
+      if (keyOrRegex instanceof RegExp && keyOrRegex.test(fieldKey)) return true
     }
   }
   if (geneConfig.include && !check(geneConfig.include)) return false

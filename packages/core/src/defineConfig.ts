@@ -31,7 +31,7 @@ export interface GeneConfig<
   M = unknown,
   TSource = Record<string, unknown> | undefined,
   TContext = GeneContext,
-  TArgDefs extends Record<string, unknown> | undefined = undefined,
+  TArgDefs extends Record<string, string> | undefined = undefined,
   TReturnType extends string | unknown = unknown,
   TVarType extends GraphQLVarType = 'type',
 > {
@@ -94,7 +94,7 @@ export interface GeneConfig<
 export type GeneTypeConfig<
   TSource = Record<string, unknown> | undefined,
   TContext = GeneContext,
-  TArgDefs extends Record<string, unknown> | undefined = undefined,
+  TArgDefs extends Record<string, string> | undefined = undefined,
   TReturnType extends string | unknown = unknown,
 > = {
   directives?: GeneDirectiveConfig[]
@@ -119,7 +119,7 @@ export type GeneTypeConfig<
 export type FieldConfig<
   TSource = Record<string, unknown> | undefined,
   TContext = GeneContext,
-  TArgDefs extends Record<string, unknown> | undefined = undefined,
+  TArgDefs extends Record<string, string> | undefined = undefined,
   TReturnType extends string | unknown = unknown,
 > =
   | GraphqlReturnTypes<ValidGraphqlType>
@@ -149,9 +149,9 @@ export type ArgsTypeToGraphQL<ArgsType> = {
           : never
 }
 
-export type GeneDefaultResolverArgs<M extends typeof GeneModel> = {
-  page?: number
-  perPage?: number
+export type GeneDefaultResolverArgs<M> = {
+  page: number
+  perPage: number
   locale?: string
   id?: string
   where: {
@@ -214,7 +214,7 @@ export function defineGraphqlGeneConfig<
   M = unknown,
   TSource = Record<string, unknown> | undefined,
   TContext = GeneContext,
-  TArgDefs extends Record<string, unknown> | undefined = undefined,
+  TArgDefs extends Record<string, string> | undefined = undefined,
 >(_model: M, options: GeneConfig<M, TSource, TContext, TArgDefs>) {
   return options
 }
@@ -241,5 +241,5 @@ export function defineField<
    * "defineField" to return a generic `Record<string, unknown>` as ArgDefs to allow adding the
    * field config to `defineGraphqlGeneConfig` (where `args` doesn't need accurate typing).
    */
-  return config as FieldConfig<TSource, TContext, Record<string, unknown> | undefined, TReturnType>
+  return config as FieldConfig<TSource, TContext, Record<string, string> | undefined, TReturnType>
 }

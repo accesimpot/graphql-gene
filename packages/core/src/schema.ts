@@ -7,13 +7,7 @@ import {
   parseType,
 } from 'graphql'
 import type { DocumentNode, GraphQLFieldResolver } from 'graphql'
-import { SEQUELIZE_TYPE_TO_GRAPHQL } from '../../plugin-sequelize/src/constants'
-import {
-  type GeneConfig,
-  type GeneConfigTypes,
-  type GeneDirectiveConfig,
-  type GeneModel,
-} from './defineConfig'
+import { type GeneConfig, type GeneConfigTypes, type GeneDirectiveConfig } from './defineConfig'
 import type { AnyObject, Mutable } from './types/typeUtils'
 import {
   getGraphqlType,
@@ -29,10 +23,12 @@ import {
   getDefaultTypeDefLinesObject,
   getDefaultFieldLinesObject,
   getGeneConfigFromOptions,
+  isFieldIncluded,
 } from './utils'
 import { addResolversToSchema } from './resolvers'
 import SCHEMA_TEMPLATE_HTML from './schema.html?raw'
 import type {
+  BasicGraphqlType,
   DirectiveDefs,
   FieldLines,
   GeneContext,
@@ -44,6 +40,7 @@ import type {
   TypeDefLines,
 } from './types'
 import {
+  AND_OR_OPERATORS,
   BASIC_GRAPHQL_TYPE_VALUES,
   PAGE_ARG_DEFAULT,
   PER_PAGE_ARG_DEFAULT,
@@ -71,7 +68,7 @@ export function generateSchema<
 }) {
   // We duplicate the type definition to have a better DX on hover of `generateSchema`
   // but we make sure that it stays in sync with its type.
-  const _options = options satisfies GenerateSchemaOptions<SchemaTypes, DataTypes>
+  const _options: GenerateSchemaOptions<SchemaTypes, DataTypes> = options
 
   const initialSchema = parseSchemaOption(options.schema)
   const geneTypeDefs = generateGeneTypeDefs(options)
@@ -101,7 +98,11 @@ export function generateSchema<
   }
   let executableSchema = new GraphQLSchema({ ...schema.toConfig(), ...schemaOptions })
 
-  executableSchema = addResolversToSchema({ schema: executableSchema, types: options.types })
+  executableSchema = addResolversToSchema({
+    schema: executableSchema,
+    plugins: options.plugins || [],
+    types: options.types,
+  })
 
   return {
     schema: executableSchema,
@@ -234,7 +235,7 @@ function forEachModel<M, SchemaTypes extends AnyObject>(options: {
   modelKey: string
   model: M
   hasDateScalars?: boolean
-  dataTypeMap?: Partial<typeof SEQUELIZE_TYPE_TO_GRAPHQL>
+  dataTypeMap?: { [k: string | symbol]: BasicGraphqlType }
 }) {
   generateTypeDefs(options)
   generateAdditionalTypeDefs(options)
@@ -271,18 +272,19 @@ function generateTypeDefs<M, SchemaTypes extends AnyObject>(options: {
   plugin: GenePlugin<M>
   hasDateScalars?: boolean
   geneConfig?: GeneConfig<M>
-  dataTypeMap?: Partial<typeof SEQUELIZE_TYPE_TO_GRAPHQL>
+  dataTypeMap?: { [k: string | symbol]: BasicGraphqlType }
 }) {
+  const geneConfig = getGeneConfigFromOptions(options)
+
   const typeDef = options.plugin.getTypeDef({
     model: options.model,
     typeName: options.modelKey,
-    exclude: [],
+    isFieldIncluded: (fieldKey: string) => !geneConfig || isFieldIncluded(geneConfig, fieldKey),
     schemaOptions: options,
   })
   if (!typeDef) return
 
   options.typeDefLines[options.modelKey] = { ...getDefaultTypeDefLinesObject(), ...typeDef }
-  const geneConfig = getGeneConfigFromOptions(options)
 
   registerDirectives({
     configs: geneConfig?.directives,
@@ -419,7 +421,7 @@ function generateQueryFilterTypeDefs<M>(options: {
         createTypeDefLines(options.typeDefLines, 'input', whereOptionsInputName)
 
         // Add "and" and "or" operators
-        ;['and', 'or'].forEach(operator => {
+        AND_OR_OPERATORS.forEach(operator => {
           options.typeDefLines[whereOptionsInputName].lines[operator] = getDefaultFieldLinesObject()
           options.typeDefLines[whereOptionsInputName].lines[operator].typeDef =
             `[${whereOptionsInputName}!]`
@@ -555,32 +557,6 @@ function stringifyDirectiveConfig(directive: GeneDirectiveConfig) {
     }
   }
   return directiveDef
-}
-
-function isFieldIncluded<M extends typeof GeneModel>(
-  geneConfig: NonNullable<M['geneConfig']>,
-  attributeKey: string
-): boolean {
-  const check = (filters: NonNullable<(typeof geneConfig)['include']>) => {
-    for (const keyOrRegex of filters) {
-      if (typeof keyOrRegex === 'string' && keyOrRegex === attributeKey) return true
-      if (keyOrRegex instanceof RegExp && keyOrRegex.test(attributeKey)) return true
-    }
-  }
-  if (geneConfig.include && !check(geneConfig.include)) return false
-
-  let extraExclude = new Set(['createdAt' as const, 'updatedAt' as const])
-
-  if (Array.isArray(geneConfig.includeTimestamps)) {
-    geneConfig.includeTimestamps.forEach(timestamp => extraExclude.delete(timestamp))
-  } else if (geneConfig.includeTimestamps === true) {
-    extraExclude = new Set([])
-  }
-
-  const exclude = [...(geneConfig.exclude || []), ...extraExclude]
-  if (check(exclude)) return false
-
-  return true
 }
 
 function createTypeDefLines(typeDefLines: TypeDefLines, varType: GraphQLVarType, varName: string) {

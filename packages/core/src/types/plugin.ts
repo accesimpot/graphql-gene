@@ -1,6 +1,10 @@
-import type { GraphQLSchema, DocumentNode } from 'graphql'
+import type { GraphQLSchema, DocumentNode, GraphQLResolveInfo } from 'graphql'
+import type { GeneDefaultResolverArgs, GeneTypeConfig } from '../defineConfig'
+import type { isFieldIncluded } from '../utils'
 import type { AnyObject } from './typeUtils'
 import type { GraphQLVarType } from './graphql'
+import type { GeneContext } from './extendable'
+import type { GraphqlToTypescript } from './graphqlToTypescript'
 
 export type GraphQLTypeName = string
 export type GraphQLFieldName = string
@@ -38,17 +42,24 @@ export type GenePlugin<M = object> = {
    */
   isMatching: (model: M) => boolean
 
-  /**
-   * Return an object with the field name as key and the GraphQL type definition as value
-   * @example
-   * {
-   *   getTypeDef: () => ({ fields: { name: 'String!', role: 'RoleEnum' } }),
-   * }
-   */
-  getTypeDef(details: {
+  getTypeDef(options: {
     model: M
     typeName: string
-    exclude: string[]
+    isFieldIncluded: (fieldKey: string) => boolean
     schemaOptions: GenerateSchemaOptions
   }): TypeDefLines[0]
+
+  defaultResolver<
+    M,
+    ModelKey extends string,
+    TSource = Record<string, unknown> | undefined,
+    TContext = GeneContext,
+    TArgDefs extends Record<string, string> = Record<string, string>,
+  >(options: {
+    model: M
+    modelKey: ModelKey
+    config: GeneTypeConfig<TSource, TContext, TArgDefs>
+    args: GeneDefaultResolverArgs<M>
+    info: GraphQLResolveInfo
+  }): Promise<GraphqlToTypescript<ModelKey>>
 }

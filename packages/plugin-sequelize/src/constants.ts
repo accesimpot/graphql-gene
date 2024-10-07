@@ -1,6 +1,10 @@
+import type { GeneConfig, ValueOf } from 'graphql-gene'
 import { Op } from 'sequelize'
-import { DataType } from 'sequelize-typescript'
-import type { ValueOf } from '../../core/src/types/typeUtils'
+import { DataType, Model } from 'sequelize-typescript'
+
+export class GeneModel extends Model {
+  static geneConfig?: GeneConfig
+}
 
 export const GENERIC_OPERATORS = {
   and: 'and',
