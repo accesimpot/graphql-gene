@@ -57,6 +57,7 @@ jobs:
         if: steps.public-package-affected.outputs.count > 0 || ${{ env.CI_FORCE_RELEASE_RUN }} == 'true'
         run: pnpm build
 
+      #
       # A release is made if the prefix is feat, fix, perf, chore(deps), or docs(README)
       #
       # { type: 'feat', release: 'minor' },
