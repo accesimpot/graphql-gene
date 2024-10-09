@@ -40,11 +40,11 @@ jobs:
       - name: Install dependencies 👨🏻‍💻
         run: pnpm install --prod=false
 
-      - name: Any change affecting the main package❔
-        id: main-package-affected
+      - name: Any change affecting the public packages❔
+        id: public-package-affected
         # Make sure the job fails with exit code 1 if the nx command fails
         run: |
-          projects=$(pnpm --silent nx show projects --projects main --affected || echo 'error')
+          projects=$(pnpm --silent nx show projects --affected --exclude=dev-* || echo 'error')
           projects+=$(git diff --name-only --diff-filter=d ${{ steps.setSHAs.outputs.base }} -- README.md || echo 'error')
           projects+=$(git diff --name-only --diff-filter=d ${{ steps.setSHAs.outputs.base }} -- package.json || echo 'error')
 
@@ -53,9 +53,9 @@ jobs:
 
           echo "count=${#projects_array[@]}" >> $GITHUB_OUTPUT
 
-      - name: Build main package 📦
-        if: steps.main-package-affected.outputs.count > 0
-        run: pnpm main build
+      - name: Build packages 📦
+        if: steps.public-package-affected.outputs.count > 0
+        run: pnpm build
 
       # A release is made if the prefix is feat, fix, perf, chore(deps), or docs(README)
       #
@@ -81,7 +81,7 @@ jobs:
       #   - revert: Reverts a previous commit
       #
       - name: Release
-        if: steps.main-package-affected.outputs.count > 0
+        if: steps.public-package-affected.outputs.count > 0
         env:
           GITHUB_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
