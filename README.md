@@ -25,6 +25,11 @@ Use `graphql-gene` to generate automatically an executable schema out of your OR
   - [Typing](#typing)
   - [Generate the schema](#generate-the-schema)
   - [Allow inspecting the generated schema](#allow-inspecting-the-generated-schema)
+- [Gene config](#gene-config)
+  - [Options](#options)
+  - [Define Query/Mutation inside your model](#define-querymutation-inside-your-model)
+  - [Define alias for specific scope](#define-alias-for-specific-scope)
+- [Available plugins](#available-plugins)
 - [Contribution](#contribution)
 
 <br>
@@ -225,6 +230,147 @@ if (process.env.NODE_ENV !== 'production') {
   )
 }
 ```
+
+<br>
+
+## Gene config
+
+By default, if a model is part of the `types` provided to `generateSchema`, it will be added to your schema.
+
+Nevertheless, you might need to exclude some fields like `password`, define queries or mutations. You can set GraphQL-specific configuration by adding a `static readonly geneConfig` object to your model (more examples below).
+
+```ts
+import { Model } from 'sequelize'
+import { defineGraphqlGeneConfig } from 'graphql-gene'
+
+export class User extends Model {
+  // ...
+
+  static readonly geneConfig = defineGraphqlGeneConfig(User, {
+    // Your config
+  }
+}
+```
+
+### Options
+
+| Name | Description |
+| :--- | :---------- |
+| `include`❔ | `(InferFields<M> \| RegExp)[]` - Array of fields to include in the GraphQL type. Default: all included. |
+| `exclude`❔ | `(InferFields<M> \| RegExp)[]` - Array of fields to exclude in the GraphQL type. Default: `['createdAt', updatedAt']`. |
+| `includeTimestamps`❔ | `boolean \| ('createdAt' \| 'updatedAt')[]` - Include the timestamp attributes or not. Default: `false`. |
+| `varType`❔ | `GraphQLVarType` - The GraphQL variable type to use. Default: `'type'`. |
+| `directives`❔ | `GeneDirectiveConfig[]` - Directives to apply at the type level (also possible at the field level). |
+| `aliases`❔ | `Record<GraphqlTypeName], GeneConfig>` - The values of "aliases" would be nested GeneConfig properties that overwrites the ones set at a higher level. This is useful for instances with a specific scope include more fields that the parent model (i.e. `AuthenticatedUser` being an alias of `User`). Note that the alias needs to be exported from _graphqlTypes.ts_ as well (i.e. `export { User as AuthenticatedUser } from '../models/User/User.model'`). |
+| `types`❔ | `Record<'Query' \| 'Mutation', Record<GraphQLFieldName, FieldConfig>>` - Allow extending the Query or Mutation types only. |
+
+### Define Query/Mutation inside your model
+
+#### *src/models/Prospect/Prospect.model.ts*
+
+```ts
+import type { InferAttributes, InferCreationAttributes } from 'sequelize'
+import { Model, Table, Column, Unique, AllowNull, DataType } from 'sequelize-typescript'
+import { defineGraphqlGeneConfig, defineField } from 'graphql-gene'
+import { isEmail } from '../someUtils.ts'
+
+export
+@Table
+class Prospect extends Model<InferAttributes<Prospect>, InferCreationAttributes<Prospect>> {
+  @Unique
+  @AllowNull(false)
+  @Column(DataType.STRING)
+  declare email: string
+
+  @Column(DataType.STRING)
+  declare language: string | null
+
+  static readonly geneConfig = defineGraphqlGeneConfig(Prospect, {
+    types: {
+      Mutation: {
+        registerProspect: defineField({
+          args: { email: 'String!', locale: 'String' },
+          returnType: 'MessageOutput!',
+
+          resolver: async ({ args }) => {
+            // `args` type is inferred from the GraphQL definition above
+            // { email: string; locale: string | null | undefined }
+            const { email, locale } = args
+
+            if (!isEmail(email)) {
+              // The return type is deeply inferred from the `MessageOutput` definition.
+              // For instance, the `type` value must be `'info' | 'success' | 'warning' | 'error'`.
+              return { type: 'error' as const, text: 'Invalid email' }
+            }
+            // No need to await
+            Prospect.create({ email, language: locale })
+            return { type: 'success' as const }
+          },
+        }),
+      },
+    },
+  })
+}
+
+export const MessageOutput = {
+  type: 'MessageTypeEnum!',
+  text: 'String',
+} as const
+
+export const MessageTypeEnum = ['info', 'success', 'warning', 'error'] as const
+```
+
+### Define alias for specific scope
+
+#### *src/models/graphqlTypes.ts*
+
+```ts
+export * from './models'
+
+// Export the alias for typing
+export { User as AuthenticatedUser } from '../models/User/User.model'
+```
+
+#### *src/models/User/User.model.ts*
+
+```ts
+export
+@Table
+class User extends Model<InferAttributes<User>, InferCreationAttributes<User>> {
+
+  // ...
+
+  static readonly geneConfig = defineGraphqlGeneConfig(User, {
+    include: ['id', 'username'],
+
+    aliases: {
+      AuthenticatedUser: {
+        include: ['id', 'email', 'username', 'role', 'address', 'orders'],
+        // The directive could throw an `Unauthorized` error if the token
+        // from the `Authorization` header is not authorized. It could
+        // also be used to return data only to users with specific roles.
+        directives: [authenticationDirective({ role: null })],
+      },
+    },
+
+    types: {
+      Query: {
+        me: {
+          returnType: 'AuthenticatedUser',
+          // Assuming `context.authenticatedUser` is defined in `authenticationDirective`
+          resolver: ({ context }) => context.authenticatedUser,
+        },
+      },
+    },
+  })
+}
+```
+
+<br>
+
+## Available plugins
+
+- [`@graphql-gene/plugin-sequelize`](https://github.com/accesimpot/graphql-gene/tree/main/packages/plugin-sequelize#readme) for [Sequelize](https://sequelize.org)
 
 <br>
 

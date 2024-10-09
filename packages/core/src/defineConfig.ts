@@ -49,7 +49,22 @@ export interface GeneConfig<
   directives?: GeneDirectiveConfig[]
 
   /**
-   * The values of "aliases" would be nested GeneConfig properties that overwrites the ones set at a higher level.
+   * The values of "aliases" would be nested GeneConfig properties that overwrites the ones se
+   * at a higher level. This is useful for instances with a specific scope include more fields
+   * that the parent model (i.e. `AuthenticatedUser` being an alias of `User`). Note that the
+   * alias needs to be exported from _graphqlTypes.ts_ as well.
+   *
+   * @example
+   * include: ['id', 'username'],
+   *
+   * aliases: {
+   *   AuthenticatedUser: {
+   *     include: ['id', 'email', 'username', 'role', 'address', 'orders'],
+   *   },
+   * },
+   *
+   * @example
+   * export { User as AuthenticatedUser } from '../models/User/User.model'
    */
   aliases?: {
     [modelKey in GraphqlTypeName]?: GeneConfig<
