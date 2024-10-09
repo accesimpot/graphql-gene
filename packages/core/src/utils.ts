@@ -238,7 +238,7 @@ export function isFieldIncluded<M>(
 ): boolean {
   const config = geneConfig || {}
 
-  const check = (filters: NonNullable<(typeof config)['include']>) => {
+  const check = (filters: (string | RegExp)[]) => {
     for (const keyOrRegex of filters) {
       if (typeof keyOrRegex === 'string' && keyOrRegex === fieldKey) return true
       if (keyOrRegex instanceof RegExp && keyOrRegex.test(fieldKey)) return true
