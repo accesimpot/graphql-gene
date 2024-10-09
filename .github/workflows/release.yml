@@ -85,4 +85,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: pnpm semantic-release
+        run: pnpm -r --workspace-concurrency=1 semantic-release -e semantic-release-monorepo

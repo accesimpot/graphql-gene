@@ -1,14 +1,38 @@
 {
-  "private": true,
   "name": "graphql-gene",
   "version": "0.1.0",
-  "main": "./dist/index.js",
+  "description": "Generates automatically an executable schema out of your ORM models",
+  "repository": "accesimpot/graphql-gene",
+  "license": "MIT",
   "type": "module",
+  "keywords": [
+    "graphql",
+    "schema",
+    "schema generator",
+    "generate schema",
+    "generate resolvers",
+    "graphql typescript",
+    "gene",
+    "lookahead",
+    "performance",
+    "best practices"
+  ],
+  "bugs": {
+    "url": "https://github.com/accesimpot/graphql-gene/issues"
+  },
+  "homepage": "https://github.com/accesimpot/graphql-gene#readme",
+  "engines": {
+    "node": "^12.22.0 || ^14.16.0 || ^16.0.0 || >=17.0.0"
+  },
+  "main": "./dist/index.js",
   "scripts": {
     "dev": "NODE_ENV=development pnpm build --watch --emptyOutDir=false",
     "build": "NODE_ENV=${NODE_ENV:-development} vite build",
     "types:check": "tsc --project tsconfig.lint.json"
   },
+  "files": [
+    "dist"
+  ],
   "imports": {
     "#src/*": "./src/*"
   },
@@ -44,12 +68,7 @@
     "concurrently": "^8.2.2",
     "dev-utils": "workspace:*",
     "graphql": "^16.9.0",
-    "nodemon": "^3.1.4",
     "typescript": "^5.6.2",
     "vite": "^5.4.1"
-  },
-  "nodemonConfig": {
-    "runOnChangeOnly": true,
-    "delay": 100
   }
 }
