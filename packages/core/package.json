@@ -68,7 +68,52 @@
     "concurrently": "^8.2.2",
     "dev-utils": "workspace:*",
     "graphql": "^16.9.0",
+    "semantic-release": "^24.0.0",
+    "semantic-release-monorepo": "^8.0.2",
     "typescript": "^5.6.2",
     "vite": "^5.4.1"
+  },
+  "release": {
+    "extends": "semantic-release-monorepo",
+    "branches": [
+      {
+        "name": "main"
+      },
+      {
+        "name": "beta",
+        "channel": "beta",
+        "prerelease": true
+      }
+    ],
+    "repositoryUrl": "https://github.com/accesimpot/graphql-gene.git",
+    "plugins": [
+      [
+        "@semantic-release/commit-analyzer",
+        {
+          "preset": "angular",
+          "releaseRules": [
+            {
+              "type": "chore",
+              "scope": "deps",
+              "release": "patch"
+            },
+            {
+              "type": "docs",
+              "scope": "README",
+              "release": "patch"
+            }
+          ]
+        }
+      ],
+      "@semantic-release/release-notes-generator",
+      "@semantic-release/npm",
+      [
+        "@semantic-release/git",
+        {
+          "message": "chore(release-core): ${nextRelease.version} \n\n${nextRelease.notes}"
+        }
+      ],
+      "@semantic-release/github"
+    ]
   }
 }
