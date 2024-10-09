@@ -1,5 +1,12 @@
 {
   "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "tasksRunnerOptions": {
+    "default": {
+      "options": {
+        "runtimeCacheInputs": ["node -v", "echo ${NODE_ENV:-development}"]
+      }
+    }
+  },
   "targetDefaults": {
     "build": {
       "dependsOn": ["^build"],
@@ -13,6 +20,5 @@
       "cache": true
     }
   },
-  "defaultBase": "main",
-  "nxCloudAccessToken": "MGYxODgzNWQtMzlkMC00YjM1LThjNjgtZDY5YmViZWY2OTBmfHJlYWQtd3JpdGU="
+  "defaultBase": "main"
 }

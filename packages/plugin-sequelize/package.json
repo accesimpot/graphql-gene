@@ -1,5 +1,5 @@
 {
-  "name": "graphql-gene",
+  "name": "@graphql-gene/plugin-sequelize",
   "version": "0.1.0",
   "description": "Generates automatically an executable schema out of your ORM models",
   "repository": "accesimpot/graphql-gene",
@@ -11,6 +11,7 @@
     "schema generator",
     "generate schema",
     "generate resolvers",
+    "sequelize graphql",
     "graphql typescript",
     "gene",
     "lookahead",
@@ -20,7 +21,7 @@
   "bugs": {
     "url": "https://github.com/accesimpot/graphql-gene/issues"
   },
-  "homepage": "https://github.com/accesimpot/graphql-gene#readme",
+  "homepage": "https://github.com/accesimpot/graphql-gene/tree/main/packages/plugin-sequelize#readme",
   "engines": {
     "node": "^12.22.0 || ^14.16.0 || ^16.0.0 || >=17.0.0"
   },
@@ -46,18 +47,6 @@
         "types": "./dist/index.d.ts",
         "default": "./dist/index.cjs"
       }
-    },
-    "./context": {
-      "types": "./dist/types/extendable/context.d.ts",
-      "default": "./dist/types/extendable/context.js"
-    },
-    "./plugin-settings": {
-      "types": "./dist/types/extendable/pluginSettings.d.ts",
-      "default": "./dist/types/extendable/pluginSettings.js"
-    },
-    "./schema": {
-      "types": "./dist/types/extendable/schema.d.ts",
-      "default": "./dist/types/extendable/schema.js"
     }
   },
   "dependencies": {
@@ -68,6 +57,10 @@
     "concurrently": "^8.2.2",
     "dev-utils": "workspace:*",
     "graphql": "^16.9.0",
+    "graphql-gene": "workspace:*",
+    "nodemon": "^3.1.4",
+    "sequelize": "^6.37.3",
+    "sequelize-typescript": "^2.1.6",
     "typescript": "^5.6.2",
     "vite": "^5.4.1"
   }

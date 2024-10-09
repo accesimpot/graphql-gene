@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+
+  "compilerOptions": {
+    "rootDir": "src"
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "./*.config.ts",
+    "**/*.spec.ts",
+    "vitest*",
+    "__mocks__",
+    "./src/types/context.ts",
+    "./src/types/pluginSettings.ts",
+    "./src/types/schema.ts"
+  ]
+}

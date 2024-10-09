@@ -3,11 +3,10 @@
 
   "compilerOptions": {
     "baseUrl": ".",
-    "rootDir": ".",
     "outDir": "dist",
-    "paths": {
-      "@/*": ["./src/*"],
-      "#src/*": ["./src/*"]
-    }
+
+    /* building for a library: */
+    "declaration": true,
+    "declarationMap": true
   }
 }
