@@ -34,32 +34,22 @@ export interface GeneConfig<
   TReturnType extends string | unknown = unknown,
   TVarType extends GraphQLVarType = 'type',
 > {
+  /** Array of fields to include in the GraphQL type (default: include all). */
   include?: (InferFields<M> | RegExp)[]
+  /** Array of fields to exclude in the GraphQL type (default: ['createdAt', updatedAt']). */
   exclude?: (InferFields<M> | RegExp)[]
 
+  /** To include the timestamp attributes or not (default: false). */
   includeTimestamps?: boolean | ('createdAt' | 'updatedAt')[]
 
+  /** The GraphQL variable type to use (default: "type"). */
   varType?: TVarType
 
+  /** Directives to apply at the type level (also possible at the field level). */
   directives?: GeneDirectiveConfig[]
 
   /**
-   * Model aliases added to global.GeneRefs['modelAliases'] will be used to validate the keys of
-   * the "aliases" option. The values of "aliases" would be nested GeneConfig properties that
-   * overwrites defined to the default model name.
-   *
-   * @example
-   * aliases: {
-   *   // AuthenticatedUser might allow more fields in its graphql type than a normal User
-   *   AuthenticatedUser: {
-   *     includes: [
-   *       'id',
-   *       'email',
-   *       'someSensibleData',
-   *       // ...
-   *     ],
-   *   },
-   * },
+   * The values of "aliases" would be nested GeneConfig properties that overwrites the ones set at a higher level.
    */
   aliases?: {
     [modelKey in GraphqlTypeName]?: GeneConfig<
@@ -72,6 +62,9 @@ export interface GeneConfig<
     >
   }
 
+  /**
+   * Extend the Query or Mutation types only.
+   */
   types?: {
     [k in 'Query' | 'Mutation']?: Record<
       GraphQLFieldName,
