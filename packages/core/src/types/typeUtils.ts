@@ -1,5 +1,3 @@
-import type { GenePluginSettings } from 'graphql-gene/plugin-settings'
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyObject = Record<string, any>
 
@@ -34,11 +32,4 @@ type Hyphenize<T extends string, A extends string = ''> = T extends `${infer F}$
 type TrimHyphen<T extends string> = T extends `-${infer R}` ? R : T
 
 export type Kebab<T extends string, A extends string = ''> = TrimHyphen<Hyphenize<T, A>>
-
-type InferFieldKeys<M> = {
-  [k in keyof GenePluginSettings<M>]: GenePluginSettings<M>[k]['isMatching'] extends true
-    ? GenePluginSettings<M>[k]['fieldName']
-    : never
-}[keyof GenePluginSettings<M>]
-
-export type InferFields<M> = InferFieldKeys<M> extends never ? unknown : InferFieldKeys<M>
+export type NeverToUnknown<T> = T extends never ? unknown : T
