@@ -1,6 +1,7 @@
 {
   "private": true,
   "name": "@graphql-gene/plugin-sequelize",
+  "version": "0.1.0",
   "main": "./dist/index.js",
   "type": "module",
   "scripts": {
