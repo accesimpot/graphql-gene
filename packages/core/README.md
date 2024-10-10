@@ -342,7 +342,7 @@ export const MessageTypeEnum = ['info', 'success', 'warning', 'error'] as const
 
 `geneConfig.directives` accepts an array of `GeneDirectiveConfig` which will add the directive at the type level (current model). It is recommended to create directives as factory function using `defineDirective` for better typing (see example below).
 
-Directives are simply wrappers around resolvers following a middleware pattern. At the type level, it looks accross your whole schema and wrap the resolver of fields returning the given type. This way, the field itself returns `null` on error instead of returning an object with all its fields being `null`.
+Directives are simply wrappers around resolvers following a middleware pattern. At the type level, it looks across your whole schema and wrap the resolver of fields returning the given type. This way, the field itself returns `null` on error instead of returning an object with all its fields being `null`.
 
 ```ts
 type GeneDirectiveConfig<
