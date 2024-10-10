@@ -27,8 +27,7 @@ Use `graphql-gene` to generate automatically an executable schema out of your OR
   - [Allow inspecting the generated schema](#allow-inspecting-the-generated-schema)
 - [Gene config](#gene-config)
   - [Options](#options)
-  - [Define Query/Mutation inside your model](#define-querymutation-inside-your-model)
-  - [Define alias for specific scope](#define-alias-for-specific-scope)
+  - [Define queries/mutations inside your model](#define-queriesmutations-inside-your-model)
   - [Define directives](#define-directives)
     - [Example: User authentication directive](#example-user-authentication-directive)
 - [Available plugins](#available-plugins)
@@ -268,7 +267,7 @@ export class User extends Model {
 | `aliases`❔ | `Record<GraphqlTypeName], GeneConfig>` - The values of "aliases" would be nested GeneConfig properties that overwrites the ones set at a higher level. This is useful for instances with a specific scope include more fields that the parent model (i.e. `AuthenticatedUser` being an alias of `User`). Note that the alias needs to be exported from _graphqlTypes.ts_ as well (i.e. `export { User as AuthenticatedUser } from '../models/User/User.model'`). |
 | `types`❔ | `Record<'Query' \| 'Mutation', Record<GraphQLFieldName, FieldConfig>>` - Allow extending the Query or Mutation types only. |
 
-### Define Query/Mutation inside your model
+### Define queries/mutations inside your model
 
 #### *src/models/Prospect/Prospect.model.ts*
 
@@ -428,11 +427,15 @@ class User extends Model<InferAttributes<User>, InferCreationAttributes<User>> {
   // ...
 
   static readonly geneConfig = defineGraphqlGeneConfig(User, {
+    include: ['id', 'username'],
+
     aliases: {
+      // Use an alias since `AuthenticatedUser` as a quite
+      // different scope than a public `User`.
       AuthenticatedUser: {
-        include: ['id', 'email', 'isConfirmed', 'lastLoginAt', 'adminRole', 'reports'],
+        include: ['id', 'email', 'username', 'role', 'address', 'orders'],
         // `role: null` means no specific admin `role` needed
-        // it just needs to be authenticated
+        // it just needs to be authenticated.
         directives: [authenticationDirective({ role: null })],
       },
     },
@@ -449,6 +452,19 @@ class User extends Model<InferAttributes<User>, InferCreationAttributes<User>> {
   }
 }
 ```
+
+The alias need to be exported as well from _graphqlTypes.ts_:
+
+#### *src/models/graphqlTypes.ts*
+
+```ts
+export * from './models'
+
+// Export the alias for typing
+export { User as AuthenticatedUser } from '../models/User/User.model'
+```
+
+Another example for `superAdmin` role:
 
 #### *src/models/AdminAccount/AdminAccount.model.ts*
 
@@ -470,52 +486,6 @@ type Query {
 ```
 
 <img width="804" alt="image" src="https://github.com/user-attachments/assets/3862b733-24b0-4e09-bf79-92645d097e73">
-
-### Define alias for specific scope
-
-#### *src/models/graphqlTypes.ts*
-
-```ts
-export * from './models'
-
-// Export the alias for typing
-export { User as AuthenticatedUser } from '../models/User/User.model'
-```
-
-#### *src/models/User/User.model.ts*
-
-```ts
-export
-@Table
-class User extends Model<InferAttributes<User>, InferCreationAttributes<User>> {
-
-  // ...
-
-  static readonly geneConfig = defineGraphqlGeneConfig(User, {
-    include: ['id', 'username'],
-
-    aliases: {
-      AuthenticatedUser: {
-        include: ['id', 'email', 'username', 'role', 'address', 'orders'],
-        // The directive could throw an `Unauthorized` error if the token
-        // from the `Authorization` header is not authorized. It could
-        // also be used to return data only to users with specific roles.
-        directives: [authenticationDirective({ role: null })],
-      },
-    },
-
-    types: {
-      Query: {
-        me: {
-          returnType: 'AuthenticatedUser',
-          // Assuming `context.authenticatedUser` is defined in `authenticationDirective`
-          resolver: ({ context }) => context.authenticatedUser,
-        },
-      },
-    },
-  })
-}
-```
 
 <br>
 
