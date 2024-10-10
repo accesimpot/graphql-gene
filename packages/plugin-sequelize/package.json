@@ -1,6 +1,6 @@
 {
   "name": "@graphql-gene/plugin-sequelize",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Generates automatically an executable schema out of your ORM models",
   "repository": "accesimpot/graphql-gene",
   "license": "MIT",
