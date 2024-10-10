@@ -231,6 +231,8 @@ if (process.env.NODE_ENV !== 'production') {
 }
 ```
 
+<img width="600" alt="375269573-093fa556-9b80-4ad2-9cea-a8f312999293" src="https://github.com/user-attachments/assets/190eb4ac-d46d-44bc-886a-110fdf4ad05c">
+
 <br>
 
 ## Gene config
