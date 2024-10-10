@@ -1,6 +1,6 @@
 {
   "name": "graphql-gene",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Generates automatically an executable schema out of your ORM models",
   "repository": "accesimpot/graphql-gene",
   "license": "MIT",
