@@ -63,6 +63,8 @@ yarn add graphql-gene @graphql-gene/plugin-sequelize
 npm i graphql-gene @graphql-gene/plugin-sequelize
 ```
 
+<br>
+
 ### Export all models from one file
 
 Create a file where you export all your GraphQL types including your database models, but also basic GraphQL types, inputs, enums.
@@ -85,6 +87,8 @@ export const MessageTypeEnum = ['info', 'success', 'warning', 'error'] as const
 // i.e. assuming AuthenticatedUser is defined as alias in User.geneConfig
 export { User as AuthenticatedUser, MutationLoginOutput } from '../models/User/User.model'
 ```
+
+<br>
 
 ### Typing
 
@@ -110,6 +114,8 @@ declare module 'graphql-gene/context' {
   export interface GeneContext extends YogaInitialContext {}
 }
 ```
+
+<br>
 
 ### Generate the schema
 
@@ -160,6 +166,8 @@ const resolvers = {
 export { typeDefs, resolvers, schema, schemaString, schemaHtml }
 ```
 
+<br>
+
 The `schema` returned is an executable schema so you can simply pass it to your GraphQL server:
 
 #### *src/server/index.ts*
@@ -192,6 +200,8 @@ server.listen(4000, () => {
   console.info('Server is running on http://localhost:4000/graphql')
 })
 ```
+
+<br>
 
 ### Allow inspecting the generated schema
 
@@ -235,6 +245,7 @@ if (process.env.NODE_ENV !== 'production') {
 <img width="600" alt="375269573-093fa556-9b80-4ad2-9cea-a8f312999293" src="https://github.com/user-attachments/assets/190eb4ac-d46d-44bc-886a-110fdf4ad05c">
 
 <br>
+<br>
 
 ## Gene config
 
@@ -266,6 +277,8 @@ export class User extends Model {
 | `directives`❔ | `GeneDirectiveConfig[]` - Directives to apply at the type level (also possible at the field level). |
 | `aliases`❔ | `Record<GraphqlTypeName], GeneConfig>` - The values of "aliases" would be nested GeneConfig properties that overwrites the ones set at a higher level. This is useful for instances with a specific scope include more fields that the parent model (i.e. `AuthenticatedUser` being an alias of `User`). Note that the alias needs to be exported from _graphqlTypes.ts_ as well (i.e. `export { User as AuthenticatedUser } from '../models/User/User.model'`). |
 | `types`❔ | `Record<'Query' \| 'Mutation', Record<GraphQLFieldName, FieldConfig>>` - Allow extending the Query or Mutation types only. |
+
+<br>
 
 ### Define queries/mutations inside your model
 
@@ -323,6 +336,8 @@ export const MessageOutput = {
 export const MessageTypeEnum = ['info', 'success', 'warning', 'error'] as const
 ```
 
+<br>
+
 ### Define directives
 
 `geneConfig.directives` accepts an array of `GeneDirectiveConfig` which will add the directive at the type level (current model). It is recommended to create directives as factory function using `defineDirective` for better typing (see example below).
@@ -349,6 +364,8 @@ type GeneDirectiveHandler<TSource, TContext, TArgs, TResult = unknown> = (option
   resolve: () => Promise<TResult> | TResult
 }) => Promise<void> | void
 ```
+
+<br>
 
 #### Example: User authentication directive
 
@@ -415,6 +432,8 @@ export const userAuthDirective = defineDirective<{
 }))
 ```
 
+<br>
+
 The `args` option allow you to use it in different contexts:
 
 #### *src/models/User/User.model.ts*
@@ -453,6 +472,8 @@ class User extends Model<InferAttributes<User>, InferCreationAttributes<User>> {
 }
 ```
 
+<br>
+
 The alias need to be exported as well from _graphqlTypes.ts_:
 
 #### *src/models/graphqlTypes.ts*
@@ -463,6 +484,8 @@ export * from './models'
 // Export the alias for typing
 export { User as AuthenticatedUser } from '../models/User/User.model'
 ```
+
+<br>
 
 Another example for `superAdmin` role:
 
@@ -475,7 +498,9 @@ static readonly geneConfig = defineGraphqlGeneConfig(AdminAccount, {
 }
 ```
 
-#### Sending a request
+<br>
+
+#### Sending the request
 
 This is how the response would look like for `Query.me` if the token is missing or invalid:
 
@@ -488,11 +513,14 @@ type Query {
 <img width="804" alt="image" src="https://github.com/user-attachments/assets/3862b733-24b0-4e09-bf79-92645d097e73">
 
 <br>
+<br>
+
 
 ## Available plugins
 
 - [`@graphql-gene/plugin-sequelize`](https://github.com/accesimpot/graphql-gene/tree/main/packages/plugin-sequelize#readme) for [Sequelize](https://sequelize.org)
 
+<br>
 <br>
 
 ## Contribution
