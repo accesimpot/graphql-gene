@@ -29,6 +29,8 @@ Use `graphql-gene` to generate automatically an executable schema out of your OR
   - [Options](#options)
   - [Define Query/Mutation inside your model](#define-querymutation-inside-your-model)
   - [Define alias for specific scope](#define-alias-for-specific-scope)
+  - [Define directives](#define-directives)
+    - [Example: User authentication directive](#example-user-authentication-directive)
 - [Available plugins](#available-plugins)
 - [Contribution](#contribution)
 
@@ -231,6 +233,8 @@ if (process.env.NODE_ENV !== 'production') {
 }
 ```
 
+<img width="600" alt="375269573-093fa556-9b80-4ad2-9cea-a8f312999293" src="https://github.com/user-attachments/assets/190eb4ac-d46d-44bc-886a-110fdf4ad05c">
+
 <br>
 
 ## Gene config
@@ -319,6 +323,153 @@ export const MessageOutput = {
 
 export const MessageTypeEnum = ['info', 'success', 'warning', 'error'] as const
 ```
+
+### Define directives
+
+`geneConfig.directives` accepts an array of `GeneDirectiveConfig` which will add the directive at the type level (current model). It is recommended to create directives as factory function using `defineDirective` for better typing (see example below).
+
+Directives are simply wrappers around resolvers following a middleware pattern. At the type level, it looks accross your whole schema and wrap the resolver of fields returning the given type. This way, the field itself returns `null` on error instead of returning an object with all its fields being `null`.
+
+```ts
+type GeneDirectiveConfig<
+  TDirectiveArgs = Record<string, string | number | boolean | null> | undefined,
+  TSource = Record<string, unknown> | undefined,
+  TContext = GeneContext,
+  TArgs = Record<string, unknown> | undefined,
+> = {
+  name: string
+  args?: TDirectiveArgs
+  handler: GeneDirectiveHandler<TSource, TContext, TArgs>
+}
+
+type GeneDirectiveHandler<TSource, TContext, TArgs, TResult = unknown> = (options: {
+  source: Parameters<GraphQLFieldResolver<TSource, TContext, TArgs, TResult>>[0]
+  args: Parameters<GraphQLFieldResolver<TSource, TContext, TArgs, TResult>>[1]
+  context: Parameters<GraphQLFieldResolver<TSource, TContext, TArgs, TResult>>[2]
+  info: Parameters<GraphQLFieldResolver<TSource, TContext, TArgs, TResult>>[3]
+  resolve: () => Promise<TResult> | TResult
+}) => Promise<void> | void
+```
+
+#### Example: User authentication directive
+
+#### *src/models/User/userAuthDirective.ts*
+
+```ts
+import { GraphQLError } from 'graphql'
+import { defineDirective } from 'graphql-gene'
+import { getQueryIncludeOf } from '@graphql-gene/plugin-sequelize'
+import type { WhereAttributeHash } from 'sequelize'
+import { User } from './User.model'
+import { getJwtTokenPayload } from './someUtils'
+
+export enum ADMIN_ROLES {
+  developer = 'developer',
+  manager = 'manager',
+  superAdmin = 'superAdmin',
+}
+
+declare module 'graphql-gene/context' {
+  export interface GeneContext {
+    authenticatedUser?: User | null
+  }
+}
+
+function throwUnauthorized(): never {
+  throw new GraphQLError('Unauthorized')
+}
+
+// Factory function returning the directive object
+export const userAuthDirective = defineDirective<{
+  // Convert ADMIN_ROLES enum to a union type
+  role: `${ADMIN_ROLES}` | null
+}>(args => ({
+  name: 'userAuth', // only used to add `@userAuth` to the schema in graphql language
+  args,
+
+  async handler({ context, info }) {
+    // If it was previously set to `null`
+    if (context.authenticatedUser === null) return throwUnauthorized()
+
+    // i.e. `context.request` coming from Fastify
+    const authHeader = context.request.headers.get('authorization')
+    const [, token] =
+      authHeader?.match(/^Bearer\s+(\S+)$/) || ([] as (string | undefined)[])
+    if (!token) return throwUnauthorized()
+
+    // For performance: avoid querying nested associations if they are not requested.
+    // `getQueryIncludeOf` look deeply inside the operation (query or mutation) for
+    // the `AuthenticatedUser` type in order to know which associations are requested.
+    const includeOptions = getQueryIncludeOf(info, 'AuthenticatedUser')
+
+    const { id, email } = getJwtTokenPayload(token) || {}
+    if (!id && !email) return throwUnauthorized()
+
+    const where: WhereAttributeHash = { id, email }
+    if (args.role) where.adminRole = args.role
+
+    const user = await User.findOne({ where, ...includeOptions })
+    context.authenticatedUser = user
+
+    if (!user) throwUnauthorized()
+  },
+}))
+```
+
+The `args` option allow you to use it in different contexts:
+
+#### *src/models/User/User.model.ts*
+
+```ts
+export
+@Table
+class User extends Model<InferAttributes<User>, InferCreationAttributes<User>> {
+
+  // ...
+
+  static readonly geneConfig = defineGraphqlGeneConfig(User, {
+    aliases: {
+      AuthenticatedUser: {
+        include: ['id', 'email', 'isConfirmed', 'lastLoginAt', 'adminRole', 'reports'],
+        // `role: null` means no specific admin `role` needed
+        // it just needs to be authenticated
+        directives: [authenticationDirective({ role: null })],
+      },
+    },
+
+    types: {
+      Query: {
+        me: {
+          returnType: 'AuthenticatedUser',
+          // `context.authenticatedUser` is defined in `authenticationDirective`
+          resolver: ({ context }) => context.authenticatedUser,
+        },
+      },
+    },
+  }
+}
+```
+
+#### *src/models/AdminAccount/AdminAccount.model.ts*
+
+```ts
+static readonly geneConfig = defineGraphqlGeneConfig(AdminAccount, {
+  // i.e. Only allow super admin users to access to the `AdminAccount` data
+  directives: [authenticationDirective({ role: 'superAdmin' })],
+}
+```
+
+#### Sending a request
+
+This is how the response would look like for `Query.me` if the token is missing or invalid:
+
+```gql
+type Query {
+  me: AuthenticatedUser
+}
+```
+
+<img width="804" alt="image" src="https://github.com/user-attachments/assets/3862b733-24b0-4e09-bf79-92645d097e73">
 
 ### Define alias for specific scope
 
