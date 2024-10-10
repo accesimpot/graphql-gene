@@ -27,8 +27,7 @@ Use `graphql-gene` to generate automatically an executable schema out of your OR
   - [Allow inspecting the generated schema](#allow-inspecting-the-generated-schema)
 - [Gene config](#gene-config)
   - [Options](#options)
-  - [Define Query/Mutation inside your model](#define-querymutation-inside-your-model)
-  - [Define alias for specific scope](#define-alias-for-specific-scope)
+  - [Define queries/mutations inside your model](#define-queriesmutations-inside-your-model)
   - [Define directives](#define-directives)
     - [Example: User authentication directive](#example-user-authentication-directive)
 - [Available plugins](#available-plugins)
@@ -64,6 +63,8 @@ yarn add graphql-gene @graphql-gene/plugin-sequelize
 npm i graphql-gene @graphql-gene/plugin-sequelize
 ```
 
+<br>
+
 ### Export all models from one file
 
 Create a file where you export all your GraphQL types including your database models, but also basic GraphQL types, inputs, enums.
@@ -86,6 +87,8 @@ export const MessageTypeEnum = ['info', 'success', 'warning', 'error'] as const
 // i.e. assuming AuthenticatedUser is defined as alias in User.geneConfig
 export { User as AuthenticatedUser, MutationLoginOutput } from '../models/User/User.model'
 ```
+
+<br>
 
 ### Typing
 
@@ -111,6 +114,8 @@ declare module 'graphql-gene/context' {
   export interface GeneContext extends YogaInitialContext {}
 }
 ```
+
+<br>
 
 ### Generate the schema
 
@@ -161,6 +166,8 @@ const resolvers = {
 export { typeDefs, resolvers, schema, schemaString, schemaHtml }
 ```
 
+<br>
+
 The `schema` returned is an executable schema so you can simply pass it to your GraphQL server:
 
 #### *src/server/index.ts*
@@ -193,6 +200,8 @@ server.listen(4000, () => {
   console.info('Server is running on http://localhost:4000/graphql')
 })
 ```
+
+<br>
 
 ### Allow inspecting the generated schema
 
@@ -236,6 +245,7 @@ if (process.env.NODE_ENV !== 'production') {
 <img width="600" alt="375269573-093fa556-9b80-4ad2-9cea-a8f312999293" src="https://github.com/user-attachments/assets/190eb4ac-d46d-44bc-886a-110fdf4ad05c">
 
 <br>
+<br>
 
 ## Gene config
 
@@ -268,7 +278,9 @@ export class User extends Model {
 | `aliases`❔ | `Record<GraphqlTypeName], GeneConfig>` - The values of "aliases" would be nested GeneConfig properties that overwrites the ones set at a higher level. This is useful for instances with a specific scope include more fields that the parent model (i.e. `AuthenticatedUser` being an alias of `User`). Note that the alias needs to be exported from _graphqlTypes.ts_ as well (i.e. `export { User as AuthenticatedUser } from '../models/User/User.model'`). |
 | `types`❔ | `Record<'Query' \| 'Mutation', Record<GraphQLFieldName, FieldConfig>>` - Allow extending the Query or Mutation types only. |
 
-### Define Query/Mutation inside your model
+<br>
+
+### Define queries/mutations inside your model
 
 #### *src/models/Prospect/Prospect.model.ts*
 
@@ -324,6 +336,8 @@ export const MessageOutput = {
 export const MessageTypeEnum = ['info', 'success', 'warning', 'error'] as const
 ```
 
+<br>
+
 ### Define directives
 
 `geneConfig.directives` accepts an array of `GeneDirectiveConfig` which will add the directive at the type level (current model). It is recommended to create directives as factory function using `defineDirective` for better typing (see example below).
@@ -350,6 +364,8 @@ type GeneDirectiveHandler<TSource, TContext, TArgs, TResult = unknown> = (option
   resolve: () => Promise<TResult> | TResult
 }) => Promise<void> | void
 ```
+
+<br>
 
 #### Example: User authentication directive
 
@@ -416,6 +432,8 @@ export const userAuthDirective = defineDirective<{
 }))
 ```
 
+<br>
+
 The `args` option allow you to use it in different contexts:
 
 #### *src/models/User/User.model.ts*
@@ -428,11 +446,15 @@ class User extends Model<InferAttributes<User>, InferCreationAttributes<User>> {
   // ...
 
   static readonly geneConfig = defineGraphqlGeneConfig(User, {
+    include: ['id', 'username'],
+
     aliases: {
+      // Use an alias since `AuthenticatedUser` as a quite
+      // different scope than a public `User`.
       AuthenticatedUser: {
-        include: ['id', 'email', 'isConfirmed', 'lastLoginAt', 'adminRole', 'reports'],
+        include: ['id', 'email', 'username', 'role', 'address', 'orders'],
         // `role: null` means no specific admin `role` needed
-        // it just needs to be authenticated
+        // it just needs to be authenticated.
         directives: [authenticationDirective({ role: null })],
       },
     },
@@ -450,6 +472,23 @@ class User extends Model<InferAttributes<User>, InferCreationAttributes<User>> {
 }
 ```
 
+<br>
+
+The alias need to be exported as well from _graphqlTypes.ts_:
+
+#### *src/models/graphqlTypes.ts*
+
+```ts
+export * from './models'
+
+// Export the alias for typing
+export { User as AuthenticatedUser } from '../models/User/User.model'
+```
+
+<br>
+
+Another example for `superAdmin` role:
+
 #### *src/models/AdminAccount/AdminAccount.model.ts*
 
 ```ts
@@ -459,7 +498,9 @@ static readonly geneConfig = defineGraphqlGeneConfig(AdminAccount, {
 }
 ```
 
-#### Sending a request
+<br>
+
+#### Sending the request
 
 This is how the response would look like for `Query.me` if the token is missing or invalid:
 
@@ -471,58 +512,15 @@ type Query {
 
 <img width="804" alt="image" src="https://github.com/user-attachments/assets/3862b733-24b0-4e09-bf79-92645d097e73">
 
-### Define alias for specific scope
-
-#### *src/models/graphqlTypes.ts*
-
-```ts
-export * from './models'
-
-// Export the alias for typing
-export { User as AuthenticatedUser } from '../models/User/User.model'
-```
-
-#### *src/models/User/User.model.ts*
-
-```ts
-export
-@Table
-class User extends Model<InferAttributes<User>, InferCreationAttributes<User>> {
-
-  // ...
-
-  static readonly geneConfig = defineGraphqlGeneConfig(User, {
-    include: ['id', 'username'],
-
-    aliases: {
-      AuthenticatedUser: {
-        include: ['id', 'email', 'username', 'role', 'address', 'orders'],
-        // The directive could throw an `Unauthorized` error if the token
-        // from the `Authorization` header is not authorized. It could
-        // also be used to return data only to users with specific roles.
-        directives: [authenticationDirective({ role: null })],
-      },
-    },
-
-    types: {
-      Query: {
-        me: {
-          returnType: 'AuthenticatedUser',
-          // Assuming `context.authenticatedUser` is defined in `authenticationDirective`
-          resolver: ({ context }) => context.authenticatedUser,
-        },
-      },
-    },
-  })
-}
-```
-
 <br>
+<br>
+
 
 ## Available plugins
 
 - [`@graphql-gene/plugin-sequelize`](https://github.com/accesimpot/graphql-gene/tree/main/packages/plugin-sequelize#readme) for [Sequelize](https://sequelize.org)
 
+<br>
 <br>
 
 ## Contribution
