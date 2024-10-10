@@ -439,6 +439,8 @@ The `args` option allow you to use it in different contexts:
 #### *src/models/User/User.model.ts*
 
 ```ts
+import { userAuthDirective } from '.userAuthDirective.ts'
+
 export
 @Table
 class User extends Model<InferAttributes<User>, InferCreationAttributes<User>> {
@@ -455,7 +457,7 @@ class User extends Model<InferAttributes<User>, InferCreationAttributes<User>> {
         include: ['id', 'email', 'username', 'role', 'address', 'orders'],
         // `role: null` means no specific admin `role` needed
         // it just needs to be authenticated.
-        directives: [authenticationDirective({ role: null })],
+        directives: [userAuthDirective({ role: null })],
       },
     },
 
@@ -463,7 +465,7 @@ class User extends Model<InferAttributes<User>, InferCreationAttributes<User>> {
       Query: {
         me: {
           returnType: 'AuthenticatedUser',
-          // `context.authenticatedUser` is defined in `authenticationDirective`
+          // `context.authenticatedUser` is defined in `userAuthDirective`
           resolver: ({ context }) => context.authenticatedUser,
         },
       },
@@ -494,7 +496,7 @@ Another example for `superAdmin` role:
 ```ts
 static readonly geneConfig = defineGraphqlGeneConfig(AdminAccount, {
   // i.e. Only allow super admin users to access to the `AdminAccount` data
-  directives: [authenticationDirective({ role: 'superAdmin' })],
+  directives: [userAuthDirective({ role: 'superAdmin' })],
 }
 ```
 
