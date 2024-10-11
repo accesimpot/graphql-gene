@@ -37,14 +37,14 @@ Use `graphql-gene` to generate automatically an executable schema out of your OR
 
 ## Highlights
 
-- ⏰ Time-to-delivery - No time wasted writing similar resolvers.
 - ⚡️ Performant - Automatically avoid querying nested database relationships if they are not requested.
 - 🔒 Secure - Easily create and share directives at the type or field level (i.e. `@userAuth`).
+- ⏰ Time-to-delivery - No time wasted writing similar resolvers.
 - 🧩 Resolver template - Generates the resolver for you with deep [`where`](https://sequelize.org/docs/v6/core-concepts/model-querying-basics/#operators) argument and more.
 - <img src="https://github.com/user-attachments/assets/bd2f6032-5346-478f-ac0c-2c28703a8e12" width="18"> Type safe - Resolver arguments and return value are deeply typed.
 - 🎯 One source of truth - Types are defined once and shared between GraphQL and Typescript.
 - 💥 Works with anything - New or existing projects. Works with any GraphQL servers, ORM, or external sources.
-- 🔌 Plugins - Simple plugin system to potentially support any Node.js ORM (it only has `plugin-sequelize` for now).
+- 🔌 Plugins - Simple plugin system to potentially support any Node.js ORM. See [Writing a Plugin](docs/plugins/writing-a-plugin.md).
 
 <br>
 
@@ -121,7 +121,7 @@ declare module 'graphql-gene/context' {
 
 The last step is to call `generateSchema` and pass the returned `typeDefs` and `schema` to your GraphQL server. You simply have to pass all types imported from _graphqlTypes.ts_ as shown in the example below.
 
-Moreover, `graphql-gene` excepts you to provide scalars for `Date` and `DateTime` or set the option `hasDateScalars` to `false` (will define the `Date`/`DateTime` fields as `String`). It also excepts you to provide a `JSON` scalar if you have fields mapping to the `JSON` type (i.e. `DataType.JSON` in Sequelize).
+Moreover, `graphql-gene` expects you to provide scalars for `Date` and `DateTime` or set the option `hasDateScalars` to `false` (will define the `Date`/`DateTime` fields as `String`). It also excepts you to provide a `JSON` scalar if you have fields mapping to the `JSON` data type (i.e. `DataType.JSON` in Sequelize).
 
 You can use the `schema` option to provide the scalars as it accepts any schema to extend (`schema?: GraphQLSchema | DocumentNode | string`).
 
@@ -476,7 +476,7 @@ class User extends Model<InferAttributes<User>, InferCreationAttributes<User>> {
 
 <br>
 
-The alias need to be exported as well from _graphqlTypes.ts_:
+The alias needs to be exported as well from _graphqlTypes.ts_:
 
 #### *src/models/graphqlTypes.ts*
 
