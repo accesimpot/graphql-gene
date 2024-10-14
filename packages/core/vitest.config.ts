@@ -8,7 +8,7 @@ export default defineConfig({
     coverage: {
       enabled: true,
       provider: 'istanbul',
-      include: ['packages/graphql-lookahead/src/**'],
+      include: ['src/**'],
 
       thresholds: {
         statements: 95,

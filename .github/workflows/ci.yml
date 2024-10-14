@@ -74,6 +74,9 @@ jobs:
         run: |
           pnpm format:check $(git diff --name-only --diff-filter=d ${{ steps.setSHAs.outputs.base }} | grep -E "\.([mc]?[jt]s|json|ya?ml|gql|graphql)$" | xargs)
 
+      - name: Run non-cacheable tests
+        run: pnpm test:non-cacheable
+
       - name: Run tests 🧪
         if: steps.affected.outputs.count > 0
         # Not running with "nx affected" since we need to run the playground integration tests even
