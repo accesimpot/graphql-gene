@@ -28,9 +28,6 @@
   "scripts": {
     "dev": "NODE_ENV=development pnpm build --watch --emptyOutDir=false",
     "build": "NODE_ENV=${NODE_ENV:-development} vite build",
-    "test": "echo \"No cacheable test (vitest --run)\"",
-    "test:watch": "echo \"No cacheable test (vitest)\"",
-    "test:non-cacheable": "vitest --run --no-coverage --config='./vitest.always.config.ts'",
     "types:check": "tsc --project tsconfig.lint.json"
   },
   "files": [
@@ -68,12 +65,10 @@
   },
   "devDependencies": {
     "@types/node": "^20.15.0",
-    "@vitest/coverage-istanbul": "^2.1.2",
     "dev-utils": "workspace:*",
     "graphql": "^16.9.0",
-    "typescript": "^5.6.2",
-    "vite": "^5.4.1",
-    "vitest": "^2.1.2"
+    "typescript": "^5.6.3",
+    "vite": "^5.4.1"
   },
   "publishConfig": {
     "access": "public"

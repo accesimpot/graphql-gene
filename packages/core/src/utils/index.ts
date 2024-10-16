@@ -17,8 +17,10 @@ import {
   type GraphQLOutputType,
 } from 'graphql'
 import type { GeneContext } from 'graphql-gene/context'
-import type { FieldLines, GraphqlReturnTypes, TypeDefLines, ValidGraphqlType } from './types'
-import type { GeneConfig, GeneTypeConfig } from './defineConfig'
+import type { FieldLines, GraphqlReturnTypes, TypeDefLines, ValidGraphqlType } from '../types'
+import type { GeneConfig, GeneTypeConfig } from '../defineConfig'
+
+export * from './extend'
 
 type GraphQLOutputObjectType = GraphQLObjectType | GraphQLInterfaceType
 
@@ -238,7 +240,7 @@ export function isFieldIncluded<M>(
 ): boolean {
   const config = geneConfig || {}
 
-  const check = (filters: (string | RegExp)[]) => {
+  const check = (filters: unknown[]) => {
     for (const keyOrRegex of filters) {
       if (typeof keyOrRegex === 'string' && keyOrRegex === fieldKey) return true
       if (keyOrRegex instanceof RegExp && keyOrRegex.test(fieldKey)) return true

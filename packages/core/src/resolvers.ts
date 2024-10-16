@@ -1,5 +1,5 @@
 import { defaultFieldResolver, GraphQLSchema } from 'graphql'
-import type { GeneConfig, GeneDefaultResolverArgs } from './defineConfig'
+import type { GeneConfig, GeneDefaultResolverArgs, QueryMutationTypes } from './defineConfig'
 import {
   lookDeepInSchema,
   isUsingDefaultResolver,
@@ -31,6 +31,20 @@ export function addResolversToSchema<SchemaTypes extends AnyObject>(options: {
       if (modifiedSchema) schema = modifiedSchema
     }
   })
+  // const extendedQueryMutationTypes = getExtendedQueryMutationTypes()
+
+  // Object.entries(extendedQueryMutationTypes.types).forEach(([graphqlType, typeConfig]) => {
+  //   for (const plugin of options.plugins) {
+  //     const modifiedSchema = defineResolvers({
+  //       schema,
+  //       plugin,
+  //       modelKey: graphqlType,
+  //       model: extendedQueryMutationTypes.model,
+  //       typeConfig,
+  //     })
+  //     if (modifiedSchema) schema = modifiedSchema
+  //   }
+  // })
   return schema
 }
 
@@ -42,25 +56,29 @@ function forEachModel<M>(options: {
   model: M
 }): GraphQLSchema | undefined {
   const geneConfig = getGeneConfigFromOptions(options)
-  let modifiedSchema = defineResolvers(options)
+  const { types: typeConfig, directives } = geneConfig || {}
+
+  let modifiedSchema = defineResolvers({ ...options, typeConfig, directives })
 
   Object.entries(geneConfig?.aliases || {}).forEach(([aliasKey, geneConfig]) => {
-    modifiedSchema = defineResolvers({ ...options, geneConfig, modelKey: aliasKey })
+    const { types: typeConfig, directives } = geneConfig || {}
+    modifiedSchema = defineResolvers({ ...options, typeConfig, directives, modelKey: aliasKey })
   })
   return modifiedSchema
 }
 
 function defineResolvers<M>(options: {
-  geneConfig?: GeneConfig<M>
   schema: GraphQLSchema
-  plugin: GenePlugin<M>
+  plugin: Pick<GenePlugin<M>, 'defaultResolver'>
   modelKey: string
   model: M
+  typeConfig: QueryMutationTypes | undefined
+  directives?: GeneConfig<M>['directives']
 }): GraphQLSchema | undefined {
-  if (!options.geneConfig) return
+  if (!options.typeConfig && !options.directives) return
 
-  const typeConfig = options.geneConfig.types || {}
-  const typeLevelDirectiveConfigs = options.geneConfig.directives
+  const typeConfig = options.typeConfig || {}
+  const typeLevelDirectiveConfigs = options.directives
 
   lookDeepInSchema({
     schema: options.schema,
@@ -95,7 +113,7 @@ function defineResolvers<M>(options: {
               return normalizedConfig.resolver({ source, args, context, info })
             }
 
-            if (isUsingDefaultResolver(normalizedConfig)) {
+            if (isUsingDefaultResolver(normalizedConfig) && options.plugin.defaultResolver) {
               const providedArgs = args as Partial<GeneDefaultResolverArgs<M>>
               const page = (providedArgs.page || PAGE_ARG_DEFAULT) - 1
               const perPage = providedArgs.perPage || PER_PAGE_ARG_DEFAULT

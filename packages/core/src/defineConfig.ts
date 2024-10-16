@@ -20,11 +20,36 @@ export type GeneConfigTypes<
   TReturnType extends string | unknown = unknown,
 > =
   | readonly string[]
-  | (Record<
-      GraphQLFieldName,
-      | GraphqlReturnTypes<ValidGraphqlType | ''>
-      | GeneTypeConfig<TSource, TContext, TArgDefs, TReturnType>
-    > & { geneConfig?: GeneConfig })
+  | (GeneObjectTypeConfig<TSource, TContext, TArgDefs, TReturnType> & { geneConfig?: GeneConfig })
+
+export type GeneObjectTypeConfig<
+  TSource = Record<string, unknown> | undefined,
+  TContext = GeneContext,
+  TArgDefs extends Record<string, string> | undefined = undefined,
+  TReturnType extends string | unknown = unknown,
+> = Record<
+  GraphQLFieldName,
+  | GraphqlReturnTypes<ValidGraphqlType | ''>
+  | GeneTypeConfig<TSource, TContext, TArgDefs, TReturnType>
+>
+
+/** Query and Mutation types extended from different models. */
+export type QueryMutationTypes<
+  TSource = Record<string, unknown> | undefined,
+  TContext = GeneContext,
+  TArgDefs extends Record<string, string> | undefined = undefined,
+  TReturnType extends string | unknown = unknown,
+> = {
+  [k in 'Query' | 'Mutation']?: Record<
+    GraphQLFieldName,
+    FieldConfig<
+      TSource,
+      TContext,
+      TArgDefs,
+      TReturnType extends unknown ? GraphqlReturnTypes<ValidGraphqlType> : TReturnType
+    >
+  >
+}
 
 export interface GeneConfig<
   M = unknown,
@@ -32,7 +57,7 @@ export interface GeneConfig<
   TContext = GeneContext,
   TArgDefs extends Record<string, string> | undefined = undefined,
   TReturnType extends string | unknown = unknown,
-  TVarType extends GraphQLVarType = 'type',
+  TVarType extends GraphQLVarType = GraphQLVarType,
 > {
   /** Array of fields to include in the GraphQL type (default: include all). */
   include?: (InferFields<M> | RegExp)[]
@@ -79,18 +104,9 @@ export interface GeneConfig<
 
   /**
    * Extend the Query or Mutation types only.
+   * @deprecated You should import and call `extendQuery` or `extendMutation` instead.
    */
-  types?: {
-    [k in 'Query' | 'Mutation']?: Record<
-      GraphQLFieldName,
-      FieldConfig<
-        TSource,
-        TContext,
-        TArgDefs,
-        TReturnType extends unknown ? GraphqlReturnTypes<ValidGraphqlType> : TReturnType
-      >
-    >
-  }
+  types?: QueryMutationTypes<TSource, TContext, TArgDefs, TReturnType>
 }
 
 export type GeneTypeConfig<
@@ -217,7 +233,9 @@ export function defineGraphqlGeneConfig<
   TSource = Record<string, unknown> | undefined,
   TContext = GeneContext,
   TArgDefs extends Record<string, string> | undefined = undefined,
->(_model: M, options: GeneConfig<M, TSource, TContext, TArgDefs>) {
+  TReturnType extends string | unknown = unknown,
+  TVarType extends GraphQLVarType = 'type',
+>(_model: M, options: GeneConfig<M, TSource, TContext, TArgDefs, TReturnType, TVarType>) {
   return options
 }
 
@@ -244,4 +262,75 @@ export function defineField<
    * field config to `defineGraphqlGeneConfig` (where `args` doesn't need accurate typing).
    */
   return config as FieldConfig<TSource, TContext, Record<string, string> | undefined, TReturnType>
+}
+
+export function defineType<
+  T extends GeneObjectTypeConfig,
+  TSource,
+  TContext,
+  TArgDefs extends Record<string, string> | undefined,
+  TVarType extends GraphQLVarType,
+>(config: T, geneConfig?: GeneConfig<T, TSource, TContext, TArgDefs, string, TVarType>) {
+  // export function defineType<T extends GeneObjectTypeConfig>(config: T, geneConfig?: GeneConfig) {
+  return {
+    ...config,
+    ...(typeof geneConfig !== 'undefined' && {
+      geneConfig: defineGraphqlGeneConfig({} as T, geneConfig),
+    }),
+  } as T
+}
+
+const Page = defineType(
+  {
+    title: 'String',
+    // content: 'PageContent',
+  },
+  {
+    include: ['title'],
+
+    types: {
+      Query: {
+        page: {
+          resolver: 'default',
+          returnType: 'String',
+        },
+      },
+    },
+  }
+)
+
+// class Page {
+//   static title = 'String' as const
+//   static content = 'PageContent' as const
+
+//   // static readonly geneConfig = defineGraphqlGeneConfig(Page, {
+//   //   types: {
+//   //     Query: {
+//   //       page: {
+//   //         resolver: 'default',
+//   //         returnType: 'Page',
+//   //       },
+//   //     },
+//   //   },
+//   // })
+// }
+
+// type Esti = (typeof Page)['title']
+
+export function defineEnum<TValue extends string>(values: TValue[]) {
+  return values
+}
+
+export function defineUnion<TUnion extends string>(unions: TUnion[]) {
+  type UnionDef = Record<TUnion, ''>
+  const unionDef: Partial<UnionDef> = {}
+
+  unions.forEach(type => (unionDef[type] = ''))
+
+  const completeUnionDef = unionDef as Required<typeof unionDef>
+
+  return {
+    ...completeUnionDef,
+    geneConfig: defineGraphqlGeneConfig({}, { varType: 'union' }),
+  }
 }

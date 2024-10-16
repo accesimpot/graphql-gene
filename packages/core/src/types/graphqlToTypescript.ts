@@ -34,11 +34,14 @@ export type PrototypeOrNot<T> = T extends { prototype: any } ? T['prototype'] : 
 export type GeneTypesToTypescript<T> = {
   [k in keyof T]: HasPluginMatching<T[k]> extends true
     ? PrototypeOrNot<T[k]>
-    : T[k] extends string[] | readonly string[]
-      ? GraphqlEnumToTypescript<T[k]>
-      : T[k] extends Record<string, string>
-        ? GraphqlObjToTypescript<T[k]>
-        : unknown
+    : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      T[k] extends { prototype: any }
+      ? Omit<PrototypeOrNot<T[k]>, 'geneConfig'>
+      : T[k] extends string[] | readonly string[]
+        ? GraphqlEnumToTypescript<T[k]>
+        : T[k] extends Record<string, string>
+          ? GraphqlObjToTypescript<Omit<T[k], 'geneConfig'>>
+          : never
 }
 
 export type GraphqlToTypescript<GqlReturnType extends string> = GraphqlToTypescriptMap<
@@ -77,7 +80,8 @@ type InferFieldKeys<M> = {
     : never
 }[keyof GenePluginSettings<M>]
 
-export type InferFields<M> = NeverToUnknown<InferFieldKeys<M>>
+export type InferFields<M> =
+  HasPluginMatching<M> extends true ? NeverToUnknown<InferFieldKeys<M>> : keyof M
 
 type HasPluginMatchingOrNever<M> = {
   [k in keyof GenePluginSettings<M>]: GenePluginSettings<M>[k]['isMatching'] extends true

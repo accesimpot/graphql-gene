@@ -276,7 +276,7 @@ export class User extends Model {
 | `varType`❔ | `GraphQLVarType` - The GraphQL variable type to use. Default: `'type'`. |
 | `directives`❔ | `GeneDirectiveConfig[]` - Directives to apply at the type level (also possible at the field level). |
 | `aliases`❔ | `Record<GraphqlTypeName], GeneConfig>` - The values of "aliases" would be nested GeneConfig properties that overwrites the ones set at a higher level. This is useful for instances with a specific scope include more fields that the parent model (i.e. `AuthenticatedUser` being an alias of `User`). Note that the alias needs to be exported from _graphqlTypes.ts_ as well (i.e. `export { User as AuthenticatedUser } from '../models/User/User.model'`). |
-| `types`❔ | `Record<'Query' \| 'Mutation', Record<GraphQLFieldName, FieldConfig>>` - Allow extending the Query or Mutation types only. |
+| `types`❔ | `Record<'Query' \| 'Mutation', Record<GraphQLFieldName, FieldConfig>>` - Allow extending the Query and Mutation types only. |
 
 <br>
 
@@ -495,7 +495,7 @@ Another example for `superAdmin` role:
 
 ```ts
 static readonly geneConfig = defineGraphqlGeneConfig(AdminAccount, {
-  // i.e. Only allow super admin users to access to the `AdminAccount` data
+  // i.e. Only allow super admin users to access the `AdminAccount` data
   directives: [userAuthDirective({ role: 'superAdmin' })],
 }
 ```

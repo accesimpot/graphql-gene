@@ -7,8 +7,9 @@ export type NestedObject = { [k: string]: NestedObject }
 export type Mutable<Immutable> = {
   -readonly [K in keyof Immutable]: Immutable[K]
 }
-export function getMutable<T>(immutable: T) {
-  return immutable as Mutable<T>
+
+export function getMutable<T extends string>(immutable: T[]) {
+  return immutable as Mutable<T[]>
 }
 
 export type ValueOf<T> = T[keyof T]
