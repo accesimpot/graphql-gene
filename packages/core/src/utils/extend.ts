@@ -1,38 +1,22 @@
-import type { GeneTypeConfig, QueryMutationTypes } from '../defineConfig'
-import type { GraphQLFieldName, SomeRequired } from '../types'
+import type { ExtendedTypes } from '../defineConfig'
 
 declare global {
   // eslint-disable-next-line no-var
-  var __graphqlGeneQueryMutationTypes: QueryMutationTypes | undefined
-
-  // eslint-disable-next-line no-var
-  var __graphqlGeneQueryFieldModel: Record<string, unknown>
+  var __graphqlGeneExtendedTypes: ExtendedTypes | undefined
 }
 
-export function getExtendedQueryMutationTypes() {
-  globalThis.__graphqlGeneQueryMutationTypes = globalThis.__graphqlGeneQueryMutationTypes || {}
+export function getGloballyExtendedTypes() {
+  globalThis.__graphqlGeneExtendedTypes = globalThis.__graphqlGeneExtendedTypes || {}
 
-  return globalThis.__graphqlGeneQueryMutationTypes
+  return globalThis.__graphqlGeneExtendedTypes
 }
 
-export function getModelForQueryField(queryField: string) {
-  globalThis.__graphqlGeneQueryFieldModel = globalThis.__graphqlGeneQueryFieldModel || {}
+export function extendTypes(types: ExtendedTypes) {
+  const globalTypes = getGloballyExtendedTypes()
 
-  if (queryField in globalThis.__graphqlGeneQueryFieldModel) {
-    return globalThis.__graphqlGeneQueryFieldModel[queryField]
-  }
-}
-
-export function extendQuery<M>(
-  model: M,
-  queryFields: Record<GraphQLFieldName, SomeRequired<GeneTypeConfig, 'resolver'>>
-) {
-  const globalTypes = getExtendedQueryMutationTypes()
-
-  Object.keys(queryFields).forEach(fieldName => {
-    globalThis.__graphqlGeneQueryFieldModel = globalThis.__graphqlGeneQueryFieldModel || {}
-    globalThis.__graphqlGeneQueryFieldModel[fieldName] = model
+  Object.entries(types).forEach(([graphqlType, fieldConfigs]) => {
+    const type = graphqlType as 'Query'
+    globalTypes[type] = globalTypes[type] || {}
+    globalTypes[type] = { ...globalTypes[type], ...fieldConfigs }
   })
-
-  globalTypes.Query = { ...globalTypes.Query, ...(queryFields as typeof globalTypes.Query) }
 }

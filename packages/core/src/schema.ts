@@ -26,8 +26,7 @@ import {
   getGeneConfigFromOptions,
   isFieldIncluded,
   isObject,
-  getExtendedQueryMutationTypes,
-  getModelForQueryField,
+  getGloballyExtendedTypes,
 } from './utils'
 import { addResolversToSchema } from './resolvers'
 import SCHEMA_TEMPLATE_HTML from './schema.html?raw'
@@ -49,7 +48,6 @@ import {
   PER_PAGE_ARG_DEFAULT,
   QUERY_ORDER_VALUES,
 } from './constants'
-import type { FieldConfig } from 'dist'
 
 const VALID_RETURN_TYPES_FOR_WHERE = [
   'String',
@@ -192,9 +190,9 @@ function generateGeneTypeDefs<SchemaTypes extends AnyObject, DataTypes extends A
       })
     }
   })
-  const extendedQueryMutationTypes = getExtendedQueryMutationTypes()
+  const globallyExtendedTypes = getGloballyExtendedTypes()
 
-  Object.entries(extendedQueryMutationTypes).forEach(([graphqlType, fieldConfigs]) => {
+  Object.entries(globallyExtendedTypes).forEach(([graphqlType, fieldConfigs]) => {
     generateTypeDefLines({
       directiveDefs,
       typeDefLines,
@@ -203,7 +201,10 @@ function generateGeneTypeDefs<SchemaTypes extends AnyObject, DataTypes extends A
     })
 
     Object.entries(fieldConfigs).forEach(([fieldKey, fieldConfig]) => {
-      const model = getModelForQueryField(fieldKey)
+      const model =
+        isObject(options.types) && graphqlType in options.types
+          ? options.types[graphqlType]
+          : undefined
 
       generateDefaultQueryFilterTypeDefs({
         typeDefLines,
@@ -217,8 +218,6 @@ function generateGeneTypeDefs<SchemaTypes extends AnyObject, DataTypes extends A
 
   const typeDefs: string[] = []
   let sortedTypeDefLines = typeDefLines
-
-  console.dir({ sortedTypeDefLines }, { depth: null })
 
   // Put type Query at the top
   if ('Query' in typeDefLines) {
@@ -469,7 +468,7 @@ function generateQueryFilterTypeDefs<M>(options: {
   })
 }
 
-function generateDefaultQueryFilterTypeDefs<M, TFieldConfig extends FieldConfig>(options: {
+function generateDefaultQueryFilterTypeDefs<M, TFieldConfig>(options: {
   typeDefLines: TypeDefLines
   // modelKey: string
   model?: M
@@ -477,9 +476,7 @@ function generateDefaultQueryFilterTypeDefs<M, TFieldConfig extends FieldConfig>
   fieldKey: string
   fieldConfig: TFieldConfig
 }) {
-  const normalizedFieldConfig = normalizeFieldConfig(
-    options.fieldConfig as Parameters<typeof normalizeFieldConfig>[0]
-  )
+  const normalizedFieldConfig = normalizeFieldConfig(options.fieldConfig as '')
   if (!isUsingDefaultResolver(normalizedFieldConfig)) return
 
   const whereOptionsInputName = getWhereOptionsInputName(options.graphqlType, options.fieldKey)

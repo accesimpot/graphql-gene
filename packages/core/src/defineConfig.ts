@@ -5,6 +5,7 @@ import type {
   GraphqlReturnTypes,
   GraphqlToTypescript,
   GraphqlTypeName,
+  GraphqlTypes,
   GraphQLVarType,
   InferFields,
   OperatorInputs,
@@ -34,7 +35,7 @@ export type GeneObjectTypeConfig<
 >
 
 /** Query and Mutation types extended from different models. */
-export type QueryMutationTypes<
+export type ExtendedTypes<
   TSource = Record<string, unknown> | undefined,
   TContext = GeneContext,
   TArgDefs extends Record<string, string> | undefined = undefined,
@@ -48,6 +49,11 @@ export type QueryMutationTypes<
       TArgDefs,
       TReturnType extends unknown ? GraphqlReturnTypes<ValidGraphqlType> : TReturnType
     >
+  >
+} & {
+  [typeName in GraphqlTypeName]?: Record<
+    GraphQLFieldName,
+    Omit<GeneTypeConfig<TSource, TContext, TArgDefs, GraphqlTypes[typeName]>, 'returnType'>
   >
 }
 
@@ -106,7 +112,7 @@ export interface GeneConfig<
    * Extend the Query or Mutation types only.
    * @deprecated You should import and call `extendQuery` or `extendMutation` instead.
    */
-  types?: QueryMutationTypes<TSource, TContext, TArgDefs, TReturnType>
+  types?: ExtendedTypes<TSource, TContext, TArgDefs, TReturnType>
 }
 
 export type GeneTypeConfig<

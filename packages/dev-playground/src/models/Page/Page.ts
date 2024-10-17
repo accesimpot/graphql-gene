@@ -1,14 +1,16 @@
-import { defineType, defineUnion, extendQuery } from 'graphql-gene'
+import { defineType, defineUnion, extendTypes } from 'graphql-gene'
 
 export const Page = defineType({
   title: 'String',
   content: 'PageContent',
 })
 
-extendQuery(Page, {
-  page: {
-    resolver: 'default',
-    returnType: 'Page',
+extendTypes({
+  Query: {
+    page: {
+      resolver: 'default',
+      returnType: 'Page',
+    },
   },
 })
 
