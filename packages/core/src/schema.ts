@@ -151,8 +151,6 @@ function generateGeneTypeDefs<SchemaTypes extends AnyObject, DataTypes extends A
   const directiveDefs: DirectiveDefs = {}
   const typeDefLines: TypeDefLines = {}
 
-  console.dir(options.types, { depth: 10 })
-
   Object.entries(options.types).forEach(([graphqlType, fieldConfigs]) => {
     let hasUsedPlugin = false
 
