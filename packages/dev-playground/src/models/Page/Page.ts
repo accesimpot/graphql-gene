@@ -5,6 +5,8 @@ export const Page = defineType({
   content: 'PageContent',
 })
 
+export const PageContent = defineUnion(['HomepageContent', 'ProductPageContent'])
+
 extendTypes({
   Query: {
     page: {
@@ -13,5 +15,3 @@ extendTypes({
     },
   },
 })
-
-export const PageContent = defineUnion(['HomepageContent', 'ProductPageContent'] as const)
