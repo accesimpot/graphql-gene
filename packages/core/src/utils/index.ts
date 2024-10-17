@@ -21,6 +21,7 @@ import type { FieldLines, GraphqlReturnTypes, TypeDefLines, ValidGraphqlType } f
 import type { GeneConfig, GeneTypeConfig } from '../defineConfig'
 
 export * from './extend'
+export * from './operators'
 
 type GraphQLOutputObjectType = GraphQLObjectType | GraphQLInterfaceType
 

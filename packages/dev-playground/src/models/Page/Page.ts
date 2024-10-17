@@ -1,6 +1,13 @@
 import { GraphQLError } from 'graphql'
-import { defineField, defineType, defineUnion, extendTypes } from 'graphql-gene'
-import { mockPages, FILTER_MAP, getEntries } from './utils'
+import {
+  defineField,
+  defineType,
+  defineUnion,
+  extendTypes,
+  getEntries,
+  getOperatorMap,
+} from 'graphql-gene'
+import { mockPages } from './utils/mockPages'
 
 export const Page = defineType({
   title: 'String',
@@ -22,9 +29,15 @@ extendTypes({
               .every(([field, operators]) => {
                 const operatorEntries = getEntries(operators as NonNullable<typeof operators>)
 
-                return operatorEntries.every(([operator, input]) =>
-                  FILTER_MAP[operator](pageEntry[field], input as never)
-                )
+                return operatorEntries.every(([operator, input]) => {
+                  const operatorMap = getOperatorMap(input)
+
+                  const testMethod = operatorMap[operator]
+                  const fieldValue = pageEntry[field]
+                  const inputValue = input as never
+
+                  return testMethod?.(fieldValue, inputValue)
+                })
               })
           })
         } catch {
