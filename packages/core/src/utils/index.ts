@@ -169,7 +169,9 @@ export function isUsingDefaultResolver<
   TArgDefs extends Record<string, string> | undefined = undefined,
   TReturnType = unknown,
 >(fieldConfig: GeneTypeConfig<TSource, TContext, TArgDefs, TReturnType>): boolean {
-  return !!(fieldConfig.resolver && fieldConfig.resolver === 'default')
+  return (['resolver', 'args'] as const).some(
+    prop => fieldConfig[prop] && fieldConfig[prop] === 'default'
+  )
 }
 
 export function getDefaultTypeDefLinesObject(): TypeDefLines[0] {
@@ -218,6 +220,16 @@ export function isListType(type: ReturnType<typeof parseType>) {
 
 export function findTypeNameFromTypeNode(type: ReturnType<typeof parseType>): string {
   return 'type' in type ? findTypeNameFromTypeNode(type.type) : type.name.value
+}
+
+/**
+ * Receives the full GraphQL return type and returns the type name as string.
+ *
+ * @example
+ * const returnTypeName = getReturnTypeName('[Foo!]!') // => 'Foo'
+ */
+export function getReturnTypeName(returnType: string) {
+  return findTypeNameFromTypeNode(parseType(returnType))
 }
 
 export function getGeneConfigFromOptions<M>(options: {

@@ -18,7 +18,6 @@ import {
   isUsingDefaultResolver,
   normalizeFieldConfig,
   isListType,
-  findTypeNameFromTypeNode,
   isArrayFieldConfig,
   isObjectFieldConfig,
   getDefaultTypeDefLinesObject,
@@ -27,6 +26,7 @@ import {
   isFieldIncluded,
   isObject,
   getGloballyExtendedTypes,
+  getReturnTypeName,
 } from './utils'
 import { addResolversToSchema } from './resolvers'
 import SCHEMA_TEMPLATE_HTML from './schema.html?raw'
@@ -197,7 +197,7 @@ function generateGeneTypeDefs<SchemaTypes extends AnyObject, DataTypes extends A
       directiveDefs,
       typeDefLines,
       graphqlType,
-      fieldConfigs,
+      fieldConfigs: fieldConfigs as GeneConfigTypes,
     })
 
     Object.entries(fieldConfigs).forEach(([fieldKey, fieldConfig]) => {
@@ -340,7 +340,7 @@ function generateAdditionalTypeDefs<M>(options: {
   if (!geneConfig?.types) return
 
   Object.entries(geneConfig.types).forEach(([graphqlType, fieldConfigs]) => {
-    generateTypeDefLines({ ...options, graphqlType, fieldConfigs })
+    generateTypeDefLines({ ...options, graphqlType, fieldConfigs: fieldConfigs as GeneConfigTypes })
   })
 }
 
@@ -502,7 +502,7 @@ function generateDefaultQueryFilterTypeDefs<M, TFieldConfig>(options: {
     createTypeDefLines(options.typeDefLines, 'enum', orderEnumName)
   }
 
-  const returnTypeName = findTypeNameFromTypeNode(parseType(normalizedFieldConfig.returnType))
+  const returnTypeName = getReturnTypeName(normalizedFieldConfig.returnType)
 
   if (returnTypeName && BASIC_GRAPHQL_TYPE_VALUES.includes(returnTypeName as 'ID')) return
 
