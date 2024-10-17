@@ -280,43 +280,6 @@ export function defineType<
   } as T
 }
 
-const Page = defineType(
-  {
-    title: 'String',
-    // content: 'PageContent',
-  },
-  {
-    include: ['title'],
-
-    types: {
-      Query: {
-        page: {
-          resolver: 'default',
-          returnType: 'String',
-        },
-      },
-    },
-  }
-)
-
-// class Page {
-//   static title = 'String' as const
-//   static content = 'PageContent' as const
-
-//   // static readonly geneConfig = defineGraphqlGeneConfig(Page, {
-//   //   types: {
-//   //     Query: {
-//   //       page: {
-//   //         resolver: 'default',
-//   //         returnType: 'Page',
-//   //       },
-//   //     },
-//   //   },
-//   // })
-// }
-
-// type Esti = (typeof Page)['title']
-
 export function defineEnum<TValue extends string>(values: TValue[]) {
   return values
 }
