@@ -1,6 +1,6 @@
 import type { GenePluginSettings } from 'graphql-gene/plugin-settings'
 import type { GraphqlTypes } from './graphql'
-import type { NeverToUnknown, PossiblyUndefinedToPartial } from './typeUtils'
+import type { NeverToUnknown, PossiblyUndefinedToPartial, ValueOf } from './typeUtils'
 
 export type GraphqlReturnTypes<TModels extends string> =
   | TModels
@@ -31,14 +31,28 @@ type GqlArrayTypeToTs<T extends string, A> = T extends `${infer R}]`
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type PrototypeOrNot<T> = T extends { prototype: any } ? T['prototype'] : T
 
+type IsUnionGeneType<T> = 'geneConfig' extends keyof T
+  ? 'varType' extends keyof T['geneConfig']
+    ? NonNullable<T['geneConfig']['varType']> extends 'union'
+      ? true
+      : false
+    : false
+  : false
+
 export type GeneTypesToTypescript<T> = {
   [k in keyof T]: HasPluginMatching<T[k]> extends true
     ? PrototypeOrNot<T[k]>
-    : T[k] extends string[] | readonly string[]
-      ? GraphqlEnumToTypescript<T[k]>
-      : T[k] extends Record<string, string>
-        ? GraphqlObjToTypescript<T[k]>
-        : unknown
+    : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      T[k] extends { prototype: any }
+      ? Omit<PrototypeOrNot<T[k]>, 'geneConfig'>
+      : T[k] extends string[] | readonly string[]
+        ? GraphqlEnumToTypescript<T[k]>
+        : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          T[k] extends Record<string, any>
+          ? IsUnionGeneType<T[k]> extends true
+            ? GraphqlUnionToTypescript<Omit<T[k], 'geneConfig'>>
+            : GraphqlObjToTypescript<Omit<T[k], 'geneConfig'>>
+          : never
 }
 
 export type GraphqlToTypescript<GqlReturnType extends string> = GraphqlToTypescriptMap<
@@ -48,19 +62,19 @@ export type GraphqlToTypescript<GqlReturnType extends string> = GraphqlToTypescr
 
 type GraphqlToTypescriptMap<
   GqlReturnType extends string,
-  TrimedGqlType extends string,
-> = TrimedGqlType extends 'ID' | 'String'
+  TrimmedGqlType extends string,
+> = TrimmedGqlType extends 'ID' | 'String'
   ? GqlTypeToTs<GqlReturnType, string>
-  : TrimedGqlType extends 'Int' | 'Float'
+  : TrimmedGqlType extends 'Int' | 'Float'
     ? GqlTypeToTs<GqlReturnType, number>
-    : TrimedGqlType extends 'Boolean'
+    : TrimmedGqlType extends 'Boolean'
       ? GqlTypeToTs<GqlReturnType, boolean>
-      : TrimedGqlType extends 'DateTime' | 'Date'
+      : TrimmedGqlType extends 'DateTime' | 'Date'
         ? GqlTypeToTs<GqlReturnType, Date>
-        : TrimedGqlType extends 'JSON'
+        : TrimmedGqlType extends 'JSON'
           ? GqlTypeToTs<GqlReturnType, object>
-          : TrimedGqlType extends keyof GraphqlTypes
-            ? GqlTypeToTs<GqlReturnType, GraphqlTypes[TrimedGqlType]>
+          : TrimmedGqlType extends keyof GraphqlTypes
+            ? GqlTypeToTs<GqlReturnType, GraphqlTypes[TrimmedGqlType]>
             : unknown
 
 export type GraphqlObjToTypescript<T extends Record<string, string>> = PossiblyUndefinedToPartial<{
@@ -71,13 +85,19 @@ export type GraphqlEnumToTypescript<T extends string[] | readonly string[]> = {
   readonly [k in keyof T]: T[k]
 }[number]
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type GraphqlUnionToTypescript<T extends Record<string, any>> = ValueOf<{
+  [k in keyof T]: k extends keyof GraphqlTypes ? GraphqlTypes[k] : unknown
+}>
+
 type InferFieldKeys<M> = {
   [k in keyof GenePluginSettings<M>]: GenePluginSettings<M>[k]['isMatching'] extends true
     ? GenePluginSettings<M>[k]['fieldName']
     : never
 }[keyof GenePluginSettings<M>]
 
-export type InferFields<M> = NeverToUnknown<InferFieldKeys<M>>
+export type InferFields<M> =
+  HasPluginMatching<M> extends true ? NeverToUnknown<InferFieldKeys<M>> : keyof M
 
 type HasPluginMatchingOrNever<M> = {
   [k in keyof GenePluginSettings<M>]: GenePluginSettings<M>[k]['isMatching'] extends true
