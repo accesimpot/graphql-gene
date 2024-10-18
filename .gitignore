@@ -131,3 +131,6 @@ dist
 # Nx
 .nx/cache
 .nx/workspace-data
+
+# Generated schema
+packages/dev-playground/schema.gql

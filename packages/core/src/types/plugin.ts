@@ -54,7 +54,7 @@ export type GenePlugin<M = any> = {
     schemaOptions: GenerateSchemaOptions
   }): TypeDefLines[0]
 
-  defaultResolver<
+  defaultResolver?<
     M,
     ModelKey extends string,
     TSource = Record<string, unknown> | undefined,

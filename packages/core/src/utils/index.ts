@@ -17,8 +17,11 @@ import {
   type GraphQLOutputType,
 } from 'graphql'
 import type { GeneContext } from 'graphql-gene/context'
-import type { FieldLines, GraphqlReturnTypes, TypeDefLines, ValidGraphqlType } from './types'
-import type { GeneConfig, GeneTypeConfig } from './defineConfig'
+import type { FieldLines, GraphqlReturnTypes, TypeDefLines, ValidGraphqlType } from '../types'
+import type { GeneConfig, GeneTypeConfig } from '../defineConfig'
+
+export * from './extend'
+export * from './operators'
 
 type GraphQLOutputObjectType = GraphQLObjectType | GraphQLInterfaceType
 
@@ -167,7 +170,9 @@ export function isUsingDefaultResolver<
   TArgDefs extends Record<string, string> | undefined = undefined,
   TReturnType = unknown,
 >(fieldConfig: GeneTypeConfig<TSource, TContext, TArgDefs, TReturnType>): boolean {
-  return !!(fieldConfig.resolver && fieldConfig.resolver === 'default')
+  return (['resolver', 'args'] as const).some(
+    prop => fieldConfig[prop] && fieldConfig[prop] === 'default'
+  )
 }
 
 export function getDefaultTypeDefLinesObject(): TypeDefLines[0] {
@@ -218,6 +223,16 @@ export function findTypeNameFromTypeNode(type: ReturnType<typeof parseType>): st
   return 'type' in type ? findTypeNameFromTypeNode(type.type) : type.name.value
 }
 
+/**
+ * Receives the full GraphQL return type and returns the type name as string.
+ *
+ * @example
+ * const returnTypeName = getReturnTypeName('[Foo!]!') // => 'Foo'
+ */
+export function getReturnTypeName(returnType: string) {
+  return findTypeNameFromTypeNode(parseType(returnType))
+}
+
 export function getGeneConfigFromOptions<M>(options: {
   model: M
   geneConfig?: GeneConfig<M>
@@ -238,7 +253,7 @@ export function isFieldIncluded<M>(
 ): boolean {
   const config = geneConfig || {}
 
-  const check = (filters: (string | RegExp)[]) => {
+  const check = (filters: unknown[]) => {
     for (const keyOrRegex of filters) {
       if (typeof keyOrRegex === 'string' && keyOrRegex === fieldKey) return true
       if (keyOrRegex instanceof RegExp && keyOrRegex.test(fieldKey)) return true
