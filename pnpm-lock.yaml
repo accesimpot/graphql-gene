@@ -85,26 +85,7 @@ importers:
         specifier: ^5.4.1
         version: 5.4.1(@types/node@20.15.0)
 
-  packages/dev-utils:
-    dependencies:
-      '@types/node':
-        specifier: ^20.15.0
-        version: 20.15.0
-      glob:
-        specifier: ^11.0.0
-        version: 11.0.0
-      vite:
-        specifier: ^5.4.1
-        version: 5.4.1(@types/node@20.15.0)
-      vite-plugin-dts:
-        specifier: ^4.2.4
-        version: 4.2.4(@types/node@20.15.0)(rollup@4.20.0)(typescript@5.6.3)(vite@5.4.1(@types/node@20.15.0))
-    devDependencies:
-      typescript:
-        specifier: ^5.6.3
-        version: 5.6.3
-
-  packages/playground:
+  packages/dev-playground:
     devDependencies:
       '@types/node':
         specifier: ^20.15.0
@@ -136,6 +117,25 @@ importers:
       vite:
         specifier: ^5.4.1
         version: 5.4.1(@types/node@20.15.0)
+
+  packages/dev-utils:
+    dependencies:
+      '@types/node':
+        specifier: ^20.15.0
+        version: 20.15.0
+      glob:
+        specifier: ^11.0.0
+        version: 11.0.0
+      vite:
+        specifier: ^5.4.1
+        version: 5.4.1(@types/node@20.15.0)
+      vite-plugin-dts:
+        specifier: ^4.2.4
+        version: 4.2.4(@types/node@20.15.0)(rollup@4.20.0)(typescript@5.6.3)(vite@5.4.1(@types/node@20.15.0))
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.6.3
 
   packages/plugin-sequelize:
     dependencies:
