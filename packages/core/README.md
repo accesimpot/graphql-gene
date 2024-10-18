@@ -72,17 +72,17 @@ Create a file where you export all your GraphQL types including your database mo
 #### *src/models/graphqlTypes.ts*
 
 ```ts
+import { defineEnum, defineType } from 'graphql-gene'
+
 // All your ORM models
 export * from './models'
 
-// i.e. some basic GraphQL type
-export const MessageOutput = {
+// i.e. some basic GraphQL types
+export const MessageOutput = defineType({
   type: 'MessageTypeEnum!',
   text: 'String!',
-} as const
-
-// i.e. this array will be created as a GraphQL enum
-export const MessageTypeEnum = ['info', 'success', 'warning', 'error'] as const
+})
+export const MessageTypeEnum = defineEnum(['info', 'success', 'warning', 'error'])
 
 // i.e. assuming AuthenticatedUser is defined as alias in User.geneConfig
 export { User as AuthenticatedUser, MutationLoginOutput } from '../models/User/User.model'
@@ -251,11 +251,11 @@ if (process.env.NODE_ENV !== 'production') {
 
 By default, if a model is part of the `types` provided to `generateSchema`, it will be added to your schema.
 
-Nevertheless, you might need to exclude some fields like `password`, define queries or mutations. You can set GraphQL-specific configuration by adding a `static readonly geneConfig` object to your model (more examples below).
+Nevertheless, you might need to exclude some fields like `password`, define queries or mutations. You can set GraphQL-specific configuration by adding a `static readonly geneConfig` object to your model (more examples below) or use `extendTypes` to add fields to Query/Mutation.
 
 ```ts
 import { Model } from 'sequelize'
-import { defineGraphqlGeneConfig } from 'graphql-gene'
+import { defineGraphqlGeneConfig, defineField, extendTypes } from 'graphql-gene'
 
 export class User extends Model {
   // ...
@@ -264,6 +264,14 @@ export class User extends Model {
     // Your config
   }
 }
+
+extendTypes({
+  Query: {
+    foo: defineField({
+      // ...
+    }),
+  },
+})
 ```
 
 ### Options
@@ -276,7 +284,6 @@ export class User extends Model {
 | `varType`❔ | `GraphQLVarType` - The GraphQL variable type to use. Default: `'type'`. |
 | `directives`❔ | `GeneDirectiveConfig[]` - Directives to apply at the type level (also possible at the field level). |
 | `aliases`❔ | `Record<GraphqlTypeName], GeneConfig>` - The values of "aliases" would be nested GeneConfig properties that overwrites the ones set at a higher level. This is useful for instances with a specific scope include more fields that the parent model (i.e. `AuthenticatedUser` being an alias of `User`). Note that the alias needs to be exported from _graphqlTypes.ts_ as well (i.e. `export { User as AuthenticatedUser } from '../models/User/User.model'`). |
-| `types`❔ | `Record<'Query' \| 'Mutation', Record<GraphQLFieldName, FieldConfig>>` - Allow extending the Query and Mutation types only. |
 
 <br>
 
@@ -287,7 +294,7 @@ export class User extends Model {
 ```ts
 import type { InferAttributes, InferCreationAttributes } from 'sequelize'
 import { Model, Table, Column, Unique, AllowNull, DataType } from 'sequelize-typescript'
-import { defineGraphqlGeneConfig, defineField } from 'graphql-gene'
+import { defineEnum, defineField, defineType, extendTypes } from 'graphql-gene'
 import { isEmail } from '../someUtils.ts'
 
 export
@@ -300,40 +307,39 @@ class Prospect extends Model<InferAttributes<Prospect>, InferCreationAttributes<
 
   @Column(DataType.STRING)
   declare language: string | null
-
-  static readonly geneConfig = defineGraphqlGeneConfig(Prospect, {
-    types: {
-      Mutation: {
-        registerProspect: defineField({
-          args: { email: 'String!', locale: 'String' },
-          returnType: 'MessageOutput!',
-
-          resolver: async ({ args }) => {
-            // `args` type is inferred from the GraphQL definition above
-            // { email: string; locale: string | null | undefined }
-            const { email, locale } = args
-
-            if (!isEmail(email)) {
-              // The return type is deeply inferred from the `MessageOutput` definition.
-              // For instance, the `type` value must be `'info' | 'success' | 'warning' | 'error'`.
-              return { type: 'error' as const, text: 'Invalid email' }
-            }
-            // No need to await
-            Prospect.create({ email, language: locale })
-            return { type: 'success' as const }
-          },
-        }),
-      },
-    },
-  })
 }
 
-export const MessageOutput = {
+extendTypes({
+  Mutation: {
+    registerProspect: defineField({
+      args: { email: 'String!', locale: 'String' },
+      returnType: 'MessageOutput!',
+
+      resolver: async ({ args }) => {
+        // `args` type is inferred from the GraphQL definition above
+        // { email: string; locale: string | null | undefined }
+        const { email, locale } = args
+
+        if (!isEmail(email)) {
+          // The return type is deeply inferred from the `MessageOutput`
+          // definition. For instance, the `type` value must be:
+          // 'info' | 'success' | 'warning' | 'error'
+          return { type: 'error' as const, text: 'Invalid email' }
+        }
+        // No need to await
+        Prospect.create({ email, language: locale })
+        return { type: 'success' as const }
+      },
+    }),
+  },
+})
+
+export const MessageOutput = defineType({
   type: 'MessageTypeEnum!',
   text: 'String',
-} as const
+})
 
-export const MessageTypeEnum = ['info', 'success', 'warning', 'error'] as const
+export const MessageTypeEnum = defineEnum(['info', 'success', 'warning', 'error'])
 ```
 
 <br>
@@ -395,7 +401,9 @@ function throwUnauthorized(): never {
   throw new GraphQLError('Unauthorized')
 }
 
-// Factory function returning the directive object
+/**
+ * Factory function returning the directive object
+ */
 export const userAuthDirective = defineDirective<{
   // Convert ADMIN_ROLES enum to a union type
   role: `${ADMIN_ROLES}` | null
@@ -439,6 +447,7 @@ The `args` option allow you to use it in different contexts:
 #### *src/models/User/User.model.ts*
 
 ```ts
+import { defineField, extendTypes } from 'graphql-gene'
 import { userAuthDirective } from '.userAuthDirective.ts'
 
 export
@@ -460,18 +469,18 @@ class User extends Model<InferAttributes<User>, InferCreationAttributes<User>> {
         directives: [userAuthDirective({ role: null })],
       },
     },
-
-    types: {
-      Query: {
-        me: {
-          returnType: 'AuthenticatedUser',
-          // `context.authenticatedUser` is defined in `userAuthDirective`
-          resolver: ({ context }) => context.authenticatedUser,
-        },
-      },
-    },
   }
 }
+
+extendTypes({
+  Query: {
+    me: defineField({
+      returnType: 'AuthenticatedUser',
+      // `context.authenticatedUser` is defined in `userAuthDirective`
+      resolver: ({ context }) => context.authenticatedUser,
+    }),
+  },
+})
 ```
 
 <br>
