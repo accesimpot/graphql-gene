@@ -49,13 +49,13 @@ function forEachModel<M, SchemaTypes extends AnyObject>(options: {
   model: M
 }): GraphQLSchema | undefined {
   const geneConfig = getGeneConfigFromOptions(options)
-  const { types: typeConfig, directives } = geneConfig || {}
+  const { types: typeConfig } = geneConfig || {}
 
-  let modifiedSchema = defineResolvers({ ...options, typeConfig, directives })
+  let modifiedSchema = defineResolvers({ ...options, typeConfig })
 
   Object.entries(geneConfig?.aliases || {}).forEach(([, geneConfig]) => {
-    const { types: typeConfig, directives } = geneConfig || {}
-    modifiedSchema = defineResolvers({ ...options, typeConfig, directives })
+    const { types: typeConfig } = geneConfig || {}
+    modifiedSchema = defineResolvers({ ...options, typeConfig })
   })
   return modifiedSchema
 }
@@ -65,12 +65,10 @@ function defineResolvers<SchemaTypes extends AnyObject>(options: {
   types: SchemaTypes
   plugins: GenePlugin[]
   typeConfig: ExtendedTypes | undefined
-  directives?: GeneConfig['directives']
 }): GraphQLSchema | undefined {
-  if (!options.typeConfig && !options.directives) return
+  if (!options.typeConfig) return
 
   const typeConfig = options.typeConfig || {}
-  const typeLevelDirectiveConfigs = options.directives
 
   lookDeepInSchema({
     schema: options.schema,
@@ -94,10 +92,18 @@ function defineResolvers<SchemaTypes extends AnyObject>(options: {
 
       if (type !== returnTypeName || !model) return
 
+      const geneConfig = getGeneConfigFromOptions({ model })
       const plugin = options.plugins.find(plugin => plugin.isMatching(model))
 
-      const directiveConfigs: typeof typeLevelDirectiveConfigs = []
-      if (typeLevelDirectiveConfigs) directiveConfigs.push(...typeLevelDirectiveConfigs)
+      const directiveConfigs: GeneConfig['directives'] = []
+
+      // Type-level directives
+      if (geneConfig?.aliases && returnTypeName in geneConfig.aliases) {
+        const aliasGeneConfig = geneConfig.aliases[returnTypeName as 'Query']
+        if (aliasGeneConfig?.directives) directiveConfigs.push(...aliasGeneConfig.directives)
+      } else if (geneConfig?.directives) {
+        directiveConfigs.push(...geneConfig.directives)
+      }
 
       if (normalizedConfig.resolver) {
         fieldDef.resolve = async (source, args, context, info) => {

@@ -120,7 +120,7 @@ export interface GeneConfig<
 
   /**
    * Extend the Query or Mutation types only.
-   * @deprecated You should import and call `extendQuery` or `extendMutation` instead.
+   * @deprecated You should import and call `extendTypes` instead.
    */
   types?: ExtendedTypes<TSource, TContext, TArgDefs, TReturnType>
 }
