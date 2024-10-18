@@ -8,6 +8,7 @@ import type {
   GraphqlTypes,
   GraphQLVarType,
   InferFields,
+  Narrow,
   OperatorInputs,
   SomeRequired,
   ValidGraphqlType,
@@ -138,7 +139,7 @@ export type GeneTypeConfig<
     | GeneResolver<
         TSource,
         TContext,
-        TArgDefs extends 'default'
+        TArgDefs extends `${GENE_RESOLVER_TEMPLATES.default}`
           ? GeneDefaultResolverArgs<
               TReturnType extends string ? NonNullable<GraphqlToTypescript<TReturnType>> : unknown
             >
@@ -275,7 +276,7 @@ export function defineField<
   TArgDefs extends ArgsDefinition,
   TReturnType extends GraphqlReturnTypes<ValidGraphqlType>,
   TContext = GeneContext,
->(config: FieldConfig<TSource, TContext, TArgDefs, TReturnType>) {
+>(config: Narrow<FieldConfig<TSource, TContext, TArgDefs, TReturnType>>) {
   /**
    * We need to infer `TArgDefs` to use accurate types inside the resolver function, but we want
    * "defineField" to return a generic `Record<string, unknown>` as ArgDefs to allow adding the
