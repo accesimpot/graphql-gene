@@ -386,6 +386,8 @@ function generateTypeDefLines(options: {
   }
 
   Object.entries(objFieldConfigs).forEach(([fieldKey, fieldConfig]) => {
+    if (fieldKey === 'geneConfig') return
+
     const normalizedFieldConfig = normalizeFieldConfig(fieldConfig)
 
     options.typeDefLines[options.graphqlType].lines[fieldKey] =

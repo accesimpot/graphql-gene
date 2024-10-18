@@ -299,6 +299,18 @@ export function defineType<
   } as T
 }
 
+export function defineInput<
+  T extends GeneObjectTypeConfig<TSource, TContext, TArgDefs>,
+  TSource,
+  TContext,
+  TArgDefs extends ArgsDefinition,
+>(config: T) {
+  return {
+    ...config,
+    geneConfig: defineGraphqlGeneConfig({}, { varType: 'input' }),
+  }
+}
+
 export function defineEnum<TValue extends string>(values: TValue[]) {
   return values
 }
