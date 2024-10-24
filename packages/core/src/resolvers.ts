@@ -90,10 +90,10 @@ function defineResolvers<SchemaTypes extends AnyObject>(options: {
       const returnTypeName = getReturnTypeName(normalizedConfig.returnType)
       const model = options.types[returnTypeName] as GraphqlTypes[keyof GraphqlTypes] | undefined
 
-      if (type !== returnTypeName || !model) return
+      if (type !== returnTypeName) return
 
-      const geneConfig = getGeneConfigFromOptions({ model })
-      const plugin = options.plugins.find(plugin => plugin.isMatching(model))
+      const geneConfig = model ? getGeneConfigFromOptions({ model }) : undefined
+      const plugin = model ? options.plugins.find(plugin => plugin.isMatching(model)) : undefined
 
       const directiveConfigs: GeneConfig['directives'] = []
 
