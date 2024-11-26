@@ -545,8 +545,10 @@ function generateDefaultQueryFilterTypeDefs<M, TFieldConfig>(options: {
         options.typeDefLines[whereOptionsInputName].lines[returnFieldKey].typeDef = whereTypeDef
       }
 
+      const isList = isListType(parseType(returnFieldType.typeDef))
+
       // Query Order Enum
-      if (hasOrderEnum) {
+      if (hasOrderEnum && !isList) {
         QUERY_ORDER_VALUES.forEach(orderValue => {
           const key = `${returnFieldKey}_${orderValue}`
           options.typeDefLines[orderEnumName].lines[key] = getDefaultFieldLinesObject()
