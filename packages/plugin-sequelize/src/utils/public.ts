@@ -17,6 +17,8 @@ type DefaultResolverIncludeOptions = Pick<
   offset?: number
 }
 
+const QUERY_TYPE = 'Query'
+
 export function isSequelizeFieldConfig<T>(
   fieldConfigs: T
 ): fieldConfigs is T extends typeof Model ? T & Model : T {
@@ -47,33 +49,49 @@ export function getQueryInclude(info: GraphQLResolveInfo) {
   return includeOptions
 }
 
-export function getQueryIncludeOf(info: GraphQLResolveInfo, targetType: ValidGraphqlType) {
+export function getQueryIncludeOf(
+  info: GraphQLResolveInfo,
+  targetType: ValidGraphqlType,
+  options: { depth?: number; lookFromOperationRoot?: boolean } = {}
+) {
   const includeOptions: DefaultResolverIncludeOptions = {}
 
-  lookahead({
-    info,
+  const until: Parameters<typeof lookahead>[0]['until'] = ({ type, nextSelectionSet }) => {
+    if (type !== targetType) return false
+    if (!nextSelectionSet) return false
 
-    next({ type, nextSelectionSet }) {
-      if (type !== targetType) return
+    lookDeeper({
+      info,
+      state: includeOptions,
+      type,
+      selectionSet: nextSelectionSet,
 
-      lookDeeper({
-        info,
-        state: includeOptions,
-        type,
-        selectionSet: nextSelectionSet,
+      next({ state, field, fieldDef, args }) {
+        const isList = isListTypeObject(fieldDef.type)
+        const include = getFieldIncludeOptions({ association: field, args, isList })
 
-        next({ state, field, fieldDef, args }) {
-          const isList = isListTypeObject(fieldDef.type)
-          const include = getFieldIncludeOptions({ association: field, args, isList })
+        state.include = state.include || []
+        state.include.push(include)
 
-          state.include = state.include || []
-          state.include.push(include)
+        return include
+      },
+    })
+    return true
+  }
 
-          return include
-        },
-      })
-    },
-  })
+  const lookDeeperOptions = { info, depth: options.depth, until }
+
+  if (options.lookFromOperationRoot) {
+    lookDeeper({
+      ...lookDeeperOptions,
+      state: {},
+      type: QUERY_TYPE,
+      selectionSet: info.operation.selectionSet,
+    })
+  } else {
+    lookahead(lookDeeperOptions)
+  }
+
   return includeOptions
 }
 
@@ -93,19 +111,19 @@ export function getFieldIncludeOptions(options: {
   if (options.association) includeOptions.association = options.association
 
   const where: GeneSequelizeWhereOptions = {}
-  includeOptions.where = where
 
   if (!options.isList) {
     if (options.association) return includeOptions
 
     if (typeof options.args.id === 'string') {
-      includeOptions.where = includeOptions.where || {}
+      includeOptions.where = where
       includeOptions.where.id = options.args.id
     }
   }
   // TODO: Possible improvement: Return from here if not using default resolver
 
   if (isObject(options.args.where)) {
+    includeOptions.where = where
     populateWhereOptions(options.args.where, where)
   }
 
