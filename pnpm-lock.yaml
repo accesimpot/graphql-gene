@@ -64,10 +64,6 @@ importers:
         version: 2.1.6(@types/node@20.17.8)
 
   packages/core:
-    dependencies:
-      graphql-lookahead:
-        specifier: ^1.2.0-beta.1
-        version: 1.2.0-beta.2(graphql@16.9.0)
     devDependencies:
       '@types/node':
         specifier: ^20.17.8
@@ -140,7 +136,7 @@ importers:
   packages/plugin-sequelize:
     dependencies:
       graphql-lookahead:
-        specifier: ^1.2.0-beta.1
+        specifier: ^1.2.0-beta.2
         version: 1.2.0-beta.2(graphql@16.9.0)
     devDependencies:
       '@types/node':
