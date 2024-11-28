@@ -17,7 +17,7 @@ import {
   type GraphQLOutputType,
 } from 'graphql'
 import type { GeneContext } from 'graphql-gene/context'
-import type { FieldLines, GraphqlReturnTypes, TypeDefLines, ValidGraphqlType } from '../types'
+import type { AnyObject, FieldLines, GraphQLVarType, TypeDefLines } from '../types'
 import type { GeneConfig, GeneTypeConfig } from '../defineConfig'
 
 export * from './extend'
@@ -164,14 +164,9 @@ export function printSchemaWithDirectives(schema: GraphQLSchema) {
 }
 
 /** is using default Gene resolver if none was provided */
-export function isUsingDefaultResolver<
-  TSource = Record<string, unknown> | undefined,
-  TContext = GeneContext,
-  TArgDefs extends Record<string, string> | undefined = undefined,
-  TReturnType = unknown,
->(fieldConfig: GeneTypeConfig<TSource, TContext, TArgDefs, TReturnType>): boolean {
+export function isUsingDefaultResolver(fieldConfig: AnyObject): boolean {
   return (['resolver', 'args'] as const).some(
-    prop => fieldConfig[prop] && fieldConfig[prop] === 'default'
+    prop => prop in fieldConfig && fieldConfig[prop] === 'default'
   )
 }
 
@@ -199,19 +194,13 @@ export function isObjectFieldConfig<T>(
   return isObject(fieldConfigs)
 }
 
-export function normalizeFieldConfig<
-  TSource = Record<string, unknown> | undefined,
-  TContext = GeneContext,
-  TArgDefs extends Record<string, string> | undefined = undefined,
-  TReturnType = unknown,
->(
-  fieldConfig:
-    | GraphqlReturnTypes<ValidGraphqlType | ''>
-    | GeneTypeConfig<TSource, TContext, TArgDefs, TReturnType>
-) {
-  return typeof fieldConfig === 'object'
-    ? fieldConfig
-    : ({ returnType: fieldConfig } as GeneTypeConfig<TSource, TContext, TArgDefs, TReturnType>)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function normalizeFieldConfig<TConfig extends string | GeneTypeConfig<any, any, any, any>>(
+  fieldConfig: TConfig
+): GeneTypeConfig {
+  return typeof fieldConfig === 'string'
+    ? ({ returnType: fieldConfig } as GeneTypeConfig)
+    : fieldConfig
 }
 
 export function isListType(type: ReturnType<typeof parseType>) {
@@ -273,4 +262,13 @@ export function isFieldIncluded<M>(
   if (check(exclude)) return false
 
   return true
+}
+
+export function createTypeDefLines(
+  typeDefLines: TypeDefLines,
+  varType: GraphQLVarType,
+  varName: string
+) {
+  typeDefLines[varName] = typeDefLines[varName] || getDefaultTypeDefLinesObject()
+  typeDefLines[varName].varType = varType
 }
