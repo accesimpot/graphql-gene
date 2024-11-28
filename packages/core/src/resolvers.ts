@@ -10,7 +10,6 @@ import {
   getReturnTypeName,
 } from './utils'
 import type { GenePlugin, AnyObject, GraphqlTypes } from './types'
-import { PAGE_ARG_DEFAULT, PER_PAGE_ARG_DEFAULT } from './constants'
 
 export function addResolversToSchema<SchemaTypes extends AnyObject>(options: {
   schema: GraphQLSchema
@@ -112,15 +111,11 @@ function defineResolvers<SchemaTypes extends AnyObject>(options: {
           }
 
           if (isUsingDefaultResolver(normalizedConfig) && plugin?.defaultResolver) {
-            const providedArgs = args as Partial<GeneDefaultResolverArgs<typeof model>>
-            const page = (providedArgs.page || PAGE_ARG_DEFAULT) - 1
-            const perPage = providedArgs.perPage || PER_PAGE_ARG_DEFAULT
-
             return await plugin.defaultResolver({
               model,
               modelKey: returnTypeName,
               config: normalizedConfig,
-              args: { ...args, page, perPage } as GeneDefaultResolverArgs<typeof model>,
+              args: args as GeneDefaultResolverArgs<typeof model>,
               info,
             })
           }
