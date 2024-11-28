@@ -18,43 +18,31 @@ import {
   isUsingDefaultResolver,
   normalizeFieldConfig,
   isListType,
-  findTypeNameFromTypeNode,
   isArrayFieldConfig,
   isObjectFieldConfig,
   getDefaultTypeDefLinesObject,
   getDefaultFieldLinesObject,
   getGeneConfigFromOptions,
   isFieldIncluded,
+  isObject,
+  getGloballyExtendedTypes,
+  getReturnTypeName,
 } from './utils'
 import { addResolversToSchema } from './resolvers'
 import SCHEMA_TEMPLATE_HTML from './schema.html?raw'
 import type {
   BasicGraphqlType,
   DirectiveDefs,
-  FieldLines,
   GenePlugin,
   GenerateSchemaOptions,
   GraphQLFieldName,
   GraphQLTypeName,
-  GraphQLVarType,
   TypeDefLines,
 } from './types'
 import {
-  AND_OR_OPERATORS,
-  BASIC_GRAPHQL_TYPE_VALUES,
-  PAGE_ARG_DEFAULT,
-  PER_PAGE_ARG_DEFAULT,
-  QUERY_ORDER_VALUES,
-} from './constants'
-
-const VALID_RETURN_TYPES_FOR_WHERE = [
-  'String',
-  'Int',
-  'Float',
-  'Boolean',
-  'Date',
-  'DateTime',
-] as const
+  generateDefaultQueryFilterTypeDefs,
+  populateArgsDefForDefaultResolver,
+} from './defaultResolver'
 
 export function generateSchema<
   SchemaTypes extends AnyObject,
@@ -148,6 +136,7 @@ function generateGeneTypeDefs<SchemaTypes extends AnyObject, DataTypes extends A
 }) {
   const directiveDefs: DirectiveDefs = {}
   const typeDefLines: TypeDefLines = {}
+  const afterTypeDefHooks: (() => void)[] = []
 
   Object.entries(options.types).forEach(([graphqlType, fieldConfigs]) => {
     let hasUsedPlugin = false
@@ -156,7 +145,7 @@ function generateGeneTypeDefs<SchemaTypes extends AnyObject, DataTypes extends A
       const isMatching = plugin.isMatching(fieldConfigs)
       if (!isMatching) continue
 
-      forEachModel({
+      const { afterTypeDefHooks: hooks } = forEachModel({
         directiveDefs,
         typeDefLines,
         types: options.types,
@@ -167,6 +156,8 @@ function generateGeneTypeDefs<SchemaTypes extends AnyObject, DataTypes extends A
         hasDateScalars: options.hasDateScalars,
         dataTypeMap: options.dataTypeMap,
       })
+      afterTypeDefHooks.push(...hooks)
+
       forEachModelOnTypeDefCompleted({
         typeDefLines,
         modelKey: graphqlType,
@@ -186,6 +177,32 @@ function generateGeneTypeDefs<SchemaTypes extends AnyObject, DataTypes extends A
       })
     }
   })
+  const globallyExtendedTypes = getGloballyExtendedTypes()
+
+  Object.entries(globallyExtendedTypes).forEach(([graphqlType, fieldConfigs]) => {
+    generateTypeDefLines({
+      directiveDefs,
+      typeDefLines,
+      graphqlType,
+      fieldConfigs: fieldConfigs as GeneConfigTypes,
+    })
+
+    Object.entries(fieldConfigs).forEach(([fieldKey, fieldConfig]) => {
+      const normalizedFieldConfig = normalizeFieldConfig(fieldConfig)
+      if (!isUsingDefaultResolver(normalizedFieldConfig)) return
+
+      generateDefaultQueryFilterTypeDefs({
+        typeDefLines,
+        graphqlType,
+        fieldKey,
+        fieldType: getReturnTypeName(normalizedFieldConfig.returnType),
+        isList: isListType(parseType(normalizedFieldConfig.returnType)),
+      })
+    })
+  })
+
+  afterTypeDefHooks.forEach(hook => hook())
+
   const typeDefs: string[] = []
   let sortedTypeDefLines = typeDefLines
 
@@ -237,15 +254,26 @@ function forEachModel<M, SchemaTypes extends AnyObject>(options: {
   hasDateScalars?: boolean
   dataTypeMap?: { [k: string | symbol]: BasicGraphqlType }
 }) {
-  generateTypeDefs(options)
+  const afterTypeDefHooks: (() => void)[] = []
+
+  const { afterTypeDefHooks: hooks } = generateTypeDefs(options)
+  afterTypeDefHooks.push(...hooks)
+
   generateAdditionalTypeDefs(options)
 
   const geneConfig = getGeneConfigFromOptions(options)
 
   Object.entries(geneConfig?.aliases || {}).forEach(([aliasKey, geneConfig]) => {
-    generateTypeDefs({ ...options, geneConfig, modelKey: aliasKey })
+    const { afterTypeDefHooks: hooks } = generateTypeDefs({
+      ...options,
+      geneConfig,
+      modelKey: aliasKey,
+    })
+    afterTypeDefHooks.push(...hooks)
+
     generateAdditionalTypeDefs({ ...options, geneConfig })
   })
+  return { afterTypeDefHooks }
 }
 
 function forEachModelOnTypeDefCompleted<M>(options: {
@@ -256,6 +284,7 @@ function forEachModelOnTypeDefCompleted<M>(options: {
   generateQueryFilterTypeDefs(options)
 
   const geneConfig = getGeneConfigFromOptions(options)
+  if (!geneConfig?.types) return
 
   Object.entries(geneConfig?.aliases || {}).forEach(([, geneConfig]) => {
     generateQueryFilterTypeDefs({ ...options, geneConfig })
@@ -275,16 +304,23 @@ function generateTypeDefs<M, SchemaTypes extends AnyObject>(options: {
   dataTypeMap?: { [k: string | symbol]: BasicGraphqlType }
 }) {
   const geneConfig = getGeneConfigFromOptions(options)
+  const afterTypeDefHooks: (() => void)[] = []
 
-  const typeDef = options.plugin.getTypeDef({
+  const optionsForPopulateTypeDefs = {
+    typeDefLines: options.typeDefLines,
     model: options.model,
     typeName: options.modelKey,
     isFieldIncluded: (fieldKey: string) => isFieldIncluded(geneConfig, fieldKey),
     schemaOptions: options,
-  })
-  if (!typeDef) return
+  }
 
-  options.typeDefLines[options.modelKey] = { ...getDefaultTypeDefLinesObject(), ...typeDef }
+  if (options.plugin.populateTypeDefs) {
+    const { afterTypeDefHooks: hooks } = options.plugin.populateTypeDefs(optionsForPopulateTypeDefs)
+    afterTypeDefHooks.push(...hooks)
+  } else {
+    const typeDef = options.plugin.getTypeDef(optionsForPopulateTypeDefs)
+    options.typeDefLines[options.modelKey] = typeDef
+  }
 
   registerDirectives({
     configs: geneConfig?.directives,
@@ -293,6 +329,7 @@ function generateTypeDefs<M, SchemaTypes extends AnyObject>(options: {
       options.typeDefLines[options.modelKey].directives.add(directiveDef)
     },
   })
+  return { afterTypeDefHooks }
 }
 
 /**
@@ -309,7 +346,7 @@ function generateAdditionalTypeDefs<M>(options: {
   if (!geneConfig?.types) return
 
   Object.entries(geneConfig.types).forEach(([graphqlType, fieldConfigs]) => {
-    generateTypeDefLines({ ...options, graphqlType, fieldConfigs })
+    generateTypeDefLines({ ...options, graphqlType, fieldConfigs: fieldConfigs as GeneConfigTypes })
   })
 }
 
@@ -323,6 +360,25 @@ function generateTypeDefLines(options: {
 
   options.typeDefLines[options.graphqlType] =
     options.typeDefLines[options.graphqlType] || getDefaultTypeDefLinesObject()
+
+  if (
+    isObject(objFieldConfigs) &&
+    'geneConfig' in objFieldConfigs &&
+    objFieldConfigs.geneConfig?.varType
+  ) {
+    const varType = objFieldConfigs.geneConfig.varType
+    options.typeDefLines[options.graphqlType].varType = varType
+
+    if (varType === 'union') {
+      const objConfigs: Record<string, ''> = {}
+
+      Object.keys(objFieldConfigs)
+        .filter(field => field !== 'geneConfig')
+        .forEach(field => (objConfigs[field] = ''))
+
+      objFieldConfigs = objConfigs
+    }
+  }
 
   // If options.fieldConfigs is an array, we should treat it as an enum
   if (isArrayFieldConfig(options.fieldConfigs)) {
@@ -338,6 +394,8 @@ function generateTypeDefLines(options: {
   }
 
   Object.entries(objFieldConfigs).forEach(([fieldKey, fieldConfig]) => {
+    if (fieldKey === 'geneConfig') return
+
     const normalizedFieldConfig = normalizeFieldConfig(fieldConfig)
 
     options.typeDefLines[options.graphqlType].lines[fieldKey] =
@@ -347,32 +405,11 @@ function generateTypeDefLines(options: {
     fieldLineConfig.typeDef = normalizedFieldConfig.returnType
 
     if (isUsingDefaultResolver(normalizedFieldConfig)) {
-      const whereOptionsInputName = getWhereOptionsInputName(options.graphqlType, fieldKey)
-      const orderEnumName = getQueryOrderEnumName(options.graphqlType, fieldKey)
-
-      const isList = isListType(parseType(normalizedFieldConfig.returnType))
-
-      const argsDef = {
-        ...(isList
-          ? {
-              page: 'Int',
-              perPage: 'Int',
-            }
-          : { id: 'String' }),
-        locale: 'String',
-        where: whereOptionsInputName,
-
-        ...(isList ? { order: `[${orderEnumName}!]` } : {}),
-      }
-      Object.entries(argsDef).forEach(([argKey, argDef]) => {
-        fieldLineConfig.argsDef[argKey] = fieldLineConfig.argsDef[argKey] || new Set<string>([])
-
-        let def = argDef
-        // Set default values
-        if (argKey === 'page') def += ` = ${PAGE_ARG_DEFAULT}`
-        if (argKey === 'perPage') def += ` = ${PER_PAGE_ARG_DEFAULT}`
-
-        fieldLineConfig.argsDef[argKey].add(def)
+      populateArgsDefForDefaultResolver({
+        fieldLineConfig,
+        graphqlType: options.graphqlType,
+        fieldKey,
+        isList: isListType(parseType(normalizedFieldConfig.returnType)),
       })
     } else if (normalizedFieldConfig.args) {
       Object.entries(normalizedFieldConfig.args).forEach(([argKey, argDef]) => {
@@ -396,88 +433,27 @@ function generateTypeDefLines(options: {
 
 function generateQueryFilterTypeDefs<M>(options: {
   typeDefLines: TypeDefLines
-  modelKey: string
-  model: M
+  // modelKey: string
+  model?: M
   geneConfig?: GeneConfig<M>
+  extendedTypes?: GeneConfigTypes
 }) {
-  const geneConfig = getGeneConfigFromOptions(options)
+  const model = options.model
+  const geneConfig = model ? getGeneConfigFromOptions({ model, ...options }) : undefined
   if (!geneConfig?.types) return
 
   Object.entries(geneConfig.types).forEach(([graphqlType, fieldConfigs]) => {
     Object.entries(fieldConfigs).forEach(([fieldKey, fieldConfig]) => {
       const normalizedFieldConfig = normalizeFieldConfig(fieldConfig)
-
       if (!isUsingDefaultResolver(normalizedFieldConfig)) return
 
-      const whereOptionsInputName = getWhereOptionsInputName(graphqlType, fieldKey)
-      const orderEnumName = getQueryOrderEnumName(graphqlType, fieldKey)
-
-      const hasWhereInputDefined = whereOptionsInputName in options.typeDefLines
-      const hasOrderEnumDefined = orderEnumName in options.typeDefLines
-
-      if (hasWhereInputDefined && hasOrderEnumDefined) return
-
-      if (!hasWhereInputDefined) {
-        createTypeDefLines(options.typeDefLines, 'input', whereOptionsInputName)
-
-        // Add "and" and "or" operators
-        AND_OR_OPERATORS.forEach(operator => {
-          options.typeDefLines[whereOptionsInputName].lines[operator] = getDefaultFieldLinesObject()
-          options.typeDefLines[whereOptionsInputName].lines[operator].typeDef =
-            `[${whereOptionsInputName}!]`
-        })
-      }
-      if (!hasOrderEnumDefined) {
-        createTypeDefLines(options.typeDefLines, 'enum', orderEnumName)
-      }
-
-      const returnTypeName = findTypeNameFromTypeNode(parseType(normalizedFieldConfig.returnType))
-
-      if (returnTypeName && BASIC_GRAPHQL_TYPE_VALUES.includes(returnTypeName as 'ID')) return
-
-      if (!(returnTypeName in options.typeDefLines)) {
-        throw new Error(`Cannot find "${returnTypeName}" definition used as "returnType".`)
-      }
-
-      Object.entries(options.typeDefLines[returnTypeName].lines).forEach(
-        ([returnFieldKey, returnFieldType]) => {
-          // Where Options Input
-          options.typeDefLines[whereOptionsInputName].lines[returnFieldKey] =
-            options.typeDefLines[whereOptionsInputName].lines[returnFieldKey] ||
-            getDefaultFieldLinesObject()
-
-          const validInputType = VALID_RETURN_TYPES_FOR_WHERE.find(type =>
-            returnFieldType.typeDef.startsWith(type)
-          )
-          let whereTypeDef = ''
-
-          if (validInputType) {
-            const operatorInputName = getOperatorInputName(validInputType)
-            whereTypeDef = operatorInputName
-
-            if (!(operatorInputName in options.typeDefLines)) {
-              createTypeDefLines(options.typeDefLines, 'input', operatorInputName)
-
-              options.typeDefLines[operatorInputName].lines =
-                generateOperatorInputLines(validInputType)
-            }
-          } else if (returnFieldType.typeDef in options.typeDefLines) {
-            for (const key in options.typeDefLines[returnFieldType.typeDef].lines) {
-              if (key === 'id') {
-                whereTypeDef = options.typeDefLines[returnFieldType.typeDef].lines[key].typeDef
-                break
-              }
-            }
-          }
-          options.typeDefLines[whereOptionsInputName].lines[returnFieldKey].typeDef = whereTypeDef
-
-          // Query Order Enum
-          QUERY_ORDER_VALUES.forEach(orderValue => {
-            const key = `${returnFieldKey}_${orderValue}`
-            options.typeDefLines[orderEnumName].lines[key] = getDefaultFieldLinesObject()
-          })
-        }
-      )
+      generateDefaultQueryFilterTypeDefs({
+        typeDefLines: options.typeDefLines,
+        graphqlType,
+        fieldKey,
+        fieldType: getReturnTypeName(normalizedFieldConfig.returnType),
+        isList: isListType(parseType(normalizedFieldConfig.returnType)),
+      })
     })
   })
 }
@@ -527,10 +503,11 @@ function stringifyFieldLines(typeKey: string, fieldLines: TypeDefLines[0]) {
   })
   if (!fieldLinesArray.length) return ''
 
-  const getVarDef = (indent = '  ') => fieldLinesArray.map(line => `${indent}${line}`).join('\n')
+  const getVarDef = (indent = '  ', join = '\n') =>
+    fieldLinesArray.map(line => `${indent}${line}`).join(join)
 
   if (fieldLines.varType === 'union') {
-    return `union ${typeKey} = ${getVarDef('')}`
+    return `union ${typeKey} = ${getVarDef('', ' | ')}`
   }
 
   return [
@@ -557,60 +534,4 @@ function stringifyDirectiveConfig(directive: GeneDirectiveConfig) {
     }
   }
   return directiveDef
-}
-
-function createTypeDefLines(typeDefLines: TypeDefLines, varType: GraphQLVarType, varName: string) {
-  typeDefLines[varName] = typeDefLines[varName] || getDefaultTypeDefLinesObject()
-  typeDefLines[varName].varType = varType
-}
-
-function getWhereOptionsInputName(typeName: string, fieldName: string) {
-  return generateGraphqlTypeName(typeName, fieldName, 'WhereOptionsInput')
-}
-
-function getQueryOrderEnumName(typeName: string, fieldName: string) {
-  return generateGraphqlTypeName(typeName, fieldName, 'SelectOrderEnum')
-}
-
-function generateGraphqlTypeName<T extends string>(typeName: string, fieldName: string, suffix: T) {
-  const pascal = (name: string) => `${name[0].toUpperCase()}${name.substring(1)}`
-  return [typeName, fieldName, suffix].map(pascal).join('') as `${string}${T}`
-}
-
-function getOperatorInputName(
-  graphqlType: (typeof VALID_RETURN_TYPES_FOR_WHERE)[number]
-): `GeneOperator${string}Input` {
-  return `GeneOperator${graphqlType}Input`
-}
-
-function generateOperatorInputLines(
-  graphqlType: (typeof VALID_RETURN_TYPES_FOR_WHERE)[number]
-): FieldLines {
-  const fieldDefs = {
-    eq: graphqlType,
-    ne: graphqlType,
-    in: `[${graphqlType}]`,
-    notIn: `[${graphqlType}]`,
-    null: 'Boolean',
-
-    ...(graphqlType === 'String'
-      ? {
-          like: graphqlType,
-          notLike: graphqlType,
-        }
-      : ['Int', 'Float', 'Date', 'DateTime'].includes(graphqlType)
-        ? {
-            lt: graphqlType,
-            lte: graphqlType,
-            gt: graphqlType,
-            gte: graphqlType,
-          }
-        : {}),
-  }
-
-  const lines: FieldLines = {}
-  Object.entries(fieldDefs).forEach(([key, typeDef]) => {
-    lines[key] = { ...getDefaultFieldLinesObject(), typeDef }
-  })
-  return lines
 }

@@ -47,6 +47,9 @@ export type GenePlugin<M = any> = {
    */
   isMatching: (model: M) => boolean
 
+  /**
+   * @deprecated In favor of "populateTypeDefs"
+   */
   getTypeDef(options: {
     model: M
     typeName: string
@@ -54,7 +57,23 @@ export type GenePlugin<M = any> = {
     schemaOptions: GenerateSchemaOptions
   }): TypeDefLines[0]
 
-  defaultResolver<
+  /**
+   * Populate the typeDefLines object with one or multiple type definitions. It might need to
+   * define multiple types if one field has arguments with inputs specific to this types
+   * (i.e. associations using the default resolver).
+   *
+   * It returns { afterTypeDefHooks } which are hooks called after all model types are added
+   * to the typeDefLines object.
+   */
+  populateTypeDefs(options: {
+    typeDefLines: TypeDefLines
+    model: M
+    typeName: string
+    isFieldIncluded: (fieldKey: string) => boolean
+    schemaOptions: GenerateSchemaOptions
+  }): { afterTypeDefHooks: (() => void)[] }
+
+  defaultResolver?<
     M,
     ModelKey extends string,
     TSource = Record<string, unknown> | undefined,

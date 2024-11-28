@@ -17,8 +17,11 @@ import {
   type GraphQLOutputType,
 } from 'graphql'
 import type { GeneContext } from 'graphql-gene/context'
-import type { FieldLines, GraphqlReturnTypes, TypeDefLines, ValidGraphqlType } from './types'
-import type { GeneConfig, GeneTypeConfig } from './defineConfig'
+import type { AnyObject, FieldLines, GraphQLVarType, TypeDefLines } from '../types'
+import type { GeneConfig, GeneTypeConfig } from '../defineConfig'
+
+export * from './extend'
+export * from './operators'
 
 type GraphQLOutputObjectType = GraphQLObjectType | GraphQLInterfaceType
 
@@ -161,13 +164,10 @@ export function printSchemaWithDirectives(schema: GraphQLSchema) {
 }
 
 /** is using default Gene resolver if none was provided */
-export function isUsingDefaultResolver<
-  TSource = Record<string, unknown> | undefined,
-  TContext = GeneContext,
-  TArgDefs extends Record<string, string> | undefined = undefined,
-  TReturnType = unknown,
->(fieldConfig: GeneTypeConfig<TSource, TContext, TArgDefs, TReturnType>): boolean {
-  return !!(fieldConfig.resolver && fieldConfig.resolver === 'default')
+export function isUsingDefaultResolver(fieldConfig: AnyObject): boolean {
+  return (['resolver', 'args'] as const).some(
+    prop => prop in fieldConfig && fieldConfig[prop] === 'default'
+  )
 }
 
 export function getDefaultTypeDefLinesObject(): TypeDefLines[0] {
@@ -182,6 +182,12 @@ export function isObject<T>(variable: T) {
   return variable !== null && typeof variable === 'object'
 }
 
+export function isEmptyObject<T extends object>(obj: T) {
+  for (const _prop in obj) return false
+
+  return true
+}
+
 export function isArrayFieldConfig<T>(
   fieldConfigs: T
 ): fieldConfigs is Extract<T, readonly string[]> {
@@ -194,19 +200,13 @@ export function isObjectFieldConfig<T>(
   return isObject(fieldConfigs)
 }
 
-export function normalizeFieldConfig<
-  TSource = Record<string, unknown> | undefined,
-  TContext = GeneContext,
-  TArgDefs extends Record<string, string> | undefined = undefined,
-  TReturnType = unknown,
->(
-  fieldConfig:
-    | GraphqlReturnTypes<ValidGraphqlType | ''>
-    | GeneTypeConfig<TSource, TContext, TArgDefs, TReturnType>
-) {
-  return typeof fieldConfig === 'object'
-    ? fieldConfig
-    : ({ returnType: fieldConfig } as GeneTypeConfig<TSource, TContext, TArgDefs, TReturnType>)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function normalizeFieldConfig<TConfig extends string | GeneTypeConfig<any, any, any, any>>(
+  fieldConfig: TConfig
+): GeneTypeConfig {
+  return typeof fieldConfig === 'string'
+    ? ({ returnType: fieldConfig } as GeneTypeConfig)
+    : fieldConfig
 }
 
 export function isListType(type: ReturnType<typeof parseType>) {
@@ -216,6 +216,16 @@ export function isListType(type: ReturnType<typeof parseType>) {
 
 export function findTypeNameFromTypeNode(type: ReturnType<typeof parseType>): string {
   return 'type' in type ? findTypeNameFromTypeNode(type.type) : type.name.value
+}
+
+/**
+ * Receives the full GraphQL return type and returns the type name as string.
+ *
+ * @example
+ * const returnTypeName = getReturnTypeName('[Foo!]!') // => 'Foo'
+ */
+export function getReturnTypeName(returnType: string) {
+  return findTypeNameFromTypeNode(parseType(returnType))
 }
 
 export function getGeneConfigFromOptions<M>(options: {
@@ -238,7 +248,7 @@ export function isFieldIncluded<M>(
 ): boolean {
   const config = geneConfig || {}
 
-  const check = (filters: (string | RegExp)[]) => {
+  const check = (filters: unknown[]) => {
     for (const keyOrRegex of filters) {
       if (typeof keyOrRegex === 'string' && keyOrRegex === fieldKey) return true
       if (keyOrRegex instanceof RegExp && keyOrRegex.test(fieldKey)) return true
@@ -258,4 +268,13 @@ export function isFieldIncluded<M>(
   if (check(exclude)) return false
 
   return true
+}
+
+export function createTypeDefLines(
+  typeDefLines: TypeDefLines,
+  varType: GraphQLVarType,
+  varName: string
+) {
+  typeDefLines[varName] = typeDefLines[varName] || getDefaultTypeDefLinesObject()
+  typeDefLines[varName].varType = varType
 }

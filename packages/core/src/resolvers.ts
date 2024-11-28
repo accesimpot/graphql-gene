@@ -1,14 +1,15 @@
 import { defaultFieldResolver, GraphQLSchema } from 'graphql'
-import type { GeneConfig, GeneDefaultResolverArgs } from './defineConfig'
+import type { GeneConfig, GeneDefaultResolverArgs, ExtendedTypes } from './defineConfig'
 import {
   lookDeepInSchema,
   isUsingDefaultResolver,
   normalizeFieldConfig,
   isArrayFieldConfig,
   getGeneConfigFromOptions,
+  getGloballyExtendedTypes,
+  getReturnTypeName,
 } from './utils'
-import type { GenePlugin, AnyObject } from './types'
-import { PAGE_ARG_DEFAULT, PER_PAGE_ARG_DEFAULT } from './constants'
+import type { GenePlugin, AnyObject, GraphqlTypes } from './types'
 
 export function addResolversToSchema<SchemaTypes extends AnyObject>(options: {
   schema: GraphQLSchema
@@ -17,50 +18,56 @@ export function addResolversToSchema<SchemaTypes extends AnyObject>(options: {
 }) {
   let schema = options.schema
 
-  Object.entries(options.types).forEach(([modelKey, model]) => {
-    const geneConfig = getGeneConfigFromOptions({ model })
-
-    for (const plugin of options.plugins) {
-      const modifiedSchema = forEachModel({
-        schema,
-        plugin,
-        modelKey,
-        model,
-        geneConfig,
-      })
-      if (modifiedSchema) schema = modifiedSchema
-    }
+  Object.entries(options.types).forEach(([, model]) => {
+    const modifiedSchema = forEachModel({
+      schema,
+      types: options.types,
+      plugins: options.plugins,
+      model,
+    })
+    if (modifiedSchema) schema = modifiedSchema
   })
+  const globallyExtendedTypes = getGloballyExtendedTypes()
+
+  const modifiedSchema = defineResolvers({
+    schema,
+    types: options.types,
+    plugins: options.plugins,
+    typeConfig: globallyExtendedTypes,
+  })
+  if (modifiedSchema) schema = modifiedSchema
+
   return schema
 }
 
-function forEachModel<M>(options: {
+function forEachModel<M, SchemaTypes extends AnyObject>(options: {
   geneConfig?: GeneConfig<M>
   schema: GraphQLSchema
-  plugin: GenePlugin<M>
-  modelKey: string
+  types: SchemaTypes
+  plugins: GenePlugin<M>[]
   model: M
 }): GraphQLSchema | undefined {
   const geneConfig = getGeneConfigFromOptions(options)
-  let modifiedSchema = defineResolvers(options)
+  const { types: typeConfig } = geneConfig || {}
 
-  Object.entries(geneConfig?.aliases || {}).forEach(([aliasKey, geneConfig]) => {
-    modifiedSchema = defineResolvers({ ...options, geneConfig, modelKey: aliasKey })
+  let modifiedSchema = defineResolvers({ ...options, typeConfig })
+
+  Object.entries(geneConfig?.aliases || {}).forEach(([, geneConfig]) => {
+    const { types: typeConfig } = geneConfig || {}
+    modifiedSchema = defineResolvers({ ...options, typeConfig })
   })
   return modifiedSchema
 }
 
-function defineResolvers<M>(options: {
-  geneConfig?: GeneConfig<M>
+function defineResolvers<SchemaTypes extends AnyObject>(options: {
   schema: GraphQLSchema
-  plugin: GenePlugin<M>
-  modelKey: string
-  model: M
+  types: SchemaTypes
+  plugins: GenePlugin[]
+  typeConfig: ExtendedTypes | undefined
 }): GraphQLSchema | undefined {
-  if (!options.geneConfig) return
+  if (!options.typeConfig) return
 
-  const typeConfig = options.geneConfig.types || {}
-  const typeLevelDirectiveConfigs = options.geneConfig.directives
+  const typeConfig = options.typeConfig || {}
 
   lookDeepInSchema({
     schema: options.schema,
@@ -70,48 +77,51 @@ function defineResolvers<M>(options: {
         typeConfig[parentType as 'Query'] &&
         field in typeConfig[parentType as 'Query']!
 
-      if (type !== options.modelKey && !isFieldInTypeConfig()) return
+      if (!isFieldInTypeConfig()) return
 
-      const directiveConfigs: typeof typeLevelDirectiveConfigs = []
+      const currentTypeConfig = typeConfig[parentType as keyof typeof typeConfig]
+      if (!currentTypeConfig || isArrayFieldConfig(currentTypeConfig)) return
 
-      if (type === options.modelKey && typeLevelDirectiveConfigs) {
-        directiveConfigs.push(...typeLevelDirectiveConfigs)
+      const config = (
+        currentTypeConfig as Record<string, Parameters<typeof normalizeFieldConfig>[0]>
+      )[field]
+      const normalizedConfig = normalizeFieldConfig(config)
+      const returnTypeName = getReturnTypeName(normalizedConfig.returnType)
+      const model = options.types[returnTypeName] as GraphqlTypes[keyof GraphqlTypes] | undefined
+
+      if (type !== returnTypeName) return
+
+      const geneConfig = model ? getGeneConfigFromOptions({ model }) : undefined
+      const plugin = model ? options.plugins.find(plugin => plugin.isMatching(model)) : undefined
+
+      const directiveConfigs: GeneConfig['directives'] = []
+
+      // Type-level directives
+      if (geneConfig?.aliases && returnTypeName in geneConfig.aliases) {
+        const aliasGeneConfig = geneConfig.aliases[returnTypeName as 'Query']
+        if (aliasGeneConfig?.directives) directiveConfigs.push(...aliasGeneConfig.directives)
+      } else if (geneConfig?.directives) {
+        directiveConfigs.push(...geneConfig.directives)
       }
 
-      resolverDefinition: {
-        if (!isFieldInTypeConfig()) break resolverDefinition
+      if (normalizedConfig.resolver) {
+        fieldDef.resolve = async (source, args, context, info) => {
+          if (normalizedConfig.resolver && typeof normalizedConfig.resolver !== 'string') {
+            return normalizedConfig.resolver({ source, args, context, info })
+          }
 
-        const currentTypeConfig = typeConfig[parentType as keyof typeof typeConfig]
-        if (!currentTypeConfig || isArrayFieldConfig(currentTypeConfig)) break resolverDefinition
-
-        const config = (
-          currentTypeConfig as Record<string, Parameters<typeof normalizeFieldConfig>[0]>
-        )[field]
-        const normalizedConfig = normalizeFieldConfig(config)
-
-        if (normalizedConfig.resolver) {
-          fieldDef.resolve = async (source, args, context, info) => {
-            if (normalizedConfig.resolver && typeof normalizedConfig.resolver !== 'string') {
-              return normalizedConfig.resolver({ source, args, context, info })
-            }
-
-            if (isUsingDefaultResolver(normalizedConfig)) {
-              const providedArgs = args as Partial<GeneDefaultResolverArgs<M>>
-              const page = (providedArgs.page || PAGE_ARG_DEFAULT) - 1
-              const perPage = providedArgs.perPage || PER_PAGE_ARG_DEFAULT
-
-              return await options.plugin.defaultResolver({
-                model: options.model,
-                modelKey: options.modelKey,
-                config: normalizedConfig,
-                args: { ...args, page, perPage } as GeneDefaultResolverArgs<M>,
-                info,
-              })
-            }
+          if (isUsingDefaultResolver(normalizedConfig) && plugin?.defaultResolver) {
+            return await plugin.defaultResolver({
+              model,
+              modelKey: returnTypeName,
+              config: normalizedConfig,
+              args: args as GeneDefaultResolverArgs<typeof model>,
+              info,
+            })
           }
         }
-        if (normalizedConfig.directives) directiveConfigs.push(...normalizedConfig.directives)
       }
+      if (normalizedConfig.directives) directiveConfigs.push(...normalizedConfig.directives)
 
       // Register directives at the type or field level
       if (directiveConfigs.length) {

@@ -1,8 +1,8 @@
-import type { GenePlugin, PluginSettings, PrototypeOrNot } from 'graphql-gene'
+import type { GenePlugin, PluginSettings, PrototypeOrNot, TypeDefLines } from 'graphql-gene'
 import type { InferAttributes } from 'sequelize'
 import { Model } from 'sequelize-typescript'
 import { defaultResolver } from './defaultResolver'
-import { getTypeDef } from './getTypeDef'
+import { populateTypeDefs } from './populateTypeDefs'
 import type { GeneModel } from './constants'
 
 declare module 'graphql-gene/plugin-settings' {
@@ -22,7 +22,16 @@ export const plugin = (): GenePlugin<typeof GeneModel> => {
   return {
     isMatching: model => isSequelizeFieldConfig(model),
 
-    getTypeDef,
+    /**
+     * @deprecated In favor of "populateTypeDefs"
+     */
+    getTypeDef(options) {
+      const typeDefLines: TypeDefLines = {}
+      populateTypeDefs({ typeDefLines, ...options })
+
+      return typeDefLines[options.typeName]
+    },
+    populateTypeDefs,
     defaultResolver,
   }
 }

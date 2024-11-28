@@ -1,6 +1,6 @@
 {
   "name": "graphql-gene",
-  "version": "1.0.10",
+  "version": "1.1.0-beta.6",
   "description": "Generates automatically an executable schema out of your ORM models",
   "repository": "accesimpot/graphql-gene",
   "license": "MIT",
@@ -28,9 +28,6 @@
   "scripts": {
     "dev": "NODE_ENV=development pnpm build --watch --emptyOutDir=false",
     "build": "NODE_ENV=${NODE_ENV:-development} vite build",
-    "test": "echo \"No cacheable test (vitest --run)\"",
-    "test:watch": "echo \"No cacheable test (vitest)\"",
-    "test:non-cacheable": "vitest --run --no-coverage --config='./vitest.always.config.ts'",
     "types:check": "tsc --project tsconfig.lint.json"
   },
   "files": [
@@ -63,17 +60,15 @@
       "default": "./dist/types/extendable/schema.js"
     }
   },
-  "dependencies": {
-    "graphql-lookahead": "^1.1.3"
+  "peerDependencies": {
+    "graphql": "16.x"
   },
   "devDependencies": {
     "@types/node": "^20.17.8",
-    "@vitest/coverage-istanbul": "^2.1.6",
     "dev-utils": "workspace:*",
     "graphql": "^16.9.0",
     "typescript": "^5.7.2",
-    "vite": "^6.0.1",
-    "vitest": "^2.1.6"
+    "vite": "^6.0.1"
   },
   "publishConfig": {
     "access": "public"
