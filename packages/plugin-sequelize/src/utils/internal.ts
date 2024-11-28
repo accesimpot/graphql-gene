@@ -49,9 +49,3 @@ export function populateWhereOptions<M>(
     }
   }
 }
-
-export function isEmptyObject<T extends object>(obj: T) {
-  for (const _prop in obj) return false
-
-  return true
-}

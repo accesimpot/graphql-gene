@@ -1,10 +1,10 @@
 import { GraphQLError, isListType as isListTypeObject, type GraphQLResolveInfo } from 'graphql'
-import { isObject, QUERY_ORDER_VALUES, type ValidGraphqlType } from 'graphql-gene'
+import { isEmptyObject, isObject, QUERY_ORDER_VALUES, type ValidGraphqlType } from 'graphql-gene'
 import { lookahead, lookDeeper } from 'graphql-lookahead'
 import type { IncludeOptions, OrderItem } from 'sequelize'
 import type { Model } from 'sequelize-typescript'
 import type { GeneSequelizeWhereOptions } from '../types'
-import { populateWhereOptions, isEmptyObject } from './internal'
+import { populateWhereOptions } from './internal'
 
 type DefaultResolverIncludeOptions = Pick<
   IncludeOptions,
