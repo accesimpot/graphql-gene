@@ -153,7 +153,7 @@ export function getFieldIncludeOptions(options: {
   // Both "page" and "perPage" arguments have default values so they should always be numbers
   // if they are valid.
   if (typeof options.args.page === 'number' && typeof options.args.perPage === 'number') {
-    includeOptions.offset = options.args.page * options.args.perPage
+    includeOptions.offset = (options.args.page - 1) * options.args.perPage
     includeOptions.limit = options.args.perPage
   }
 
