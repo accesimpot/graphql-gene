@@ -136,8 +136,8 @@ importers:
   packages/plugin-sequelize:
     dependencies:
       graphql-lookahead:
-        specifier: ^1.2.0-beta.2
-        version: 1.2.0-beta.2(graphql@16.9.0)
+        specifier: ^1.2.0
+        version: 1.2.0(graphql@16.9.0)
     devDependencies:
       '@types/node':
         specifier: ^20.17.8
@@ -1994,8 +1994,8 @@ packages:
   graphemer@1.4.0:
     resolution: {integrity: sha512-EtKwoO6kxCL9WO5xipiHTZlSzBm7WLT627TqC/uVRd0HKmq8NXyebnNYxDoBi7wt8eTWrUrKXCOVaFq9x1kgag==}
 
-  graphql-lookahead@1.2.0-beta.2:
-    resolution: {integrity: sha512-n+0+oSBeBkSXTi9xHZswnWvE4mYqd6jZFAtsWHoNdU7HNrh1FbiR9EnBbWa27iT1oaztBLlA6gRFX3T/f1UiXg==}
+  graphql-lookahead@1.2.0:
+    resolution: {integrity: sha512-RwLZFeRJT/7fc/LxJOK6VNv+V84ciAyWCNqvwMPGaqE99lu7N+tC0w/aM8+eiHu7V2rOwEG+we7M6+msBQVy4g==}
     engines: {node: ^12.22.0 || ^14.16.0 || ^16.0.0 || >=17.0.0}
     peerDependencies:
       graphql: 16.x
@@ -5593,7 +5593,7 @@ snapshots:
 
   graphemer@1.4.0: {}
 
-  graphql-lookahead@1.2.0-beta.2(graphql@16.9.0):
+  graphql-lookahead@1.2.0(graphql@16.9.0):
     dependencies:
       graphql: 16.9.0
 

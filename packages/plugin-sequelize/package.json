@@ -51,12 +51,12 @@
   },
   "peerDependencies": {
     "graphql": "16.x",
-    "graphql-gene": "^1.1.0-beta.4",
+    "graphql-gene": "^1.1.0",
     "sequelize": "6.x",
     "sequelize-typescript": "2.x"
   },
   "dependencies": {
-    "graphql-lookahead": "^1.2.0-beta.2"
+    "graphql-lookahead": "^1.2.0"
   },
   "devDependencies": {
     "@types/node": "^20.17.8",
