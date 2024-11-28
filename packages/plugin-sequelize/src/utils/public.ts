@@ -1,5 +1,5 @@
 import { GraphQLError, isListType as isListTypeObject, type GraphQLResolveInfo } from 'graphql'
-import { isObject, QUERY_ORDER_VALUES, type ValidGraphqlType } from 'graphql-gene'
+import { isEmptyObject, isObject, QUERY_ORDER_VALUES, type ValidGraphqlType } from 'graphql-gene'
 import { lookahead, lookDeeper } from 'graphql-lookahead'
 import type { IncludeOptions, OrderItem } from 'sequelize'
 import type { Model } from 'sequelize-typescript'
@@ -8,8 +8,9 @@ import { populateWhereOptions } from './internal'
 
 type DefaultResolverIncludeOptions = Pick<
   IncludeOptions,
-  'where' | 'order' | 'association' | 'include' | 'limit'
+  'where' | 'order' | 'association' | 'limit'
 > & {
+  include?: DefaultResolverIncludeOptions[]
   /**
    * "offset" is missing in IncludeOptions
    * @see https://github.com/sequelize/sequelize/issues/12969
@@ -46,7 +47,10 @@ export function getQueryInclude(info: GraphQLResolveInfo) {
       return include
     },
   })
-  return includeOptions
+
+  return isEmptyObject(includeOptions)
+    ? undefined
+    : (includeOptions as Required<Pick<typeof includeOptions, 'include'>>)
 }
 
 export function getQueryIncludeOf(
@@ -92,7 +96,9 @@ export function getQueryIncludeOf(
     lookahead(lookDeeperOptions)
   }
 
-  return includeOptions
+  return isEmptyObject(includeOptions)
+    ? undefined
+    : (includeOptions as Required<Pick<typeof includeOptions, 'include'>>)
 }
 
 export function getFieldFindOptions(options: {
@@ -147,8 +153,9 @@ export function getFieldIncludeOptions(options: {
   // Both "page" and "perPage" arguments have default values so they should always be numbers
   // if they are valid.
   if (typeof options.args.page === 'number' && typeof options.args.perPage === 'number') {
-    includeOptions.offset = options.args.page * options.args.perPage
+    includeOptions.offset = (options.args.page - 1) * options.args.perPage
     includeOptions.limit = options.args.perPage
   }
+
   return includeOptions
 }

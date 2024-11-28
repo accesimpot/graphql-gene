@@ -182,6 +182,12 @@ export function isObject<T>(variable: T) {
   return variable !== null && typeof variable === 'object'
 }
 
+export function isEmptyObject<T extends object>(obj: T) {
+  for (const _prop in obj) return false
+
+  return true
+}
+
 export function isArrayFieldConfig<T>(
   fieldConfigs: T
 ): fieldConfigs is Extract<T, readonly string[]> {
