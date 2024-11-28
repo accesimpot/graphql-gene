@@ -19,6 +19,7 @@ type DefaultResolverIncludeOptions = Pick<
 }
 
 const QUERY_TYPE = 'Query'
+const MUTATION_TYPE = 'Mutation'
 
 export function isSequelizeFieldConfig<T>(
   fieldConfigs: T
@@ -89,7 +90,7 @@ export function getQueryIncludeOf(
     lookDeeper({
       ...lookDeeperOptions,
       state: {},
-      type: QUERY_TYPE,
+      type: info.operation.operation === 'mutation' ? MUTATION_TYPE : QUERY_TYPE,
       selectionSet: info.operation.selectionSet,
     })
   } else {
