@@ -25,6 +25,10 @@ Use `graphql-gene` to generate automatically an executable schema out of your OR
   - [Typing](#typing)
   - [Generate the schema](#generate-the-schema)
   - [Allow inspecting the generated schema](#allow-inspecting-the-generated-schema)
+- [Query filtering](#query-filtering)
+  - [Default resolver](#default-resolver)
+  - [Filter arguments](#filter-arguments)
+  - [Operators](#operators)
 - [Gene config](#gene-config)
   - [Options](#options)
   - [Define queries/mutations inside your model](#define-queriesmutations-inside-your-model)
@@ -40,7 +44,7 @@ Use `graphql-gene` to generate automatically an executable schema out of your OR
 - ⚡️ Performant - Automatically avoid querying nested database relationships if they are not requested.
 - 🔒 Secure - Easily create and share directives at the type or field level (i.e. `@userAuth`).
 - ⏰ Time-to-delivery - No time wasted writing similar resolvers.
-- 🧩 Resolver template - Generates the resolver for you with deep [`where`](https://sequelize.org/docs/v6/core-concepts/model-querying-basics/#operators) argument and more.
+- 🧩 Resolver template - [Generates the resolver](#default-resolver) for you with deep [`where`](https://sequelize.org/docs/v6/core-concepts/model-querying-basics/#operators) argument and more.
 - <img src="https://github.com/user-attachments/assets/bd2f6032-5346-478f-ac0c-2c28703a8e12" width="18"> Type safe - Resolver arguments and return value are deeply typed.
 - 🎯 One source of truth - Types are defined once and shared between GraphQL and Typescript.
 - 💥 Works with anything - New or existing projects. Works with any GraphQL servers, ORM, or external sources.
@@ -247,6 +251,94 @@ if (process.env.NODE_ENV !== 'production') {
 <br>
 <br>
 
+## Query filtering
+
+No need to write Query resolvers anymore! You can simply use the filter arguments that are automatically defined when using the default resolver at the Query level. The same filter arguments are also defined on all association fields so you can also query with nested filters.
+
+### Default resolver
+
+```ts
+import { Model } from 'sequelize'
+import { extendTypes } from 'graphql-gene'
+
+export class Product extends Model {
+  // ...
+}
+
+extendTypes({
+  Query: {
+    products: {
+      resolver: 'default',
+      returnType: '[Product!]',
+    },
+  },
+})
+```
+
+```gql
+query productsByColor($color: String) {
+  products(where: { color: { eq: $color } }, order: [name_ASC]) {
+    id
+    name
+    color
+
+    # Association fields also have filters
+    variants(where: { size: { in: ["US 10", "US 11"] } }) {
+      id
+      size
+    }
+  }
+}
+```
+
+<br>
+
+### Filter arguments
+
+| Argument | Description |
+| :--- | :---------- |
+| `id` | `String` - Entry id (only available for fields returning a single entry). |
+| `page` | `Int` - Page number for query pagination. Default: `1`. |
+| `perPage` | `Int` - Amount of results per page. Default: `10`. |
+| `where` | `Record<Attribute, Record<Operator, T>>` - Where options generated based on the fields of the return type (i.e. `where: { name: { eq: "Foo" } }`). |
+| `where` | `Record<Attribute, Record<Operator, T>>` - Where options generated based on the fields of the return type (i.e. `where: { name: { eq: "Foo" } }`). |
+| `order` | `[foo_ASC]` - Array of enum values representing the order in which the results should be sorted. The enum values are defined based on the attribute name + `_ASC` or `_DESC` (i.e. `order: [name_ASC, foo_DESC]`). |
+
+<br>
+
+### Operators
+
+#### Generic operators
+
+| Operator | Description |
+| :--- | :---------- |
+| `eq` | `T` - The value equals to... |
+| `ne` | `T` - The value does not equals to... |
+| `in` | `[T]` - The value is in... |
+| `notIn` | `[T]` - The value is not in... |
+| `null` | `Boolean` - The value is null if `true`. The value is not null if `false`. |
+| `and` | `[CurrentWhereOptionsInput!]` - Array of object including the same operators. It represents a set of `and` conditions. |
+| `or` | `[CurrentWhereOptionsInput!]` - Array of object including the same operators. It represents a set of `or` conditions. |
+
+#### String operators
+
+| Operator | Description |
+| :--- | :---------- |
+| `lt` | `String` - The value is like... (i.e. `{ like: "%foo%" }`) |
+| `lte` | `String` - The value is not like... (i.e. `{ notLike: "%foo%" }`) |
+
+#### Date and number operators
+
+| Operator | Description |
+| :--- | :---------- |
+| `lt` | `T` - The value is less than... |
+| `lte` | `T` - The value is less than or equal to... |
+| `gt` | `T` - The value is greater than... |
+| `gte` | `T` - The value is greater than or equal to... |
+
+<br>
+<br>
+
 ## Gene config
 
 By default, if a model is part of the `types` provided to `generateSchema`, it will be added to your schema.
@@ -424,7 +516,10 @@ export const userAuthDirective = defineDirective<{
     // For performance: avoid querying nested associations if they are not requested.
     // `getQueryIncludeOf` look deeply inside the operation (query or mutation) for
     // the `AuthenticatedUser` type in order to know which associations are requested.
-    const includeOptions = getQueryIncludeOf(info, 'AuthenticatedUser')
+    const includeOptions = getQueryIncludeOf(info, 'AuthenticatedUser', {
+      // Set to true if the directive is added to a field that is not of type "AuthenticatedUser"
+      lookFromOperationRoot: true,
+    })
 
     const { id, email } = getJwtTokenPayload(token) || {}
     if (!id && !email) return throwUnauthorized()
