@@ -60,15 +60,15 @@
       "default": "./dist/types/extendable/schema.js"
     }
   },
-  "dependencies": {
-    "graphql-lookahead": "^1.1.2"
+  "peerDependencies": {
+    "graphql": "16.x"
   },
   "devDependencies": {
-    "@types/node": "^20.15.0",
+    "@types/node": "^20.17.8",
     "dev-utils": "workspace:*",
     "graphql": "^16.9.0",
-    "typescript": "^5.6.3",
-    "vite": "^5.4.1"
+    "typescript": "^5.7.2",
+    "vite": "^6.0.1"
   },
   "publishConfig": {
     "access": "public"
