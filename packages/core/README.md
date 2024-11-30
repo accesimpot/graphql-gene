@@ -354,7 +354,7 @@ export class User extends Model {
 
   static readonly geneConfig = defineGraphqlGeneConfig(User, {
     // Your config
-  }
+  })
 }
 
 extendTypes({
@@ -564,7 +564,7 @@ class User extends Model<InferAttributes<User>, InferCreationAttributes<User>> {
         directives: [userAuthDirective({ role: null })],
       },
     },
-  }
+  })
 }
 
 extendTypes({
@@ -601,7 +601,7 @@ Another example for `superAdmin` role:
 static readonly geneConfig = defineGraphqlGeneConfig(AdminAccount, {
   // i.e. Only allow super admin users to access the `AdminAccount` data
   directives: [userAuthDirective({ role: 'superAdmin' })],
-}
+})
 ```
 
 <br>
