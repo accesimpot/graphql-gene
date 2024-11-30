@@ -148,7 +148,7 @@ import * as graphqlTypes from '../models/graphqlTypes'
 
 const {
   typeDefs,
-  resolvers: generatedResolvers,
+  resolvers,
   schema,
   schemaString,
   schemaHtml,
@@ -156,16 +156,14 @@ const {
   schema: [DateTypeDefinition, DateTimeTypeDefinition, JSONDefinition].join(
     '\n'
   ),
+  resolvers: {
+    Date: DateResolver,
+    DateTime: DateTimeResolver,
+    JSON: JSONResolver,
+  },
   plugins: [pluginSequelize()],
   types: graphqlTypes,
 })
-
-const resolvers = {
-  Date: DateResolver,
-  DateTime: DateTimeResolver,
-  JSON: JSONResolver,
-  ...generatedResolvers,
-}
 
 export { typeDefs, resolvers, schema, schemaString, schemaHtml }
 ```

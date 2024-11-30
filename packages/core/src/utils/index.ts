@@ -21,7 +21,6 @@ import type { AnyObject, FieldLines, GraphQLVarType, TypeDefLines } from '../typ
 import type { GeneConfig, GeneTypeConfig } from '../defineConfig'
 
 export * from './extend'
-export * from './operators'
 
 type GraphQLOutputObjectType = GraphQLObjectType | GraphQLInterfaceType
 
@@ -216,6 +215,22 @@ export function isListType(type: ReturnType<typeof parseType>) {
 
 export function findTypeNameFromTypeNode(type: ReturnType<typeof parseType>): string {
   return 'type' in type ? findTypeNameFromTypeNode(type.type) : type.name.value
+}
+
+export function getFieldDefinition(options: {
+  schema: GraphQLSchema
+  parent: string
+  field: string
+}) {
+  const typeDefinition = options.schema.getType(options.parent)
+
+  // // This should only happen if the provided parent type is invalid
+  if (!typeDefinition) return
+
+  const fields = 'getFields' in typeDefinition ? typeDefinition.getFields() : undefined
+  const fieldDef = fields?.[options.field]
+
+  return fieldDef && 'resolve' in fieldDef ? fieldDef : undefined
 }
 
 /**
