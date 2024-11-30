@@ -5,8 +5,9 @@ import {
   GraphQLSchema,
   GraphQLObjectType,
   parseType,
+  GraphQLScalarType,
 } from 'graphql'
-import type { DocumentNode, GraphQLFieldResolver } from 'graphql'
+import type { DocumentNode, GraphQLFieldResolver, GraphQLNamedType } from 'graphql'
 import type { GeneContext } from 'graphql-gene/context'
 import { type GeneConfig, type GeneConfigTypes, type GeneDirectiveConfig } from './defineConfig'
 import type { AnyObject, Mutable } from './types/typeUtils'
@@ -27,6 +28,7 @@ import {
   isObject,
   getGloballyExtendedTypes,
   getReturnTypeName,
+  getFieldDefinition,
 } from './utils'
 import { addResolversToSchema } from './resolvers'
 import SCHEMA_TEMPLATE_HTML from './schema.html?raw'
@@ -44,11 +46,19 @@ import {
   populateArgsDefForDefaultResolver,
 } from './defaultResolver'
 
+type FieldResolver = GraphQLFieldResolver<Record<string, unknown> | undefined, GeneContext>
+type Resolvers = Record<GraphQLTypeName, Record<GraphQLFieldName, FieldResolver>>
+type ResolversOrScalars = Record<
+  GraphQLTypeName,
+  Record<GraphQLFieldName, FieldResolver> | GraphQLScalarType
+>
+
 export function generateSchema<
   SchemaTypes extends AnyObject,
   DataTypes extends AnyObject,
 >(options: {
   schema?: GraphQLSchema | DocumentNode | string
+  resolvers?: ResolversOrScalars
   plugins?: GenePlugin[]
   types: SchemaTypes
   hasDateScalars?: boolean
@@ -77,6 +87,7 @@ export function generateSchema<
   const schemaOptions: Mutable<ConstructorParameters<typeof GraphQLSchema>[0]> = {
     query: queryType,
   }
+  const schemaTypes: GraphQLNamedType[] = []
 
   if (mutationType) {
     if (!(mutationType instanceof GraphQLObjectType)) {
@@ -84,6 +95,22 @@ export function generateSchema<
     }
     schemaOptions.mutation = mutationType
   }
+
+  if (options.resolvers) {
+    Object.entries(options.resolvers).forEach(([parentType, typeConfig]) => {
+      if (typeConfig instanceof GraphQLScalarType) {
+        schemaTypes.push(typeConfig)
+        return
+      }
+      Object.entries(typeConfig).forEach(([field, resolver]) => {
+        const fieldDef = getFieldDefinition({ schema, parent: parentType, field })
+        if (fieldDef) fieldDef.resolve = resolver
+        else throw new Error(`No field definition found for "${field}" of type "${parentType}.`)
+      })
+    })
+  }
+  if (schemaTypes.length) schemaOptions.types = schemaTypes
+
   let executableSchema = new GraphQLSchema({ ...schema.toConfig(), ...schemaOptions })
 
   executableSchema = addResolversToSchema({
@@ -102,13 +129,7 @@ export function generateSchema<
       return parse(this.schemaString)
     },
     get resolvers() {
-      const resolvers: Record<
-        GraphQLTypeName,
-        Record<
-          GraphQLFieldName,
-          GraphQLFieldResolver<Record<string, unknown> | undefined, GeneContext>
-        >
-      > = {}
+      const resolvers: Resolvers = {}
 
       lookDeepInSchema({
         schema: executableSchema,
