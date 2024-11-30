@@ -1,4 +1,4 @@
-import { GraphQLError, isListType as isListTypeObject, type GraphQLResolveInfo } from 'graphql'
+import { GraphQLError, type GraphQLResolveInfo } from 'graphql'
 import { isEmptyObject, isObject, QUERY_ORDER_VALUES, type ValidGraphqlType } from 'graphql-gene'
 import { lookahead, lookDeeper } from 'graphql-lookahead'
 import type { IncludeOptions, OrderItem } from 'sequelize'
@@ -38,8 +38,7 @@ export function getQueryInclude(info: GraphQLResolveInfo) {
     info,
     state: includeOptions,
 
-    next({ state, field, fieldDef, args }) {
-      const isList = isListTypeObject(fieldDef.type)
+    next({ state, field, args, isList }) {
       const include = getFieldIncludeOptions({ association: field, args, isList })
 
       state.include = state.include || []
@@ -71,8 +70,7 @@ export function getQueryIncludeOf(
       type,
       selectionSet: nextSelectionSet,
 
-      next({ state, field, fieldDef, args }) {
-        const isList = isListTypeObject(fieldDef.type)
+      next({ state, field, args, isList }) {
         const include = getFieldIncludeOptions({ association: field, args, isList })
 
         state.include = state.include || []
