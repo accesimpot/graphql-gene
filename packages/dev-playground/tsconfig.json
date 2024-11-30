@@ -6,6 +6,13 @@
       "graphql-gene": ["../core"],
       "#src/*": ["./src/*"]
     },
-    "noEmit": true
+    "noEmit": true,
+
+    /**
+     * sequelize-typescript
+     * @see https://www.npmjs.com/package/sequelize-typescript#installation
+     */
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
   }
 }

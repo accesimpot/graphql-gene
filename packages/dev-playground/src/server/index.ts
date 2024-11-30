@@ -3,6 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fastify from 'fastify'
 import { createYoga } from 'graphql-yoga'
+import { sequelize } from '../models'
 import { schema, schemaString, schemaHtml } from './schema'
 import type { FastifyContext } from './types'
 
@@ -57,6 +58,10 @@ app.route({
     return reply
   },
 })
+
+// Connect to the database and start the server
+await sequelize.authenticate()
+console.info('\n🧪 Database connection was successful\n')
 
 app.listen({ port: PORT }).then(() => {
   console.info(`\n🚀 Server is running on http://localhost:${PORT}/graphql\n`)
