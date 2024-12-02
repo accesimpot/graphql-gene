@@ -1,3 +1,4 @@
+import { isScalarType, type GraphQLSchema } from 'graphql'
 import {
   getDefaultTypeDefLinesObject,
   getDefaultFieldLinesObject,
@@ -8,13 +9,19 @@ import {
 } from 'graphql-gene'
 import { DataTypes } from 'sequelize'
 import {
+  DATE_SCALAR,
+  DATE_TIME_SCALAR,
   GeneModel,
+  JSON_SCALAR,
   SEQUELIZE_TYPE_TO_GRAPHQL,
-  SEQUELIZE_TYPE_TO_GRAPHQL_WITH_DATE_AS_STRING,
 } from './constants'
 
 type PopulateTypeDefs = GenePlugin<typeof GeneModel>['populateTypeDefs']
 type PopulateTypeDefsOptions = Parameters<PopulateTypeDefs>[0]
+
+function hasScalarInSchema(schema: GraphQLSchema | undefined, scalar: string) {
+  return schema ? isScalarType(schema.getType(scalar)) : false
+}
 
 export const populateTypeDefs: PopulateTypeDefs = options => {
   options.typeDefLines[options.typeName] =
@@ -43,16 +50,21 @@ export const populateTypeDefs: PopulateTypeDefs = options => {
       realDataType = attributeValue.type.returnType.constructor.name
     }
 
-    const baseTypeMap = options.schemaOptions.hasDateScalars
-      ? SEQUELIZE_TYPE_TO_GRAPHQL
-      : SEQUELIZE_TYPE_TO_GRAPHQL_WITH_DATE_AS_STRING
-
-    const typeMap = { ...baseTypeMap, ...options.schemaOptions.dataTypeMap }
+    const { schemaOptions } = options
+    const typeMap = { ...SEQUELIZE_TYPE_TO_GRAPHQL, ...schemaOptions.dataTypeMap }
 
     if (realDataType in typeMap && typeMap[realDataType as keyof typeof typeMap]) {
       let graphqlType = typeMap[realDataType as keyof typeof typeMap]
 
       if (graphqlType === 'String' && attributeValue.primaryKey) graphqlType = 'ID'
+
+      if (
+        graphqlType === DATE_SCALAR ||
+        graphqlType === DATE_TIME_SCALAR ||
+        graphqlType === JSON_SCALAR
+      ) {
+        if (!hasScalarInSchema(schemaOptions.schema, graphqlType)) graphqlType = 'String'
+      }
 
       if (attributeValue.allowNull === false) graphqlType += '!'
 

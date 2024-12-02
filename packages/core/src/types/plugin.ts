@@ -1,8 +1,8 @@
-import type { GraphQLSchema, DocumentNode, GraphQLResolveInfo } from 'graphql'
+import type { GraphQLSchema, GraphQLResolveInfo } from 'graphql'
 import type { GeneContext } from 'graphql-gene/context'
 import type { GeneDefaultResolverArgs, GeneTypeConfig } from '../defineConfig'
 import type { AnyObject } from './typeUtils'
-import type { GraphQLVarType } from './graphql'
+import type { GraphQLVarType, ResolversOrScalars } from './graphql'
 import type { GraphqlToTypescript } from './graphqlToTypescript'
 
 export type PluginSettings<
@@ -33,10 +33,10 @@ export type GenerateSchemaOptions<
   SchemaTypes extends AnyObject = AnyObject,
   DataTypes extends AnyObject = AnyObject,
 > = {
-  schema?: GraphQLSchema | DocumentNode | string
+  schema?: GraphQLSchema
+  resolvers?: ResolversOrScalars
   plugins?: GenePlugin[]
   types: SchemaTypes
-  hasDateScalars?: boolean
   dataTypeMap?: DataTypes
 }
 
