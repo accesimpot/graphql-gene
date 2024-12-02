@@ -125,23 +125,16 @@ declare module 'graphql-gene/context' {
 
 The last step is to call `generateSchema` and pass the returned `schema` to your GraphQL server. You simply have to pass all types imported from _graphqlTypes.ts_ as shown in the example below.
 
-Moreover, `graphql-gene` expects you to provide scalars for `Date` and `DateTime` or set the option `hasDateScalars` to `false` (will define the `Date`/`DateTime` fields as `String`). It also expects you to provide a `JSON` scalar if you have fields mapping to the `JSON` data type (i.e. `DataType.JSON` in Sequelize).
+Please note that `graphql-gene` is using `Date`, `DateTime`, or `JSON` for certain data types. If you don't provide scalars for them, they will fallback to the `String` type.
 
-You can use the `schema` option to provide the scalars as it accepts any schema to extend (`schema?: GraphQLSchema | DocumentNode | string`).
+You can use the `resolvers` option to provide the scalars as it accepts both resolvers and scalar objects (`resolvers?: { [field: string]: GraphQLFieldResolver } | GraphQLScalarType`).
 
-Note: if you follow the example below, you'll also need to install `graphql-scalars`.
+If you follow the example below, you will also need to install `graphql-scalars`.
 
 #### *src/server/schema.ts*
 
 ```ts
-import {
-  DateTypeDefinition,
-  DateTimeTypeDefinition,
-  JSONDefinition,
-  DateResolver,
-  DateTimeResolver,
-  JSONResolver,
-} from 'graphql-scalars'
+import { DateResolver, DateTimeResolver, JSONResolver } from 'graphql-scalars'
 import { generateSchema } from 'graphql-gene'
 import { pluginSequelize } from '@graphql-gene/plugin-sequelize'
 import * as graphqlTypes from '../models/graphqlTypes'
@@ -153,9 +146,6 @@ const {
   schemaString,
   schemaHtml,
 } = generateSchema({
-  schema: [DateTypeDefinition, DateTimeTypeDefinition, JSONDefinition].join(
-    '\n'
-  ),
   resolvers: {
     Date: DateResolver,
     DateTime: DateTimeResolver,
