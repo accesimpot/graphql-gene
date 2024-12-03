@@ -35,24 +35,21 @@ type TrimHyphen<T extends string> = T extends `-${infer R}` ? R : T
 export type Kebab<T extends string, A extends string = ''> = TrimHyphen<Hyphenize<T, A>>
 export type NeverToUnknown<T> = T extends never ? unknown : T
 
-type Try<A1, A2, Catch = never> = A1 extends A2 ? A1 : Catch
-
-type Narrowable = string | number | bigint | boolean
-
-type NarrowRaw<A> =
-  | (A extends [] ? [] : never)
-  | (A extends Narrowable ? A : never)
-  | {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-      [K in keyof A]: A[K] extends Function ? A[K] : NarrowRaw<A[K]>
-    }
-
 /**
  * Allow you to infer the values of an object inside another object without using `as const`.
  *
  * @example
- * type Example = Narrow<{ args: { page: 'Int' } }>
+ * function doSomething<T>(obj: Narrow<T>) {
+ *   return obj
+ * }
+ * const something = doSomething({ args: { page: 'Int' } })
  *
- * // Example['args'] will be of type `{ email: 'Int' }` instead of `{ email: string }`
+ * // `something.args.page` will be of type `'Int'` instead of `string`
+ *
+ * @see https://stackoverflow.com/a/75881801/1895428
  */
-export type Narrow<A> = Try<A, [], NarrowRaw<A>>
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type Narrow<T, SpecificProps = any> =
+  | (T extends infer U ? U : never)
+  | Extract<T, number | string | boolean | bigint | symbol | null | undefined | []>
+  | ([T] extends [[]] ? [] : { [K in keyof T]: K extends SpecificProps ? Narrow<T[K]> : never })
