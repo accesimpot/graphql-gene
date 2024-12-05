@@ -1,14 +1,23 @@
-import { BelongsTo, Column, DataType, ForeignKey, Model, Table } from 'sequelize-typescript'
+import {
+  BelongsTo,
+  Column,
+  DataType,
+  ForeignKey,
+  Model,
+  PrimaryKey,
+  Table,
+} from 'sequelize-typescript'
 import { ProductGroup } from '../ProductGroup/ProductGroup.model'
 import { ProductCategory } from '../ProductCategory/ProductCategory.model'
 
 export
-@Table
+@Table({ timestamps: false })
 class ProductGroupCategory extends Model {
   @BelongsTo(() => ProductGroup)
   declare group: ProductGroup
 
   @ForeignKey(() => ProductGroup)
+  @PrimaryKey
   @Column(DataType.INTEGER)
   declare groupId: number
 
@@ -16,6 +25,7 @@ class ProductGroupCategory extends Model {
   declare category: ProductCategory
 
   @ForeignKey(() => ProductCategory)
+  @PrimaryKey
   @Column(DataType.INTEGER)
   declare categoryId: number
 }

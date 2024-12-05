@@ -4,10 +4,13 @@
  */
 import repl from 'node:repl'
 import * as models from './models'
+import { sequelize } from './models/sequelize'
 
 Object.keys(models).forEach(modelName => {
   // @ts-expect-error Types are not important in console
   globalThis[modelName] = models[modelName]
+  // @ts-expect-error Types are not important in console
+  globalThis.sequelize = sequelize
 })
 
 const replServer = repl.start({ prompt: 'playground > ' })

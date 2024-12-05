@@ -10,10 +10,11 @@ import {
 } from 'sequelize-typescript'
 import { ProductGroup } from '../ProductGroup/ProductGroup.model'
 import { ProductVariant } from '../ProductVariant/ProductVariant.model'
+import type { InferAttributes, InferCreationAttributes } from 'sequelize'
 
 export
 @Table
-class Product extends Model {
+class Product extends Model<InferAttributes<Product>, InferCreationAttributes<Product>> {
   @AllowNull(false)
   @Column(DataType.STRING)
   declare name: string
@@ -29,5 +30,5 @@ class Product extends Model {
   declare group: ProductGroup | null
 
   @HasMany(() => ProductVariant)
-  declare variants: ProductVariant[]
+  declare variants: ProductVariant[] | null
 }
