@@ -16,6 +16,8 @@ import {
   SEQUELIZE_TYPE_TO_GRAPHQL,
 } from './constants'
 
+const BELONGS_TO_MANY = 'BelongsToMany'
+
 type PopulateTypeDefs = GenePlugin<typeof GeneModel>['populateTypeDefs']
 type PopulateTypeDefsOptions = Parameters<PopulateTypeDefs>[0]
 
@@ -93,7 +95,13 @@ function generateAssociationFields(
   const afterTypeDefHooks: (() => void)[] = []
 
   Object.entries(options.model.associations).forEach(([attributeKey, association]) => {
-    if (!options.isFieldIncluded(attributeKey)) return
+    if (
+      !options.isFieldIncluded(attributeKey) ||
+      // Eager loading doesn't support BelongsToMany associations
+      association.associationType === BELONGS_TO_MANY
+    ) {
+      return
+    }
 
     const associationModelName = association.target.name
     let returnType = associationModelName
