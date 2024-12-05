@@ -122,7 +122,6 @@ function generateAssociationFields(
           graphqlType: options.typeName,
           fieldKey: attributeKey,
           fieldType: associationModelName,
-          isList,
         })
       })
     }

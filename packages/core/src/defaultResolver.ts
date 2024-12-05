@@ -35,8 +35,7 @@ export function populateArgsDefForDefaultResolver(options: {
       : { id: 'String' }),
     locale: 'String',
     where: whereOptionsInputName,
-
-    ...(options.isList ? { order: `[${orderEnumName}!]` } : {}),
+    order: `[${orderEnumName}!]`,
   }
   Object.entries(argsDef).forEach(([argKey, argDef]) => {
     options.fieldLineConfig.argsDef[argKey] =
@@ -119,14 +118,12 @@ export function generateDefaultQueryFilterTypeDefs(options: {
   graphqlType: string
   fieldKey: string
   fieldType: string
-  isList: boolean
 }) {
   const whereOptionsInputName = getWhereOptionsInputName(options.graphqlType, options.fieldKey)
   const orderEnumName = getQueryOrderEnumName(options.graphqlType, options.fieldKey)
 
   const hasWhereInputDefined = whereOptionsInputName in options.typeDefLines
   const hasOrderEnumDefined = orderEnumName in options.typeDefLines
-  const hasOrderEnum = options.isList
 
   if (hasWhereInputDefined && hasOrderEnumDefined) return
 
@@ -140,7 +137,7 @@ export function generateDefaultQueryFilterTypeDefs(options: {
         `[${whereOptionsInputName}!]`
     })
   }
-  if (hasOrderEnum && !hasOrderEnumDefined) {
+  if (!hasOrderEnumDefined) {
     createTypeDefLines(options.typeDefLines, 'enum', orderEnumName)
   }
 
@@ -204,12 +201,10 @@ export function generateDefaultQueryFilterTypeDefs(options: {
       }
 
       // Query Order Enum
-      if (hasOrderEnum) {
-        QUERY_ORDER_VALUES.forEach(orderValue => {
-          const key = `${returnFieldKey}_${orderValue}`
-          options.typeDefLines[orderEnumName].lines[key] = getDefaultFieldLinesObject()
-        })
-      }
+      QUERY_ORDER_VALUES.forEach(orderValue => {
+        const key = `${returnFieldKey}_${orderValue}`
+        options.typeDefLines[orderEnumName].lines[key] = getDefaultFieldLinesObject()
+      })
     }
   )
 }

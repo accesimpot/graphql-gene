@@ -212,7 +212,6 @@ function generateGeneTypeDefs<SchemaTypes extends AnyObject, DataTypes extends A
         graphqlType,
         fieldKey,
         fieldType: getReturnTypeName(normalizedFieldConfig.returnType),
-        isList: isListType(parseType(normalizedFieldConfig.returnType)),
       })
     })
   })
@@ -468,7 +467,6 @@ function generateQueryFilterTypeDefs<M>(options: {
         graphqlType,
         fieldKey,
         fieldType: getReturnTypeName(normalizedFieldConfig.returnType),
-        isList: isListType(parseType(normalizedFieldConfig.returnType)),
       })
     })
   })
