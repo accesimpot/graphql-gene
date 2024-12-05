@@ -20,8 +20,8 @@
     "format": "prettier --write --cache \"**/*.{js,mjs,cjs,ts,mts,cts,json,yaml,yml,gql,graphql,md}\"",
     "format:check": "prettier --check --cache \"**/*.{js,mjs,cjs,ts,mts,cts,json,yaml,yml,gql,graphql,md}\"",
     "types:check": "NX_DISABLE_DB=true nx run-many -t types:check",
-    "test": "NX_DISABLE_DB=true nx run-many -t test",
-    "test:watch": "NX_DISABLE_DB=true nx run-many -t test:watch",
+    "test": "vitest --run",
+    "test:watch": "vitest",
     "test:non-cacheable": "NX_DISABLE_DB=true nx run-many -t test:non-cacheable",
     "dev-utils": "NX_DISABLE_DB=true bash -c 'nx ${0} dev-utils $@'",
     "dev-utils:": "pnpm -F=dev-utils",
@@ -50,6 +50,6 @@
     "semantic-release-monorepo": "^8.0.2",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.16.0",
-    "vitest": "^2.1.2"
+    "vitest": "^2.1.8"
   }
 }

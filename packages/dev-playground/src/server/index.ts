@@ -6,8 +6,7 @@ import { createYoga } from 'graphql-yoga'
 import { sequelize } from '../models/sequelize'
 import { schema, schemaString, schemaHtml } from './schema'
 import type { FastifyContext } from './types'
-
-const PORT = 4000
+import { GRAPHQL_YOGA_PORT } from '../constants'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -64,6 +63,6 @@ await sequelize.authenticate()
 console.info('\n🧪 Database connection was successful\n')
 
 // Start the server
-app.listen({ port: PORT }).then(() => {
-  console.info(`\n🚀 Server is running on http://localhost:${PORT}/graphql\n`)
+app.listen({ port: GRAPHQL_YOGA_PORT }).then(() => {
+  console.info(`\n🚀 Server is running on http://localhost:${GRAPHQL_YOGA_PORT}/graphql\n`)
 })
