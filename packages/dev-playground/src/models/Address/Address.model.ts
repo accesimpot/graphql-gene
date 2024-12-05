@@ -5,6 +5,14 @@ export
 class Address extends Model {
   @AllowNull(false)
   @Column(DataType.STRING)
+  declare firstName: string
+
+  @AllowNull(false)
+  @Column(DataType.STRING)
+  declare lastName: string
+
+  @AllowNull(false)
+  @Column(DataType.STRING)
   declare address1: string
 
   @Column(DataType.STRING)
