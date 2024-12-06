@@ -1,8 +1,8 @@
-import type { ExtendedTypes } from '../defineConfig'
+import type { StrictExtendedTypes, NarrowExtendedTypes } from '../defineConfig'
 
 declare global {
   // eslint-disable-next-line no-var
-  var __graphqlGeneExtendedTypes: ExtendedTypes | undefined
+  var __graphqlGeneExtendedTypes: StrictExtendedTypes | undefined
 }
 
 export function getGloballyExtendedTypes() {
@@ -11,7 +11,9 @@ export function getGloballyExtendedTypes() {
   return globalThis.__graphqlGeneExtendedTypes
 }
 
-export function extendTypes(types: ExtendedTypes) {
+export function extendTypes<T extends Record<string, Record<string, object>>>(
+  types: NarrowExtendedTypes<T>
+) {
   const globalTypes = getGloballyExtendedTypes()
 
   Object.entries(types).forEach(([graphqlType, fieldConfigs]) => {

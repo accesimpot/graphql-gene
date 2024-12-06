@@ -12,6 +12,8 @@ export function getMutable<T extends string>(immutable: T[]) {
   return immutable as Mutable<T[]>
 }
 
+export type Prop<T, K> = K extends keyof T ? T[K] : never
+
 export type ValueOf<T> = T[keyof T]
 
 export type SomeRequired<T, K extends keyof T> = T & { [k in K]-?: T[k] }
