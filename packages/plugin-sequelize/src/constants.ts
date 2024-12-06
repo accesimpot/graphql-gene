@@ -67,6 +67,10 @@ export const GENE_TO_SEQUELIZE_OPERATORS: {
   [STRING_OPERATORS.notLike]: value => [Op.notLike, value],
 }
 
+export const DATE_SCALAR = 'Date' as const
+export const DATE_TIME_SCALAR = 'DateTime' as const
+export const JSON_SCALAR = 'JSON' as const
+
 export const SEQUELIZE_TYPE_TO_GRAPHQL = {
   ABSTRACT: '',
   STRING: 'String',

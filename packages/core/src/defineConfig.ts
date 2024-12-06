@@ -15,7 +15,8 @@ import type {
 } from './types'
 import type { GENE_RESOLVER_TEMPLATES, QUERY_ORDER_ENUM } from './constants'
 
-type ArgsDefinition = Record<string, string> | `${GENE_RESOLVER_TEMPLATES}` | undefined
+type ArgsDefinition<V = string> = Record<string, V> | `${GENE_RESOLVER_TEMPLATES}` | undefined
+type StrictArgsDefinition = ArgsDefinition<GraphqlReturnTypes<ValidGraphqlType>>
 
 export type GeneConfigTypes<
   TSource = Record<string, unknown> | undefined,
@@ -273,10 +274,10 @@ export function defineDirective<
 
 export function defineField<
   TSource extends Record<string, unknown> | undefined,
-  TArgDefs extends ArgsDefinition,
+  TArgDefs extends StrictArgsDefinition,
   TReturnType extends GraphqlReturnTypes<ValidGraphqlType>,
   TContext = GeneContext,
->(config: Narrow<FieldConfig<TSource, TContext, TArgDefs, TReturnType>>) {
+>(config: Narrow<FieldConfig<TSource, TContext, TArgDefs, TReturnType>, 'args' | 'returnType'>) {
   /**
    * We need to infer `TArgDefs` to use accurate types inside the resolver function, but we want
    * "defineField" to return a generic `Record<string, unknown>` as ArgDefs to allow adding the

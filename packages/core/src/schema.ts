@@ -5,9 +5,9 @@ import {
   GraphQLSchema,
   GraphQLObjectType,
   parseType,
+  isScalarType,
 } from 'graphql'
-import type { DocumentNode, GraphQLFieldResolver } from 'graphql'
-import type { GeneContext } from 'graphql-gene/context'
+import type { DocumentNode } from 'graphql'
 import { type GeneConfig, type GeneConfigTypes, type GeneDirectiveConfig } from './defineConfig'
 import type { AnyObject, Mutable } from './types/typeUtils'
 import {
@@ -27,6 +27,7 @@ import {
   isObject,
   getGloballyExtendedTypes,
   getReturnTypeName,
+  getFieldDefinition,
 } from './utils'
 import { addResolversToSchema } from './resolvers'
 import SCHEMA_TEMPLATE_HTML from './schema.html?raw'
@@ -34,9 +35,8 @@ import type {
   BasicGraphqlType,
   DirectiveDefs,
   GenePlugin,
-  GenerateSchemaOptions,
-  GraphQLFieldName,
-  GraphQLTypeName,
+  Resolvers,
+  ResolversOrScalars,
   TypeDefLines,
 } from './types'
 import {
@@ -49,17 +49,19 @@ export function generateSchema<
   DataTypes extends AnyObject,
 >(options: {
   schema?: GraphQLSchema | DocumentNode | string
+  resolvers?: ResolversOrScalars
   plugins?: GenePlugin[]
   types: SchemaTypes
-  hasDateScalars?: boolean
   dataTypeMap?: DataTypes
 }) {
-  // We duplicate the type definition to have a better DX on hover of `generateSchema`
-  // but we make sure that it stays in sync with its type.
-  const _options: GenerateSchemaOptions<SchemaTypes, DataTypes> = options
+  const providedScalars = options.resolvers
+    ? Object.values(options.resolvers)
+        .filter(typeConfig => isScalarType(typeConfig))
+        .map(({ name }) => name)
+    : []
 
-  const initialSchema = parseSchemaOption(options.schema)
-  const geneTypeDefs = generateGeneTypeDefs(options)
+  const initialSchema = parseSchemaOption(options.schema, providedScalars)
+  const geneTypeDefs = generateGeneTypeDefs({ ...options, schema: initialSchema })
 
   const schema = initialSchema
     ? extendSchema(initialSchema, parse(geneTypeDefs))
@@ -77,6 +79,7 @@ export function generateSchema<
   const schemaOptions: Mutable<ConstructorParameters<typeof GraphQLSchema>[0]> = {
     query: queryType,
   }
+  const schemaTypeMap = schema.getTypeMap()
 
   if (mutationType) {
     if (!(mutationType instanceof GraphQLObjectType)) {
@@ -84,7 +87,26 @@ export function generateSchema<
     }
     schemaOptions.mutation = mutationType
   }
-  let executableSchema = new GraphQLSchema({ ...schema.toConfig(), ...schemaOptions })
+
+  if (options.resolvers) {
+    Object.entries(options.resolvers).forEach(([parentType, typeConfig]) => {
+      if (isScalarType(typeConfig)) {
+        Object.assign(schemaTypeMap[parentType], typeConfig)
+        return
+      }
+      Object.entries(typeConfig).forEach(([field, resolver]) => {
+        const fieldDef = getFieldDefinition({ schema, parent: parentType, field })
+        if (fieldDef) fieldDef.resolve = resolver
+        else throw new Error(`No field definition found for "${field}" of type "${parentType}.`)
+      })
+    })
+  }
+
+  let executableSchema = new GraphQLSchema({
+    ...schema.toConfig(),
+    ...schemaOptions,
+    types: Object.values(schemaTypeMap),
+  })
 
   executableSchema = addResolversToSchema({
     schema: executableSchema,
@@ -102,13 +124,7 @@ export function generateSchema<
       return parse(this.schemaString)
     },
     get resolvers() {
-      const resolvers: Record<
-        GraphQLTypeName,
-        Record<
-          GraphQLFieldName,
-          GraphQLFieldResolver<Record<string, unknown> | undefined, GeneContext>
-        >
-      > = {}
+      const resolvers: Resolvers = {}
 
       lookDeepInSchema({
         schema: executableSchema,
@@ -128,10 +144,10 @@ export function generateSchema<
 }
 
 function generateGeneTypeDefs<SchemaTypes extends AnyObject, DataTypes extends AnyObject>(options: {
-  schema?: GraphQLSchema | DocumentNode | string
+  schema?: GraphQLSchema
+  resolvers?: ResolversOrScalars
   plugins?: GenePlugin[]
   types: SchemaTypes
-  hasDateScalars?: boolean
   dataTypeMap?: DataTypes
 }) {
   const directiveDefs: DirectiveDefs = {}
@@ -150,10 +166,10 @@ function generateGeneTypeDefs<SchemaTypes extends AnyObject, DataTypes extends A
         typeDefLines,
         types: options.types,
         schema: options.schema,
+        resolvers: options.resolvers,
         plugin,
         modelKey: graphqlType,
         model: fieldConfigs,
-        hasDateScalars: options.hasDateScalars,
         dataTypeMap: options.dataTypeMap,
       })
       afterTypeDefHooks.push(...hooks)
@@ -196,7 +212,6 @@ function generateGeneTypeDefs<SchemaTypes extends AnyObject, DataTypes extends A
         graphqlType,
         fieldKey,
         fieldType: getReturnTypeName(normalizedFieldConfig.returnType),
-        isList: isListType(parseType(normalizedFieldConfig.returnType)),
       })
     })
   })
@@ -247,11 +262,11 @@ function forEachModel<M, SchemaTypes extends AnyObject>(options: {
   directiveDefs: DirectiveDefs
   typeDefLines: TypeDefLines
   types: SchemaTypes
-  schema?: GraphQLSchema | DocumentNode | string
+  schema?: GraphQLSchema
+  resolvers?: ResolversOrScalars
   plugin: GenePlugin<M>
   modelKey: string
   model: M
-  hasDateScalars?: boolean
   dataTypeMap?: { [k: string | symbol]: BasicGraphqlType }
 }) {
   const afterTypeDefHooks: (() => void)[] = []
@@ -295,11 +310,11 @@ function generateTypeDefs<M, SchemaTypes extends AnyObject>(options: {
   directiveDefs: DirectiveDefs
   typeDefLines: TypeDefLines
   types: SchemaTypes
-  schema?: GraphQLSchema | DocumentNode | string
+  schema?: GraphQLSchema
+  resolvers?: ResolversOrScalars
   modelKey: string
   model: M
   plugin: GenePlugin<M>
-  hasDateScalars?: boolean
   geneConfig?: GeneConfig<M>
   dataTypeMap?: { [k: string | symbol]: BasicGraphqlType }
 }) {
@@ -452,7 +467,6 @@ function generateQueryFilterTypeDefs<M>(options: {
         graphqlType,
         fieldKey,
         fieldType: getReturnTypeName(normalizedFieldConfig.returnType),
-        isList: isListType(parseType(normalizedFieldConfig.returnType)),
       })
     })
   })

@@ -33,6 +33,6 @@ export async function defaultResolver<
 
   return (await model[findFn]({
     ...topLevelFindOptions,
-    include: includeOptions,
+    ...includeOptions,
   })) as GraphqlToTypescript<ModelKey>
 }

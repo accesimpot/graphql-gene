@@ -1,14 +1,17 @@
 import {
   buildASTSchema,
   buildSchema,
+  extendSchema,
   GraphQLDirective,
   GraphQLInterfaceType,
   GraphQLList,
   GraphQLNonNull,
   GraphQLObjectType,
   GraphQLSchema,
+  isScalarType,
   isSpecifiedDirective,
   isSpecifiedScalarType,
+  parse,
   parseType,
   print,
   type DocumentNode,
@@ -21,20 +24,34 @@ import type { AnyObject, FieldLines, GraphQLVarType, TypeDefLines } from '../typ
 import type { GeneConfig, GeneTypeConfig } from '../defineConfig'
 
 export * from './extend'
-export * from './operators'
 
 type GraphQLOutputObjectType = GraphQLObjectType | GraphQLInterfaceType
 
 export function parseSchemaOption(
-  schema?: GraphQLSchema | DocumentNode | string
+  schema: GraphQLSchema | DocumentNode | string | undefined,
+  scalars?: string[]
 ): GraphQLSchema | undefined {
-  if (!schema) return undefined
+  if (!schema && (!scalars || !scalars.length)) return undefined
 
-  return typeof schema === 'string'
-    ? buildSchema(schema)
-    : schema instanceof GraphQLSchema
-      ? schema
-      : buildASTSchema(schema)
+  let parsedSchema: GraphQLSchema | undefined = undefined
+
+  if (schema) {
+    parsedSchema =
+      typeof schema === 'string'
+        ? buildSchema(schema)
+        : schema instanceof GraphQLSchema
+          ? schema
+          : buildASTSchema(schema)
+  }
+  if (scalars?.length) {
+    const undefinedScalars = scalars.filter(scalar => !parsedSchema?.getType(scalar))
+    const scalarsDef = undefinedScalars.map(scalar => `scalar ${scalar}`).join('\n')
+
+    parsedSchema = parsedSchema
+      ? extendSchema(parsedSchema, parse(scalarsDef))
+      : buildSchema(scalarsDef)
+  }
+  return parsedSchema
 }
 
 export function lookDeepInSchema<TState>(options: {
@@ -133,6 +150,7 @@ export function printSchemaWithDirectives(schema: GraphQLSchema) {
   let schemaString = ''
 
   const printAst = (type: GraphQLDirective | GraphQLNamedType) => {
+    if (isScalarType(type)) schemaString += `scalar ${type.name}\n\n`
     if (type && 'astNode' in type && type.astNode) schemaString += `${print(type.astNode)}\n\n`
   }
 
@@ -216,6 +234,22 @@ export function isListType(type: ReturnType<typeof parseType>) {
 
 export function findTypeNameFromTypeNode(type: ReturnType<typeof parseType>): string {
   return 'type' in type ? findTypeNameFromTypeNode(type.type) : type.name.value
+}
+
+export function getFieldDefinition(options: {
+  schema: GraphQLSchema
+  parent: string
+  field: string
+}) {
+  const typeDefinition = options.schema.getType(options.parent)
+
+  // // This should only happen if the provided parent type is invalid
+  if (!typeDefinition) return
+
+  const fields = 'getFields' in typeDefinition ? typeDefinition.getFields() : undefined
+  const fieldDef = fields?.[options.field]
+
+  return fieldDef && 'resolve' in fieldDef ? fieldDef : undefined
 }
 
 /**
