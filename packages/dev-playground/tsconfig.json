@@ -3,9 +3,15 @@
 
   "compilerOptions": {
     "paths": {
-      "graphql-gene": ["../core"],
-      "#src/*": ["./src/*"]
+      "graphql-gene": ["../core/src/index.ts"]
     },
-    "noEmit": true
+    "noEmit": true,
+
+    /**
+     * sequelize-typescript
+     * @see https://www.npmjs.com/package/sequelize-typescript#installation
+     */
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
   }
 }

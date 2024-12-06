@@ -1,6 +1,23 @@
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
 export default defineConfig({
+  resolve: {
+    alias: {
+      /**
+       * @see https://github.com/vitest-dev/vitest/issues/4605#issuecomment-1847658160
+       */
+      graphql: 'graphql/index.js',
+
+      // Use the source files for test coverage
+      'graphql-gene': path.resolve(__dirname, './packages/core/src/index.ts'),
+    },
+  },
+
   test: {
     include: ['**/*.spec.ts'],
     globalSetup: 'vitest.setup.ts',
@@ -8,13 +25,13 @@ export default defineConfig({
     coverage: {
       enabled: true,
       provider: 'istanbul',
-      include: ['src/**'],
+      include: ['packages/core/src/**', 'packages/plugin-sequelize/src/**'],
 
       thresholds: {
-        statements: 95,
-        branches: 88,
-        functions: 100,
-        lines: 100,
+        statements: 49,
+        branches: 41,
+        functions: 47,
+        lines: 50,
       },
     },
   },

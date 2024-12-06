@@ -21,6 +21,9 @@
     /* Transpiling with Esbuild: */
     "module": "preserve",
     "outDir": "dist",
-    "lib": ["es2022"]
+    "lib": ["es2022"],
+
+    /* Global types */
+    "types": ["vitest/globals"]
   }
 }

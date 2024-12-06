@@ -2,7 +2,16 @@
   "extends": "./tsconfig.json",
 
   "compilerOptions": {
-    "rootDir": "src"
+    "rootDir": "src",
+
+    /**
+     * We also need to specify it here even if it was set in "./tsconfig.json"
+     *
+     * sequelize-typescript
+     * @see https://www.npmjs.com/package/sequelize-typescript#installation
+     */
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
   },
   "exclude": ["node_modules", "dist", "./*.config.ts", "**/*.spec.ts", "vitest*", "__mocks__"]
 }
