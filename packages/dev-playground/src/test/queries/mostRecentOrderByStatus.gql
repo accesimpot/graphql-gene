@@ -1,8 +1,9 @@
-query mostRecentOrderWithStatus($status: String!) {
+query mostRecentOrderByStatus($status: String!) {
   order(where: { status: { eq: $status } }, order: [updatedAt_DESC]) {
     id
     status
     updatedAt
+    fieldAddedWithExtendTypes(prefix: "status", separator: ": ")
 
     items {
       id

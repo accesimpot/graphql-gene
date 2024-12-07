@@ -19,6 +19,7 @@ export default defineConfig({
   },
 
   test: {
+    globals: true,
     include: ['**/*.spec.ts'],
     globalSetup: 'vitest.setup.ts',
 
@@ -28,10 +29,10 @@ export default defineConfig({
       include: ['packages/core/src/**', 'packages/plugin-sequelize/src/**'],
 
       thresholds: {
-        statements: 49,
-        branches: 41,
-        functions: 47,
-        lines: 50,
+        lines: 51,
+        functions: 48,
+        statements: 50,
+        branches: 43,
       },
     },
   },
