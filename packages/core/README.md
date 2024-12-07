@@ -335,7 +335,7 @@ Nevertheless, you might need to exclude some fields like `password`, define quer
 
 ```ts
 import { Model } from 'sequelize'
-import { defineGraphqlGeneConfig, defineField, extendTypes } from 'graphql-gene'
+import { defineGraphqlGeneConfig, extendTypes } from 'graphql-gene'
 
 export class User extends Model {
   // ...
@@ -347,9 +347,9 @@ export class User extends Model {
 
 extendTypes({
   Query: {
-    foo: defineField({
+    foo: {
       // ...
-    }),
+    },
   },
 })
 ```
@@ -374,7 +374,7 @@ extendTypes({
 ```ts
 import type { InferAttributes, InferCreationAttributes } from 'sequelize'
 import { Model, Table, Column, Unique, AllowNull, DataType } from 'sequelize-typescript'
-import { defineEnum, defineField, defineType, extendTypes } from 'graphql-gene'
+import { defineEnum, defineType, extendTypes } from 'graphql-gene'
 import { isEmail } from '../someUtils.ts'
 
 export
@@ -391,7 +391,7 @@ class Prospect extends Model<InferAttributes<Prospect>, InferCreationAttributes<
 
 extendTypes({
   Mutation: {
-    registerProspect: defineField({
+    registerProspect: {
       args: { email: 'String!', locale: 'String' },
       returnType: 'MessageOutput!',
 
@@ -410,7 +410,7 @@ extendTypes({
         Prospect.create({ email, language: locale })
         return { type: 'success' as const }
       },
-    }),
+    },
   },
 })
 
@@ -530,7 +530,7 @@ The `args` option allow you to use it in different contexts:
 #### *src/models/User/User.model.ts*
 
 ```ts
-import { defineField, extendTypes } from 'graphql-gene'
+import { defineGraphqlGeneConfig, extendTypes } from 'graphql-gene'
 import { userAuthDirective } from '.userAuthDirective.ts'
 
 export
@@ -557,11 +557,11 @@ class User extends Model<InferAttributes<User>, InferCreationAttributes<User>> {
 
 extendTypes({
   Query: {
-    me: defineField({
+    me: {
       returnType: 'AuthenticatedUser',
       // `context.authenticatedUser` is defined in `userAuthDirective`
       resolver: ({ context }) => context.authenticatedUser,
-    }),
+    },
   },
 })
 ```
