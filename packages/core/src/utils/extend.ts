@@ -3,6 +3,7 @@ import type {
   StrictExtendedTypes,
   NarrowExtendedTypes,
   StrictArgsDefinition,
+  GeneDirectiveConfig,
 } from '../defineConfig'
 import type { GraphqlReturnTypes, ValidGraphqlType } from '../types'
 
@@ -25,7 +26,9 @@ export function extendTypes<
           ? GraphqlReturnTypes<ValidGraphqlType>
           : K extends 'args'
             ? StrictArgsDefinition
-            : T[TypeName][Field][K]
+            : K extends 'directives'
+              ? GeneDirectiveConfig[]
+              : T[TypeName][Field][K]
       }
     }
   },
