@@ -1,3 +1,4 @@
+import { isObject } from '.'
 import type {
   StrictExtendedTypes,
   NarrowExtendedTypes,
@@ -32,6 +33,9 @@ export function extendTypes<
   const globalTypes = getGloballyExtendedTypes()
 
   Object.entries(types).forEach(([graphqlType, fieldConfigs]) => {
+    if (!isObject(fieldConfigs)) {
+      throw new Error(`Provided field config for type "${graphqlType}" must be an object.`)
+    }
     const type = graphqlType as 'Query'
     globalTypes[type] = globalTypes[type] || {}
     globalTypes[type] = { ...globalTypes[type], ...fieldConfigs }

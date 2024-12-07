@@ -1,11 +1,10 @@
-import { vi, describe, it, expect } from 'vitest'
 import type { ExecutionResult } from 'graphql'
 import { createYoga } from 'graphql-yoga'
 import { buildHTTPExecutor } from '@graphql-tools/executor-http'
 import { sequelize } from '../models/sequelize'
 import { useMetaPlugin } from '../plugins/useMetaPlugin'
-import { getFixtureQuery } from '../utils/graphql'
-import { schema } from './schema'
+import { schema } from '../server/schema'
+import { getFixtureQuery } from './utils'
 
 await sequelize.authenticate()
 
@@ -23,7 +22,7 @@ describe('integration', () => {
   describe('when sending query with filters for default resolver returning single entry', async () => {
     consoleErrorSpy.mockClear()
     const result = await execute({
-      document: getFixtureQuery('queries/mostRecentOrderWithStatus.gql'),
+      document: getFixtureQuery('queries/mostRecentOrderByStatus.gql'),
       variables: { status: 'paid' },
     })
 
@@ -32,6 +31,8 @@ describe('integration', () => {
         id: 160,
         status: 'paid',
         updatedAt: '2024-11-27T07:43:13.000Z',
+        fieldAddedWithExtendTypes: 'status: paid',
+
         items: [
           {
             id: 402,

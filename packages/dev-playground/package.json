@@ -7,7 +7,8 @@
     "dev": "NODE_ENV=development concurrently --kill-others -p=none \"pnpm build --watch --emptyOutDir=false\" \"nodemon --inspect=8805 --watch ./src/schema.gql --watch ./dist --watch ../core/dist -e js dist/server\"",
     "console": "node dist/console.js",
     "build": "NODE_ENV=${NODE_ENV:-development} vite build",
-    "start": "node dist/server"
+    "start": "node dist/server",
+    "types:check": "tsc --noEmit"
   },
   "devDependencies": {
     "@faker-js/faker": "^9.3.0",
