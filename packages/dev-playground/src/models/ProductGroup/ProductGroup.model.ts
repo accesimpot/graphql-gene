@@ -4,18 +4,11 @@ import type {
   InferAttributes,
   InferCreationAttributes,
 } from 'sequelize'
-import {
-  BelongsToMany,
-  Column,
-  DataType,
-  HasMany,
-  HasOne,
-  Model,
-  Table,
-} from 'sequelize-typescript'
+import { BelongsToMany, Column, DataType, HasMany, Model, Table } from 'sequelize-typescript'
 import { Product } from '../Product/Product.model'
 import { ProductCategory } from '../ProductCategory/ProductCategory.model'
 import { ProductGroupCategory } from '../ProductGroupCategory/ProductGroupCategory.model'
+import { defineGraphqlGeneConfig, extendTypes } from 'graphql-gene'
 
 export
 @Table
@@ -33,6 +26,29 @@ class ProductGroup extends Model<
   @HasMany(() => ProductGroupCategory, { onDelete: 'CASCADE' })
   declare groupCategories: CreationOptional<ProductGroupCategory[]>
 
-  @HasOne(() => Product)
-  declare product: CreationOptional<Product>
+  @HasMany(() => Product)
+  declare products: CreationOptional<Product[]>
+
+  static readonly geneConfig = defineGraphqlGeneConfig(ProductGroup, {
+    exclude: ['categories', 'groupCategories'],
+  })
 }
+
+extendTypes({
+  ProductGroup: {
+    categories: {
+      resolver: ({ source }) => {
+        return source.groupCategories.map(({ category }) => category?.name || '').filter(v => v)
+      },
+      returnType: '[String!]',
+
+      findOptions({ state }) {
+        state.include = state.include || []
+        state.include.push({
+          association: 'groupCategories',
+          include: [{ association: 'category' }],
+        })
+      },
+    },
+  },
+})

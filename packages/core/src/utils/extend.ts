@@ -1,4 +1,3 @@
-import { isObject } from '.'
 import type {
   StrictExtendedTypes,
   NarrowExtendedTypes,
@@ -6,6 +5,7 @@ import type {
   GeneDirectiveConfig,
 } from '../defineConfig'
 import type { GraphqlReturnTypes, ValidGraphqlType } from '../types'
+import { isObject } from '.'
 
 declare global {
   // eslint-disable-next-line no-var

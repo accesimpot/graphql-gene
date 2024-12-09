@@ -1,0 +1,18 @@
+mutation updateOrderStatus($id: String!, $status: OrderStatusEnum!) {
+  updateOrderStatus(id: $id, status: $status) {
+    message {
+      type
+      text
+    }
+    order {
+      id
+      status
+
+      items {
+        product {
+          name
+        }
+      }
+    }
+  }
+}

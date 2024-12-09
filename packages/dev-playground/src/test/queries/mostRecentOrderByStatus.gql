@@ -14,14 +14,10 @@ query mostRecentOrderByStatus($status: String!) {
         color
 
         group {
-          product {
+          products {
             id
           }
-          groupCategories {
-            category {
-              name
-            }
-          }
+          categories
         }
       }
     }

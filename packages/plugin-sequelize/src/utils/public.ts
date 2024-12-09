@@ -1,22 +1,19 @@
 import { GraphQLError, type GraphQLResolveInfo } from 'graphql'
-import { isEmptyObject, isObject, QUERY_ORDER_VALUES, type ValidGraphqlType } from 'graphql-gene'
-import { lookahead, lookDeeper } from 'graphql-lookahead'
-import type { IncludeOptions, OrderItem } from 'sequelize'
+import {
+  getGloballyExtendedTypes,
+  isEmptyObject,
+  isObject,
+  normalizeFieldConfig,
+  PAGE_ARG_DEFAULT,
+  PER_PAGE_ARG_DEFAULT,
+  QUERY_ORDER_VALUES,
+  type ValidGraphqlType,
+} from 'graphql-gene'
+import { lookahead, lookDeeper, type UntilHandlerDetails } from 'graphql-lookahead'
+import type { OrderItem } from 'sequelize'
 import type { Model } from 'sequelize-typescript'
-import type { GeneSequelizeWhereOptions } from '../types'
+import type { DefaultResolverIncludeOptions, GeneSequelizeWhereOptions } from '../types'
 import { populateWhereOptions } from './internal'
-
-type DefaultResolverIncludeOptions = Pick<
-  IncludeOptions,
-  'where' | 'order' | 'association' | 'limit'
-> & {
-  include?: DefaultResolverIncludeOptions[]
-  /**
-   * "offset" is missing in IncludeOptions
-   * @see https://github.com/sequelize/sequelize/issues/12969
-   */
-  offset?: number
-}
 
 const QUERY_TYPE = 'Query'
 const MUTATION_TYPE = 'Mutation'
@@ -31,12 +28,38 @@ export function isSequelizeFieldConfig<T>(
   )
 }
 
+function getFieldConfig(sourceType: string, field: string) {
+  const extendedTypes = getGloballyExtendedTypes()
+  if (!(sourceType in extendedTypes)) return
+
+  const fieldConfigs = extendedTypes[sourceType as keyof typeof extendedTypes]
+  if (!fieldConfigs) return
+
+  if (field in fieldConfigs) return normalizeFieldConfig(fieldConfigs[field])
+}
+
+function untilFindOptions(options: UntilHandlerDetails<DefaultResolverIncludeOptions>) {
+  const { sourceType, field } = options
+  const fieldConfig = getFieldConfig(sourceType, field)
+
+  if (fieldConfig?.findOptions) {
+    const findOptions = fieldConfig.findOptions
+    return {
+      afterAllSelections() {
+        findOptions(options)
+      },
+    }
+  }
+  return false
+}
+
 export function getQueryInclude(info: GraphQLResolveInfo) {
   const includeOptions: DefaultResolverIncludeOptions = {}
 
   lookahead({
     info,
     state: includeOptions,
+    until: untilFindOptions,
 
     next({ state, field, args, isList }) {
       const include = getFieldIncludeOptions({ association: field, args, isList })
@@ -68,6 +91,7 @@ export function getQueryIncludeOf(
       info,
       state: includeOptions,
       type,
+      until: untilFindOptions,
       selectionSet: nextSelectionSet,
 
       next({ state, field, args, isList }) {
@@ -149,12 +173,12 @@ export function getFieldIncludeOptions(options: {
     includeOptions.order = orderOptions
   }
 
-  // Both "page" and "perPage" arguments have default values so they should always be numbers
-  // if they are valid.
-  if (typeof options.args.page === 'number' && typeof options.args.perPage === 'number') {
-    includeOptions.offset = (options.args.page - 1) * options.args.perPage
-    includeOptions.limit = options.args.perPage
-  }
+  const argPage = typeof options.args.page === 'number' ? options.args.page : PAGE_ARG_DEFAULT
+  const argPerPage =
+    typeof options.args.perPage === 'number' ? options.args.perPage : PER_PAGE_ARG_DEFAULT
+
+  includeOptions.offset = (argPage - 1) * argPerPage
+  includeOptions.limit = argPerPage
 
   return includeOptions
 }

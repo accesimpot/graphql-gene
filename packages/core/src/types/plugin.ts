@@ -6,7 +6,11 @@ import type { GraphQLVarType, ResolversOrScalars } from './graphql'
 import type { GraphqlToTypescript } from './graphqlToTypescript'
 
 export type PluginSettings<
-  T extends { isMatching: boolean; fieldName: TField extends string ? string : never },
+  T extends {
+    isMatching: boolean
+    fieldName: TField extends string ? string : never
+    findOptionsState: object
+  },
   TField extends string | number | symbol = string,
 > = T
 

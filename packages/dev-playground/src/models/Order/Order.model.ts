@@ -8,9 +8,16 @@ import {
   Model,
   Table,
 } from 'sequelize-typescript'
-import { extendTypes, defineGraphqlGeneConfig, defineField } from 'graphql-gene'
+import {
+  extendTypes,
+  defineGraphqlGeneConfig,
+  defineField,
+  defineType,
+  defineEnum,
+} from 'graphql-gene'
 import { OrderItem } from '../OrderItem/OrderItem.model'
 import { Address } from '../Address/Address.model'
+import { getQueryIncludeOf } from '@graphql-gene/plugin-sequelize'
 
 export
 @Table
@@ -32,7 +39,7 @@ class Order extends Model {
   declare total: number
 
   @HasMany(() => OrderItem)
-  declare items: OrderItem[]
+  declare items: OrderItem[] | null
 
   @ForeignKey(() => Address)
   @Column(DataType.INTEGER)
@@ -46,11 +53,53 @@ class Order extends Model {
   })
 }
 
+export const UpdateOrderStatusOutput = defineType({
+  message: 'MessageOutput!',
+  order: 'Order',
+})
+
+export const OrderStatusEnum = defineEnum(['cart', 'shipping', 'payment', 'paid', 'shipped'])
+
+export const MessageOutput = defineType({
+  type: 'MessageTypeEnum!',
+  text: 'String!',
+})
+
+export const MessageTypeEnum = defineEnum(['info', 'success', 'warning', 'error'])
+
 extendTypes({
   Query: {
     order: {
       resolver: 'default',
       returnType: 'Order',
+    },
+  },
+
+  Mutation: {
+    updateOrderStatus: {
+      args: { id: 'String!', status: 'OrderStatusEnum!' },
+
+      async resolver({ info, args }) {
+        let messageType: (typeof MessageTypeEnum)[number] = 'success'
+        let text = 'Status updated successfully.'
+        let order: Order | null = null
+
+        if (Number.isNaN(Number(args.id))) {
+          messageType = 'error'
+          text = 'Status could not be updated.'
+        } else {
+          const findOptions = getQueryIncludeOf(info, 'Order')
+          order = await Order.findOne({ ...findOptions, where: { id: args.id } })
+
+          // Just pretend to update the status
+          order?.setDataValue('status', args.status)
+        }
+        return {
+          message: { type: messageType, text },
+          order,
+        }
+      },
+      returnType: 'UpdateOrderStatusOutput!',
     },
   },
 

@@ -1,6 +1,8 @@
 import type { GraphQLFieldResolver } from 'graphql'
+import type { UntilHandlerDetails } from 'graphql-lookahead'
 import type { GeneContext } from 'graphql-gene/context'
 import type {
+  FindOptionsState,
   GraphQLFieldName,
   GraphqlReturnTypes,
   GraphqlToTypescript,
@@ -88,7 +90,9 @@ export type ExtendedTypeField<T, TypeName> = {
         ? T[K] extends StrictArgsDefinition
           ? Narrow<T[K]>
           : never
-        : Narrow<T[K]>
+        : K extends 'findOptions'
+          ? FindOptionsState<TypeName, T[K]>
+          : Narrow<T[K]>
 }
 
 export type StrictExtendedTypes<
@@ -163,8 +167,9 @@ export type GeneTypeConfig<
 > = {
   directives?: GeneDirectiveConfig[]
   args?: TArgDefs extends undefined ? undefined : TArgDefs
-  returnType: TReturnType extends unknown ? GraphqlReturnTypes<ValidGraphqlType> : TReturnType
   resolver?: GeneResolverOption<TSource, TContext, TArgDefs, TReturnType>
+  returnType: TReturnType extends unknown ? GraphqlReturnTypes<ValidGraphqlType> : TReturnType
+  findOptions?: (details: UntilHandlerDetails<object>) => void
 }
 
 export type FieldConfig<
