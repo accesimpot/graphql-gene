@@ -8,7 +8,7 @@ export type Mutable<Immutable> = {
   -readonly [K in keyof Immutable]: Immutable[K]
 }
 
-export function getMutable<T extends string>(immutable: T[]) {
+export function getMutable<T extends string>(immutable: T[] | readonly T[]) {
   return immutable as Mutable<T[]>
 }
 

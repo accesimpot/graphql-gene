@@ -42,13 +42,8 @@ describe('integration', () => {
               name: 'TrailMaster - Storm Gray',
               color: 'Storm Gray',
               group: {
-                product: { id: 74 },
-                groupCategories: [
-                  { category: { name: 'shoes' } },
-                  { category: { name: 'trail' } },
-                  { category: { name: 'competition' } },
-                  { category: { name: 'support' } },
-                ],
+                products: [{ id: 70 }, { id: 71 }, { id: 72 }, { id: 73 }, { id: 74 }],
+                categories: ['shoes', 'trail', 'competition', 'support'],
               },
             },
           },
@@ -60,17 +55,52 @@ describe('integration', () => {
               name: 'Impulse - Thunder Gray',
               color: 'Thunder Gray',
               group: {
-                product: { id: 225 },
-                groupCategories: [
-                  { category: { name: 'trail' } },
-                  { category: { name: 'apparel' } },
-                  { category: { name: 'top' } },
-                  { category: { name: 'light' } },
-                ],
+                products: [{ id: 224 }, { id: 225 }, { id: 226 }, { id: 227 }, { id: 228 }],
+                categories: ['trail', 'apparel', 'top', 'light'],
               },
             },
           },
         ],
+      })
+    })
+  })
+
+  describe('when sending mutation returning mutated object using "getQueryIncludeOf"', async () => {
+    describe('when providing valid "id"', async () => {
+      consoleErrorSpy.mockClear()
+      const result = await execute({
+        document: getFixtureQuery('mutations/updateOrderStatus.gql'),
+        variables: { id: '26', status: 'payment' },
+      })
+
+      it('returns the expected data', () => {
+        expect(result.data.updateOrderStatus).toEqual({
+          message: { type: 'success', text: 'Status updated successfully.' },
+          order: {
+            id: 26,
+            status: 'payment',
+            items: [
+              { product: { name: 'Nexus - Uranium Gray' } },
+              { product: { name: 'NatureTrek - Deep Indigo' } },
+              { product: { name: 'NatureTrek - Moss Green' } },
+            ],
+          },
+        })
+      })
+    })
+
+    describe('when providing invalid "id"', async () => {
+      consoleErrorSpy.mockClear()
+      const result = await execute({
+        document: getFixtureQuery('mutations/updateOrderStatus.gql'),
+        variables: { id: 'invalid', status: 'paid' },
+      })
+
+      it('returns the expected data', () => {
+        expect(result.data.updateOrderStatus).toEqual({
+          message: { type: 'error', text: 'Status could not be updated.' },
+          order: null,
+        })
       })
     })
   })

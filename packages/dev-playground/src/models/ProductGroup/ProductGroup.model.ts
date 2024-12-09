@@ -4,15 +4,8 @@ import type {
   InferAttributes,
   InferCreationAttributes,
 } from 'sequelize'
-import {
-  BelongsToMany,
-  Column,
-  DataType,
-  HasMany,
-  HasOne,
-  Model,
-  Table,
-} from 'sequelize-typescript'
+import { BelongsToMany, Column, DataType, HasMany, Model, Table } from 'sequelize-typescript'
+import { defineGraphqlGeneConfig, extendTypes } from 'graphql-gene'
 import { Product } from '../Product/Product.model'
 import { ProductCategory } from '../ProductCategory/ProductCategory.model'
 import { ProductGroupCategory } from '../ProductGroupCategory/ProductGroupCategory.model'
@@ -33,6 +26,34 @@ class ProductGroup extends Model<
   @HasMany(() => ProductGroupCategory, { onDelete: 'CASCADE' })
   declare groupCategories: CreationOptional<ProductGroupCategory[]>
 
-  @HasOne(() => Product)
-  declare product: CreationOptional<Product>
+  @HasMany(() => Product)
+  declare products: CreationOptional<Product[]>
+
+  static readonly geneConfig = defineGraphqlGeneConfig(ProductGroup, {
+    exclude: ['categories', 'groupCategories'],
+  })
 }
+
+extendTypes({
+  ProductGroup: {
+    categories: {
+      resolver: ({ source }) => {
+        return source.groupCategories.map(({ category }) => category?.name || '').filter(v => v)
+      },
+      returnType: '[String!]',
+
+      /**
+       * Using `findOptions`, we make sure that the `groupCategories` is included in the
+       * query for `ProductGroup` whenever this field is requested so we can access it within
+       * the resolver.
+       */
+      findOptions({ state }) {
+        state.include = state.include || []
+        state.include.push({
+          association: 'groupCategories',
+          include: [{ association: 'category' }],
+        })
+      },
+    },
+  },
+})
