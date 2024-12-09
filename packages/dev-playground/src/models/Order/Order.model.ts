@@ -15,9 +15,9 @@ import {
   defineType,
   defineEnum,
 } from 'graphql-gene'
+import { getQueryIncludeOf } from '@graphql-gene/plugin-sequelize'
 import { OrderItem } from '../OrderItem/OrderItem.model'
 import { Address } from '../Address/Address.model'
-import { getQueryIncludeOf } from '@graphql-gene/plugin-sequelize'
 
 export
 @Table
