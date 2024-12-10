@@ -56,7 +56,7 @@
     "sequelize-typescript": "2.x"
   },
   "dependencies": {
-    "graphql-lookahead": "^1.3.0-beta.1"
+    "graphql-lookahead": "^1.3.0-beta.2"
   },
   "devDependencies": {
     "@types/node": "^20.17.8",
