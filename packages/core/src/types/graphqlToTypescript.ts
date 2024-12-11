@@ -114,8 +114,13 @@ export type FindOptionsStateByModel<M, TFallback = never> = {
     : TFallback
 }[keyof GenePluginSettings<M>]
 
-type UntilHandler<TState> = (details: UntilHandlerDetails<TState>) => void
+export type FindOptionsHandler<TState> = (
+  details: UntilHandlerDetails<TState> & { findOptions: UntilHandlerDetails<TState>['state'] }
+) => void
 
-export type FindOptionsState<TTypeName, TFallback = never> = TTypeName extends keyof GraphqlTypes
-  ? UntilHandler<FindOptionsStateByModel<GraphqlTypes[TTypeName], TFallback>>
+export type FindOptionsHandlerByType<
+  TTypeName,
+  TFallback = never,
+> = TTypeName extends keyof GraphqlTypes
+  ? FindOptionsHandler<FindOptionsStateByModel<GraphqlTypes[TTypeName], TFallback>>
   : TFallback

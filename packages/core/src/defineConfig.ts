@@ -1,8 +1,9 @@
 import type { GraphQLFieldResolver } from 'graphql'
-import type { UntilHandlerDetails } from 'graphql-lookahead'
 import type { GeneContext } from 'graphql-gene/context'
 import type {
-  FindOptionsState,
+  FindOptionsHandler,
+  FindOptionsHandlerByType,
+  FindOptionsStateByModel,
   GraphQLFieldName,
   GraphqlReturnTypes,
   GraphqlToTypescript,
@@ -12,6 +13,7 @@ import type {
   Narrow,
   OperatorInputs,
   Prop,
+  PrototypeOrNot,
   SomeRequired,
   ValidGraphqlType,
 } from './types'
@@ -91,7 +93,7 @@ export type ExtendedTypeField<T, TypeName> = {
           ? Narrow<T[K]>
           : never
         : K extends 'findOptions'
-          ? FindOptionsState<TypeName, T[K]>
+          ? FindOptionsHandlerByType<TypeName, T[K]>
           : Narrow<T[K]>
 }
 
@@ -103,7 +105,7 @@ export type StrictExtendedTypes<
 
 export interface GeneConfig<
   M = unknown,
-  TSource = Record<string, unknown> | undefined,
+  TSource = M | Record<string, unknown> | undefined,
   TContext = GeneContext,
   TArgDefs extends ArgsDefinition = undefined,
   TReturnType extends string | unknown = unknown,
@@ -121,7 +123,10 @@ export interface GeneConfig<
   varType?: TVarType
 
   /** Directives to apply at the type level (also possible at the field level). */
-  directives?: GeneDirectiveConfig[]
+  directives?: GeneDirectiveConfig<
+    Record<string, string | number | boolean | null> | undefined,
+    PrototypeOrNot<M>
+  >[]
 
   /**
    * The values of "aliases" would be nested GeneConfig properties that overwrites the ones se
@@ -157,6 +162,9 @@ export interface GeneConfig<
    * @deprecated You should import and call `extendTypes` instead.
    */
   types?: ExtendedTypes<TSource, TContext, TArgDefs, TReturnType>
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  findOptions?: FindOptionsHandler<FindOptionsStateByModel<M, any>>
 }
 
 export type GeneTypeConfig<
@@ -165,11 +173,14 @@ export type GeneTypeConfig<
   TArgDefs extends ArgsDefinition = undefined,
   TReturnType extends string | unknown = unknown,
 > = {
-  directives?: GeneDirectiveConfig[]
+  directives?: GeneDirectiveConfig<
+    Record<string, string | number | boolean | null> | undefined,
+    TSource
+  >[]
   args?: TArgDefs extends undefined ? undefined : TArgDefs
   resolver?: GeneResolverOption<TSource, TContext, TArgDefs, TReturnType>
   returnType: TReturnType extends unknown ? GraphqlReturnTypes<ValidGraphqlType> : TReturnType
-  findOptions?: (details: UntilHandlerDetails<object>) => void
+  findOptions?: FindOptionsHandler<object>
 }
 
 export type FieldConfig<
@@ -252,7 +263,7 @@ export type GeneDirective<
   TSource = Record<string, unknown> | undefined,
   TContext = GeneContext,
   TArgs = Record<string, unknown> | undefined,
-> = (args: TDirectiveArgs) => GeneDirectiveConfig<TDirectiveArgs, TSource, TContext, TArgs>
+> = (args?: TDirectiveArgs) => GeneDirectiveConfig<TDirectiveArgs, TSource, TContext, TArgs>
 
 export type GeneDirectiveConfig<
   TDirectiveArgs = Record<string, string | number | boolean | null> | undefined,
@@ -281,6 +292,7 @@ export type GeneDirectiveHandler<
   args: Parameters<GraphQLFieldResolver<TSource, TContext, TArgs, TResult>>[1]
   context: Parameters<GraphQLFieldResolver<TSource, TContext, TArgs, TResult>>[2]
   info: Parameters<GraphQLFieldResolver<TSource, TContext, TArgs, TResult>>[3]
+  field: string
   resolve: () => Promise<TResult> | TResult
 }) => Promise<void> | void
 
@@ -297,7 +309,7 @@ export class GeneModel {
  */
 export function defineGraphqlGeneConfig<
   M = unknown,
-  TSource = Record<string, unknown> | undefined,
+  TSource = M | Record<string, unknown> | undefined,
   TContext = GeneContext,
   TArgDefs extends ArgsDefinition = undefined,
   TReturnType extends string | unknown = unknown,
@@ -307,7 +319,7 @@ export function defineGraphqlGeneConfig<
 }
 
 export function defineDirective<
-  TDirectiveArgs,
+  TDirectiveArgs = undefined,
   TSource = Record<string, unknown> | undefined,
   TContext = GeneContext,
   TArgs = Record<string, unknown> | undefined,

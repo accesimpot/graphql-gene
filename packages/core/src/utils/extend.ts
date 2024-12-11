@@ -3,19 +3,38 @@ import type {
   NarrowExtendedTypes,
   StrictArgsDefinition,
   GeneDirectiveConfig,
+  GeneConfig,
 } from '../defineConfig'
 import type { GraphqlReturnTypes, ValidGraphqlType } from '../types'
 import { isObject } from '.'
 
 declare global {
   // eslint-disable-next-line no-var
-  var __graphqlGeneExtendedTypes: StrictExtendedTypes | undefined
+  var __graphqlGeneExtendedTypes:
+    | { config: StrictExtendedTypes; geneConfig: { [type: string]: GeneConfig | undefined } }
+    | undefined
 }
 
-export function getGloballyExtendedTypes() {
-  globalThis.__graphqlGeneExtendedTypes = globalThis.__graphqlGeneExtendedTypes || {}
+export function getGloballyExtendedTypes(): NonNullable<
+  typeof globalThis.__graphqlGeneExtendedTypes
+> {
+  globalThis.__graphqlGeneExtendedTypes = globalThis.__graphqlGeneExtendedTypes ?? {
+    config: {},
+    geneConfig: {},
+  }
 
   return globalThis.__graphqlGeneExtendedTypes
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function setGeneConfigByType<TGeneConfig extends GeneConfig<any>>(
+  type: string,
+  geneConfig: TGeneConfig | undefined
+) {
+  if (!geneConfig) return
+
+  const globalTypes = getGloballyExtendedTypes()
+  globalTypes.geneConfig[type] = geneConfig
 }
 
 export function extendTypes<
@@ -40,7 +59,7 @@ export function extendTypes<
       throw new Error(`Provided field config for type "${graphqlType}" must be an object.`)
     }
     const type = graphqlType as 'Query'
-    globalTypes[type] = globalTypes[type] || {}
-    globalTypes[type] = { ...globalTypes[type], ...fieldConfigs }
+    globalTypes.config[type] = globalTypes.config[type] || {}
+    globalTypes.config[type] = { ...globalTypes.config[type], ...fieldConfigs }
   })
 }

@@ -28,25 +28,42 @@ export function isSequelizeFieldConfig<T>(
   )
 }
 
+function getTypeConfig(type: string) {
+  const extendedTypes = getGloballyExtendedTypes()
+  if (!(type in extendedTypes.geneConfig)) return
+
+  return extendedTypes.geneConfig[type as keyof typeof extendedTypes.geneConfig]
+}
+
 function getFieldConfig(sourceType: string, field: string) {
   const extendedTypes = getGloballyExtendedTypes()
-  if (!(sourceType in extendedTypes)) return
+  if (!(sourceType in extendedTypes.config)) return
 
-  const fieldConfigs = extendedTypes[sourceType as keyof typeof extendedTypes]
+  const fieldConfigs = extendedTypes.config[sourceType as keyof typeof extendedTypes.config]
   if (!fieldConfigs) return
 
   if (field in fieldConfigs) return normalizeFieldConfig(fieldConfigs[field])
 }
 
 function untilFindOptions(options: UntilHandlerDetails<DefaultResolverIncludeOptions>) {
-  const { sourceType, field } = options
+  const { sourceType, type, field } = options
+  const typeConfig = getTypeConfig(type)
   const fieldConfig = getFieldConfig(sourceType, field)
 
-  if (fieldConfig?.findOptions) {
-    const findOptions = fieldConfig.findOptions
+  if (typeConfig?.findOptions || fieldConfig?.findOptions) {
     return {
       afterAllSelections() {
-        findOptions(options)
+        if (typeConfig?.findOptions) {
+          options.state.include = options.state.include || []
+          const possibleState = options.state?.include?.find(opt => opt.association === field)
+          const state = possibleState || { association: field }
+          if (!possibleState) options.state.include.push(state)
+
+          typeConfig?.findOptions?.(Object.assign(options, { findOptions: state }))
+        }
+        // Using `Object.assign` instead of object spread operator to prevent executing the
+        // getters if not requested (i.e. `fieldDef`, `args`).
+        fieldConfig?.findOptions?.(Object.assign(options, { findOptions: options.state }))
       },
     }
   }

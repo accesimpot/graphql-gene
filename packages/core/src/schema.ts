@@ -28,6 +28,7 @@ import {
   getGloballyExtendedTypes,
   getReturnTypeName,
   getFieldDefinition,
+  setGeneConfigByType,
 } from './utils'
 import { addResolversToSchema } from './resolvers'
 import SCHEMA_TEMPLATE_HTML from './schema.html?raw'
@@ -61,11 +62,14 @@ export function generateSchema<
     : []
 
   const initialSchema = parseSchemaOption(options.schema, providedScalars)
-  const geneTypeDefs = generateGeneTypeDefs({ ...options, schema: initialSchema })
+  const { typeDefsString, typeDefLines } = generateGeneTypeDefs({
+    ...options,
+    schema: initialSchema,
+  })
 
   const schema = initialSchema
-    ? extendSchema(initialSchema, parse(geneTypeDefs))
-    : buildSchema(geneTypeDefs)
+    ? extendSchema(initialSchema, parse(typeDefsString))
+    : buildSchema(typeDefsString)
 
   const queryType = schema.getType('Query')
   const mutationType = schema.getType('Mutation')
@@ -109,6 +113,7 @@ export function generateSchema<
   })
 
   executableSchema = addResolversToSchema({
+    typeDefLines,
     schema: executableSchema,
     plugins: options.plugins || [],
     types: options.types,
@@ -195,7 +200,7 @@ function generateGeneTypeDefs<SchemaTypes extends AnyObject, DataTypes extends A
   })
   const globallyExtendedTypes = getGloballyExtendedTypes()
 
-  Object.entries(globallyExtendedTypes).forEach(([graphqlType, fieldConfigs]) => {
+  Object.entries(globallyExtendedTypes.config).forEach(([graphqlType, fieldConfigs]) => {
     generateTypeDefLines({
       directiveDefs,
       typeDefLines,
@@ -255,7 +260,7 @@ function generateGeneTypeDefs<SchemaTypes extends AnyObject, DataTypes extends A
     typeDefsString = `${directiveDef}\n\n${typeDefsString}`
   })
 
-  return typeDefsString
+  return { typeDefsString, typeDefLines }
 }
 
 function forEachModel<M, SchemaTypes extends AnyObject>(options: {
@@ -321,6 +326,8 @@ function generateTypeDefs<M, SchemaTypes extends AnyObject>(options: {
   const geneConfig = getGeneConfigFromOptions(options)
   const afterTypeDefHooks: (() => void)[] = []
 
+  setGeneConfigByType(options.modelKey, geneConfig)
+
   const optionsForPopulateTypeDefs = {
     typeDefLines: options.typeDefLines,
     model: options.model,
@@ -338,6 +345,7 @@ function generateTypeDefs<M, SchemaTypes extends AnyObject>(options: {
   }
 
   registerDirectives({
+    // @ts-expect-error Fix type issue raised by incompatible TSource
     configs: geneConfig?.directives,
     defs: options.directiveDefs,
     each: ({ directiveDef }) => {
