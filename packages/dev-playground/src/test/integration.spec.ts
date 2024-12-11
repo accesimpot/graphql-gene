@@ -28,35 +28,28 @@ describe('integration', () => {
 
     it('returns the expected data', () => {
       expect(result.data.order).toEqual({
-        id: 160,
+        id: 397,
         status: 'paid',
-        updatedAt: '2024-11-27T07:43:13.000Z',
+        updatedAt: '2024-11-03T21:20:43.000Z',
         fieldAddedWithExtendTypes: 'status: paid',
-
         items: [
           {
-            id: 402,
-            price: 275.74,
-            quantity: 1,
+            id: 976,
+            price: 145.85,
+            quantity: 3,
             product: {
-              name: 'TrailMaster - Storm Gray',
-              color: 'Storm Gray',
+              name: 'StreetStyle - Slate Thunder',
+              color: 'Slate Thunder',
               group: {
-                products: [{ id: 70 }, { id: 71 }, { id: 72 }, { id: 73 }, { id: 74 }],
-                categories: ['shoes', 'trail', 'competition', 'support'],
-              },
-            },
-          },
-          {
-            id: 403,
-            price: 159.4,
-            quantity: 1,
-            product: {
-              name: 'Impulse - Thunder Gray',
-              color: 'Thunder Gray',
-              group: {
-                products: [{ id: 224 }, { id: 225 }, { id: 226 }, { id: 227 }, { id: 228 }],
-                categories: ['trail', 'apparel', 'top', 'light'],
+                products: [
+                  { id: 116 },
+                  { id: 117 },
+                  { id: 118 },
+                  { id: 119 },
+                  { id: 120 },
+                  { id: 121 },
+                ],
+                categories: ['shoes', 'urban'],
               },
             },
           },
@@ -79,11 +72,7 @@ describe('integration', () => {
           order: {
             id: 26,
             status: 'payment',
-            items: [
-              { product: { name: 'Nexus - Uranium Gray' } },
-              { product: { name: 'NatureTrek - Deep Indigo' } },
-              { product: { name: 'NatureTrek - Moss Green' } },
-            ],
+            items: [{ product: { name: 'SpeedTech - Arctic Mint' } }],
           },
         })
       })

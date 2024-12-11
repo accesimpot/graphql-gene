@@ -22,6 +22,9 @@ class Product extends Model<InferAttributes<Product>, InferCreationAttributes<Pr
   @Column(DataType.STRING)
   declare color: string | null
 
+  @Column(DataType.BOOLEAN)
+  declare isPublished: boolean | null
+
   @ForeignKey(() => ProductGroup)
   @Column(DataType.INTEGER)
   declare groupId: number | null
