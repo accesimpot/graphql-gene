@@ -381,8 +381,10 @@ function generateTypeDefLines(options: {
 }) {
   let objFieldConfigs = options.fieldConfigs
 
-  options.typeDefLines[options.graphqlType] =
-    options.typeDefLines[options.graphqlType] || getDefaultTypeDefLinesObject()
+  options.typeDefLines[options.graphqlType] = {
+    ...getDefaultTypeDefLinesObject(),
+    ...options.typeDefLines[options.graphqlType],
+  }
 
   if (
     isObject(objFieldConfigs) &&
@@ -421,18 +423,23 @@ function generateTypeDefLines(options: {
 
     const normalizedFieldConfig = normalizeFieldConfig(fieldConfig)
 
-    options.typeDefLines[options.graphqlType].lines[fieldKey] =
-      options.typeDefLines[options.graphqlType].lines[fieldKey] || getDefaultFieldLinesObject()
+    options.typeDefLines[options.graphqlType].lines[fieldKey] = {
+      ...getDefaultFieldLinesObject(),
+      ...options.typeDefLines[options.graphqlType].lines[fieldKey],
+    }
 
     const fieldLineConfig = options.typeDefLines[options.graphqlType].lines[fieldKey]
-    fieldLineConfig.typeDef = normalizedFieldConfig.returnType
+
+    if (normalizedFieldConfig.returnType) {
+      fieldLineConfig.typeDef = normalizedFieldConfig.returnType
+    }
 
     if (isUsingDefaultResolver(normalizedFieldConfig)) {
       populateArgsDefForDefaultResolver({
         fieldLineConfig,
         graphqlType: options.graphqlType,
         fieldKey,
-        isList: isListType(parseType(normalizedFieldConfig.returnType)),
+        isList: isListType(parseType(fieldLineConfig.typeDef)),
       })
     } else if (normalizedFieldConfig.args) {
       Object.entries(normalizedFieldConfig.args).forEach(([argKey, argDef]) => {

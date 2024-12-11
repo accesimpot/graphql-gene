@@ -26,8 +26,10 @@ function hasScalarInSchema(schema: GraphQLSchema | undefined, scalar: string) {
 }
 
 export const populateTypeDefs: PopulateTypeDefs = options => {
-  options.typeDefLines[options.typeName] =
-    options.typeDefLines[options.typeName] || getDefaultTypeDefLinesObject()
+  options.typeDefLines[options.typeName] = {
+    ...getDefaultTypeDefLinesObject(),
+    ...options.typeDefLines[options.typeName],
+  }
 
   const mainTypeDef = options.typeDefLines[options.typeName]
   const attributes = options.model.getAttributes()
@@ -70,8 +72,10 @@ export const populateTypeDefs: PopulateTypeDefs = options => {
 
       if (attributeValue.allowNull === false) graphqlType += '!'
 
-      mainTypeDef.lines[attributeKey] =
-        mainTypeDef.lines[attributeKey] || getDefaultFieldLinesObject()
+      mainTypeDef.lines[attributeKey] = {
+        ...getDefaultFieldLinesObject(),
+        ...mainTypeDef.lines[attributeKey],
+      }
       mainTypeDef.lines[attributeKey].typeDef = graphqlType
     }
   })
@@ -112,7 +116,7 @@ function generateAssociationFields(
       isList = true
     }
 
-    lines[attributeKey] = lines[attributeKey] || getDefaultFieldLinesObject()
+    lines[attributeKey] = { ...getDefaultFieldLinesObject(), ...lines[attributeKey] }
     lines[attributeKey].typeDef = returnType
 
     if (isList) {

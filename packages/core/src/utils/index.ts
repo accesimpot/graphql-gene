@@ -181,7 +181,7 @@ export function printSchemaWithDirectives(schema: GraphQLSchema) {
   return schemaString.replace(/\n$/, '')
 }
 
-/** is using default Gene resolver if none was provided */
+/** is using default Gene resolver if `resolver` or `args` option is set to "default" */
 export function isUsingDefaultResolver(fieldConfig: AnyObject): boolean {
   return (['resolver', 'args'] as const).some(
     prop => prop in fieldConfig && fieldConfig[prop] === 'default'
@@ -309,6 +309,6 @@ export function createTypeDefLines(
   varType: GraphQLVarType,
   varName: string
 ) {
-  typeDefLines[varName] = typeDefLines[varName] || getDefaultTypeDefLinesObject()
+  typeDefLines[varName] = { ...getDefaultTypeDefLinesObject(), ...typeDefLines[varName] }
   typeDefLines[varName].varType = varType
 }

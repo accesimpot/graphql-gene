@@ -108,7 +108,7 @@ export function generateOperatorInputLines(
 
   const lines: FieldLines = {}
   Object.entries(fieldDefs).forEach(([key, typeDef]) => {
-    lines[key] = { ...getDefaultFieldLinesObject(), typeDef }
+    lines[key] = { ...getDefaultFieldLinesObject(), ...lines[key], typeDef }
   })
   return lines
 }
@@ -132,7 +132,10 @@ export function generateDefaultQueryFilterTypeDefs(options: {
 
     // Add "and" and "or" operators
     AND_OR_OPERATORS.forEach(operator => {
-      options.typeDefLines[whereOptionsInputName].lines[operator] = getDefaultFieldLinesObject()
+      options.typeDefLines[whereOptionsInputName].lines[operator] = {
+        ...getDefaultFieldLinesObject(),
+        ...options.typeDefLines[whereOptionsInputName].lines[operator],
+      }
       options.typeDefLines[whereOptionsInputName].lines[operator].typeDef =
         `[${whereOptionsInputName}!]`
     })
@@ -155,11 +158,14 @@ export function generateDefaultQueryFilterTypeDefs(options: {
   >([])
 
   Object.entries(options.typeDefLines[options.fieldType].lines).forEach(
-    ([returnFieldKey, returnFieldType]) => {
+    ([returnFieldKey, returnFieldConfig]) => {
       // Where Options Input
-      options.typeDefLines[whereOptionsInputName].lines[returnFieldKey] =
-        options.typeDefLines[whereOptionsInputName].lines[returnFieldKey] ||
-        getDefaultFieldLinesObject()
+      options.typeDefLines[whereOptionsInputName].lines[returnFieldKey] = {
+        ...getDefaultFieldLinesObject(),
+        ...options.typeDefLines[whereOptionsInputName].lines[returnFieldKey],
+      }
+
+      const returnFieldType = { ...getDefaultFieldLinesObject(), ...returnFieldConfig }
 
       const validInputType = findValidInputType(returnFieldType.typeDef)
       let whereTypeDef = ''
