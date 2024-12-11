@@ -29,10 +29,10 @@ export default defineConfig({
       include: ['packages/core/src/**', 'packages/plugin-sequelize/src/**'],
 
       thresholds: {
-        lines: 51,
-        functions: 48,
-        statements: 50,
-        branches: 43,
+        lines: 56,
+        functions: 54,
+        statements: 55,
+        branches: 48,
       },
     },
   },

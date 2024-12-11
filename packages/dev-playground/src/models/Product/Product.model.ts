@@ -8,9 +8,11 @@ import {
   Model,
   Table,
 } from 'sequelize-typescript'
+import type { InferAttributes, InferCreationAttributes } from 'sequelize'
+import { extendTypes } from 'graphql-gene'
+import { authorizationDirective } from '../../directives/authorization.directive'
 import { ProductGroup } from '../ProductGroup/ProductGroup.model'
 import { ProductVariant } from '../ProductVariant/ProductVariant.model'
-import type { InferAttributes, InferCreationAttributes } from 'sequelize'
 
 export
 @Table
@@ -22,6 +24,9 @@ class Product extends Model<InferAttributes<Product>, InferCreationAttributes<Pr
   @Column(DataType.STRING)
   declare color: string | null
 
+  @Column(DataType.BOOLEAN)
+  declare isPublished: boolean | null
+
   @ForeignKey(() => ProductGroup)
   @Column(DataType.INTEGER)
   declare groupId: number | null
@@ -32,3 +37,11 @@ class Product extends Model<InferAttributes<Product>, InferCreationAttributes<Pr
   @HasMany(() => ProductVariant)
   declare variants: ProductVariant[] | null
 }
+
+extendTypes({
+  Product: {
+    isPublished: {
+      directives: [authorizationDirective()],
+    },
+  },
+})

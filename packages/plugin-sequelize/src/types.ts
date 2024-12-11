@@ -7,10 +7,7 @@ export type GeneSequelizeWhereOptions = {
     : WhereAttributeHash<AnyObject>[k extends symbol ? never : k]
 }
 
-export type DefaultResolverIncludeOptions = Pick<
-  IncludeOptions,
-  'where' | 'order' | 'association' | 'limit'
-> & {
+export type DefaultResolverIncludeOptions = Omit<IncludeOptions, 'include' | 'offset'> & {
   include?: DefaultResolverIncludeOptions[]
   /**
    * "offset" is missing in IncludeOptions

@@ -142,7 +142,7 @@ async function createAllProducts() {
   for (const productName in productSettings) {
     const { group, color, productType } = productSettings[productName] || {}
 
-    const creationAttributes: CreationAttributes<Product> = { name: productName }
+    const creationAttributes: CreationAttributes<Product> = { name: productName, isPublished: true }
 
     if (group && productGroups[group]) creationAttributes.groupId = productGroups[group].id
     if (color) creationAttributes.color = color

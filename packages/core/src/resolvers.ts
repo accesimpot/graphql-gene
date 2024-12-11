@@ -9,9 +9,10 @@ import {
   getGloballyExtendedTypes,
   getReturnTypeName,
 } from './utils'
-import type { GenePlugin, AnyObject, GraphqlTypes } from './types'
+import type { GenePlugin, AnyObject, GraphqlTypes, TypeDefLines } from './types'
 
 export function addResolversToSchema<SchemaTypes extends AnyObject>(options: {
+  typeDefLines: TypeDefLines
   schema: GraphQLSchema
   plugins: GenePlugin[]
   types: SchemaTypes
@@ -20,6 +21,7 @@ export function addResolversToSchema<SchemaTypes extends AnyObject>(options: {
 
   Object.entries(options.types).forEach(([, model]) => {
     const modifiedSchema = forEachModel({
+      typeDefLines: options.typeDefLines,
       schema,
       types: options.types,
       plugins: options.plugins,
@@ -30,10 +32,12 @@ export function addResolversToSchema<SchemaTypes extends AnyObject>(options: {
   const globallyExtendedTypes = getGloballyExtendedTypes()
 
   const modifiedSchema = defineResolvers({
+    typeDefLines: options.typeDefLines,
     schema,
     types: options.types,
     plugins: options.plugins,
-    typeConfig: globallyExtendedTypes,
+    typeConfig: globallyExtendedTypes.config,
+    isAddingDirectives: true,
   })
   if (modifiedSchema) schema = modifiedSchema
 
@@ -41,6 +45,7 @@ export function addResolversToSchema<SchemaTypes extends AnyObject>(options: {
 }
 
 function forEachModel<M, SchemaTypes extends AnyObject>(options: {
+  typeDefLines: TypeDefLines
   geneConfig?: GeneConfig<M>
   schema: GraphQLSchema
   types: SchemaTypes
@@ -60,24 +65,28 @@ function forEachModel<M, SchemaTypes extends AnyObject>(options: {
 }
 
 function defineResolvers<SchemaTypes extends AnyObject>(options: {
+  typeDefLines: TypeDefLines
   schema: GraphQLSchema
   types: SchemaTypes
   plugins: GenePlugin[]
   typeConfig: ExtendedTypes | undefined
+  isAddingDirectives?: boolean
 }): GraphQLSchema | undefined {
-  if (!options.typeConfig) return
-
+  const geneConfigByTpe = getGloballyExtendedTypes().geneConfig
   const typeConfig = options.typeConfig || {}
 
   lookDeepInSchema({
     schema: options.schema,
     each({ type, field, fieldDef, parentType }) {
+      const geneConfig = geneConfigByTpe[type]
+      const hasTypeDirectives = options.isAddingDirectives && !!geneConfig?.directives?.length
+
       const isFieldInTypeConfig = () =>
         parentType in typeConfig &&
         typeConfig[parentType as 'Query'] &&
         field in typeConfig[parentType as 'Query']!
 
-      if (!isFieldInTypeConfig()) return
+      if (!hasTypeDirectives && !isFieldInTypeConfig()) return
 
       const currentTypeConfig = typeConfig[parentType as keyof typeof typeConfig]
       if (!currentTypeConfig || isArrayFieldConfig(currentTypeConfig)) return
@@ -85,26 +94,18 @@ function defineResolvers<SchemaTypes extends AnyObject>(options: {
       const config = (
         currentTypeConfig as Record<string, Parameters<typeof normalizeFieldConfig>[0]>
       )[field]
-      const normalizedConfig = normalizeFieldConfig(config)
-      const returnTypeName = getReturnTypeName(normalizedConfig.returnType)
+      const normalizedConfig = config ? normalizeFieldConfig(config) : undefined
+
+      const returnTypeName = getReturnTypeName(
+        normalizedConfig?.returnType || options.typeDefLines[parentType]?.lines[field]?.typeDef
+      )
       const model = options.types[returnTypeName] as GraphqlTypes[keyof GraphqlTypes] | undefined
 
       if (type !== returnTypeName) return
 
-      const geneConfig = model ? getGeneConfigFromOptions({ model }) : undefined
       const plugin = model ? options.plugins.find(plugin => plugin.isMatching(model)) : undefined
 
-      const directiveConfigs: GeneConfig['directives'] = []
-
-      // Type-level directives
-      if (geneConfig?.aliases && returnTypeName in geneConfig.aliases) {
-        const aliasGeneConfig = geneConfig.aliases[returnTypeName as 'Query']
-        if (aliasGeneConfig?.directives) directiveConfigs.push(...aliasGeneConfig.directives)
-      } else if (geneConfig?.directives) {
-        directiveConfigs.push(...geneConfig.directives)
-      }
-
-      if (normalizedConfig.resolver) {
+      if (normalizedConfig?.resolver) {
         fieldDef.resolve = async (source, args, context, info) => {
           if (normalizedConfig.resolver && typeof normalizedConfig.resolver !== 'string') {
             return normalizedConfig.resolver({ source, args, context, info })
@@ -121,9 +122,22 @@ function defineResolvers<SchemaTypes extends AnyObject>(options: {
           }
         }
       }
-      if (normalizedConfig.directives) directiveConfigs.push(...normalizedConfig.directives)
+      if (!options.isAddingDirectives) return
 
-      // Register directives at the type or field level
+      const directiveConfigs: GeneConfig<Record<string, unknown> | undefined>['directives'] = []
+
+      // Type-level directives
+      if (geneConfig?.directives) {
+        directiveConfigs.push(...geneConfig.directives)
+      }
+      if (geneConfig?.aliases && returnTypeName in geneConfig.aliases) {
+        const aliasGeneConfig = geneConfig.aliases[returnTypeName as 'Query']
+        if (aliasGeneConfig?.directives) directiveConfigs.push(...aliasGeneConfig.directives)
+      }
+
+      // Field-level directives
+      if (normalizedConfig?.directives) directiveConfigs.push(...normalizedConfig.directives)
+
       if (directiveConfigs.length) {
         // Reverse the order so that the first directive you defined will be executed first
         // (middleware pattern).
@@ -147,6 +161,7 @@ function defineResolvers<SchemaTypes extends AnyObject>(options: {
               args,
               context,
               info,
+              field,
               resolve,
             })
             if (!hasCalledResolve) await resolve()
