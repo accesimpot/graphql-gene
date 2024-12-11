@@ -8,11 +8,11 @@ import {
   Model,
   Table,
 } from 'sequelize-typescript'
-import { ProductGroup } from '../ProductGroup/ProductGroup.model'
-import { ProductVariant } from '../ProductVariant/ProductVariant.model'
 import type { InferAttributes, InferCreationAttributes } from 'sequelize'
 import { extendTypes } from 'graphql-gene'
 import { authorizationDirective } from '../../directives/authorization.directive'
+import { ProductGroup } from '../ProductGroup/ProductGroup.model'
+import { ProductVariant } from '../ProductVariant/ProductVariant.model'
 
 export
 @Table
@@ -40,7 +40,7 @@ class Product extends Model<InferAttributes<Product>, InferCreationAttributes<Pr
 
 extendTypes({
   Product: {
-    color: {
+    isPublished: {
       directives: [authorizationDirective()],
     },
   },

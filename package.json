@@ -22,6 +22,7 @@
     "types:check": "NX_DISABLE_DB=true nx run-many -t types:check",
     "test": "vitest --run",
     "test:watch": "vitest",
+    "test:inspect": "vitest --inspect-brk=0.0.0.0:8806 --no-file-parallelism",
     "test:non-cacheable": "NX_DISABLE_DB=true nx run-many -t test:non-cacheable",
     "dev-utils": "NX_DISABLE_DB=true bash -c 'nx ${0} dev-utils $@'",
     "dev-utils:": "pnpm -F=dev-utils",

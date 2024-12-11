@@ -14,7 +14,7 @@ export const authorizationDirective = defineDirective(() => ({
   name: 'authorization',
 
   async handler({ context }) {
-    const authorizationHeader = context.req.headers.authorization
+    const authorizationHeader = context.request.headers.get('authorization')
 
     if (!authorizationHeader || !VALID_API_KEYS.has(authorizationHeader)) {
       throw new GraphQLError('Unauthorized')
