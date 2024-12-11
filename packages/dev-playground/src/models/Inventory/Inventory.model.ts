@@ -7,6 +7,8 @@ import {
   Model,
   Table,
 } from 'sequelize-typescript'
+import { defineGraphqlGeneConfig } from 'graphql-gene'
+import { authorizationDirective } from '../../directives/authorization.directive'
 import { ProductVariant } from '../ProductVariant/ProductVariant.model'
 import type { CreationOptional, InferAttributes, InferCreationAttributes } from 'sequelize'
 
@@ -23,4 +25,8 @@ class Inventory extends Model<InferAttributes<Inventory>, InferCreationAttribute
 
   @BelongsTo(() => ProductVariant)
   declare variant: CreationOptional<ProductVariant | null>
+
+  static readonly geneConfig = defineGraphqlGeneConfig(Inventory, {
+    directives: [authorizationDirective()],
+  })
 }

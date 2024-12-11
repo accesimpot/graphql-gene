@@ -1,5 +1,10 @@
 import { defaultFieldResolver, GraphQLSchema } from 'graphql'
-import type { GeneConfig, GeneDefaultResolverArgs, ExtendedTypes } from './defineConfig'
+import type {
+  GeneConfig,
+  GeneDefaultResolverArgs,
+  ExtendedTypes,
+  GeneTypeConfig,
+} from './defineConfig'
 import {
   lookDeepInSchema,
   isUsingDefaultResolver,
@@ -88,13 +93,15 @@ function defineResolvers<SchemaTypes extends AnyObject>(options: {
 
       if (!hasTypeDirectives && !isFieldInTypeConfig()) return
 
+      let normalizedConfig: GeneTypeConfig | undefined
       const currentTypeConfig = typeConfig[parentType as keyof typeof typeConfig]
-      if (!currentTypeConfig || isArrayFieldConfig(currentTypeConfig)) return
 
-      const config = (
-        currentTypeConfig as Record<string, Parameters<typeof normalizeFieldConfig>[0]>
-      )[field]
-      const normalizedConfig = config ? normalizeFieldConfig(config) : undefined
+      if (currentTypeConfig && !isArrayFieldConfig(currentTypeConfig)) {
+        const config = (
+          currentTypeConfig as Record<string, Parameters<typeof normalizeFieldConfig>[0]>
+        )[field]
+        normalizedConfig = config ? normalizeFieldConfig(config) : undefined
+      }
 
       const returnTypeName = getReturnTypeName(
         normalizedConfig?.returnType || options.typeDefLines[parentType]?.lines[field]?.typeDef
