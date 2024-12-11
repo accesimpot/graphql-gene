@@ -125,7 +125,7 @@ export interface GeneConfig<
   /** Directives to apply at the type level (also possible at the field level). */
   directives?: GeneDirectiveConfig<
     Record<string, string | number | boolean | null> | undefined,
-    PrototypeOrNot<M>
+    TSource extends M ? PrototypeOrNot<M> : TSource
   >[]
 
   /**
@@ -323,10 +323,13 @@ export function defineDirective<
   TSource = Record<string, unknown> | undefined,
   TContext = GeneContext,
   TArgs = Record<string, unknown> | undefined,
->(
-  directive: GeneDirective<TDirectiveArgs, TSource, TContext, TArgs>
-): GeneDirective<TDirectiveArgs, TSource, TContext, TArgs> {
-  return directive
+>(directive: GeneDirective<TDirectiveArgs, TSource, TContext, TArgs>) {
+  return directive as GeneDirective<
+    TDirectiveArgs,
+    Record<string, unknown> | undefined,
+    TContext,
+    TArgs
+  >
 }
 
 /**

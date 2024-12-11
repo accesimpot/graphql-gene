@@ -62,6 +62,55 @@ describe('integration', () => {
     })
   })
 
+  describe('when sending query including type with authorization directive', async () => {
+    const targetedOrderId = 117
+
+    describe('when the directive throws an error', async () => {
+      const result = await execute<{ order: Order }>({
+        document: getFixtureQuery('queries/orderWithInventory.gql'),
+        variables: { id: String(targetedOrderId) },
+      })
+
+      it('returns null for each field returning the type with the directive', () => {
+        expect(result.data?.order.items?.length).toBeTruthy()
+        expect(
+          result.data?.order.items?.every(item => {
+            return (
+              item.product?.variants?.length &&
+              item.product?.variants?.every(variant => {
+                return variant.inventory === null
+              })
+            )
+          })
+        ).toBe(true)
+      })
+    })
+
+    describe('when the directive does not throw an error', async () => {
+      const result = await execute<{ order: Order }>(
+        {
+          document: getFixtureQuery('queries/orderWithInventory.gql'),
+          variables: { id: String(targetedOrderId) },
+        },
+        { headers: { authorization: '5Jx4SHbtvaxFmAHMxIlCvf9V66YdCy' } }
+      )
+
+      it('returns the real value of each field returning the type with the directive', () => {
+        expect(result.data?.order.items?.length).toBeTruthy()
+        expect(
+          result.data?.order.items?.every(item => {
+            return (
+              item.product?.variants?.length &&
+              item.product?.variants?.every(variant => {
+                return typeof variant.inventory?.stock === 'number'
+              })
+            )
+          })
+        ).toBe(true)
+      })
+    })
+  })
+
   describe('when sending query including field with authorization directive', async () => {
     describe('when the directive throws an error', async () => {
       const result = await execute<{ order: Order }>({
