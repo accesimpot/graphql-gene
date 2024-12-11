@@ -5,7 +5,7 @@ import { sequelize } from '../models/sequelize'
 import { useMetaPlugin } from '../plugins/useMetaPlugin'
 import { schema } from '../server/schema'
 import { getFixtureQuery } from './utils'
-import { Order } from '../models'
+import { Order, Product } from '../models'
 
 await sequelize.authenticate()
 
@@ -87,6 +87,58 @@ describe('integration', () => {
         expect(
           result.data?.order.items?.every(item => typeof item.product?.isPublished === 'boolean')
         ).toBe(true)
+      })
+    })
+  })
+
+  describe('when sending query including type filtering published items using "findOptions"', async () => {
+    const targetedOrderId = 363
+    const firstProductId = 22
+    const secondProductId = 246
+    const thirdProductId = 248
+
+    const targetedProductId = secondProductId
+    const targetedProduct = await Product.findOne({ where: { id: targetedProductId } })
+
+    const productFindOptions = { where: { id: targetedProductId } }
+    const originalIsPublished = targetedProduct?.isPublished
+
+    afterAll(async () => {
+      await Product.update({ isPublished: originalIsPublished }, productFindOptions)
+    })
+
+    describe('when all items are published', async () => {
+      await Product.update({ isPublished: true }, productFindOptions)
+
+      const result = await execute<{ order: Order }>({
+        document: getFixtureQuery('queries/orderById.gql'),
+        variables: { id: String(targetedOrderId) },
+      })
+
+      it('returns all items', () => {
+        expect(result.data?.order.items?.length).toBeTruthy()
+        expect(result.data?.order.items?.map(item => item.product?.id)).toEqual([
+          firstProductId,
+          secondProductId,
+          thirdProductId,
+        ])
+      })
+    })
+
+    describe('when all items are published except one', async () => {
+      await Product.update({ isPublished: false }, productFindOptions)
+
+      const result = await execute<{ order: Order }>({
+        document: getFixtureQuery('queries/orderById.gql'),
+        variables: { id: String(targetedOrderId) },
+      })
+
+      it('returns all items except the one unpublished', () => {
+        expect(result.data?.order.items?.length).toBeTruthy()
+        expect(result.data?.order.items?.map(item => item.product?.id)).toEqual([
+          firstProductId,
+          thirdProductId,
+        ])
       })
     })
   })

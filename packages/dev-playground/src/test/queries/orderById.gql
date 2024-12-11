@@ -1,0 +1,20 @@
+query orderById($id: String!) {
+  order(id: $id) {
+    id
+    status
+
+    items {
+      price
+      quantity
+      product {
+        id
+        name
+        color
+
+        group {
+          categories
+        }
+      }
+    }
+  }
+}
