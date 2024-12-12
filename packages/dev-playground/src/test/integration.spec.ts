@@ -140,6 +140,52 @@ describe('integration', () => {
     })
   })
 
+  describe('when sending query including type with filterBySize directive', async () => {
+    const targetedOrderId = 707
+
+    describe('when filtering is set to active by test header', async () => {
+      const result = await execute<{ order: Order }>(
+        {
+          document: getFixtureQuery('queries/orderById.gql'),
+          variables: { id: String(targetedOrderId) },
+        },
+        { headers: { 'x-test-size-filter-active': 'true' } }
+      )
+
+      const apparelOrderItem = result.data?.order.items?.find(item =>
+        (item.product?.group?.categories as unknown as string[]).includes('apparel')
+      )
+      const apparelProduct = apparelOrderItem?.product
+
+      it('filters out the XXL variants', () => {
+        expect(result.data?.order.items?.length).toBeTruthy()
+        expect(apparelProduct?.variants?.length).toBeTruthy()
+        expect(apparelProduct?.variants?.map(v => v.size).join(',')).toBe('XS,S,M,L,XL')
+      })
+    })
+
+    describe('when filtering is set to inactive by test header', async () => {
+      const result = await execute<{ order: Order }>(
+        {
+          document: getFixtureQuery('queries/orderById.gql'),
+          variables: { id: String(targetedOrderId) },
+        },
+        { headers: { 'x-test-size-filter-active': 'false' } }
+      )
+
+      const apparelOrderItem = result.data?.order.items?.find(item =>
+        (item.product?.group?.categories as unknown as string[]).includes('apparel')
+      )
+      const apparelProduct = apparelOrderItem?.product
+
+      it('does not filter out the XXL variants', () => {
+        expect(result.data?.order.items?.length).toBeTruthy()
+        expect(apparelProduct?.variants?.length).toBeTruthy()
+        expect(apparelProduct?.variants?.map(v => v.size).join(',')).toBe('XS,S,M,L,XL,XLL')
+      })
+    })
+  })
+
   describe('when sending query including type filtering published items using "findOptions"', async () => {
     const targetedOrderId = 363
     const firstProductId = 22

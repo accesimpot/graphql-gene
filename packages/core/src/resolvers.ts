@@ -169,6 +169,7 @@ function defineResolvers<SchemaTypes extends AnyObject>(options: {
               context,
               info,
               field,
+              filter: getFilterFunction({ source, field }),
               resolve,
             })
             if (!hasCalledResolve) await resolve()
@@ -180,4 +181,18 @@ function defineResolvers<SchemaTypes extends AnyObject>(options: {
     },
   })
   return options.schema
+}
+
+function getFilterFunction<TSource>(options: { source: TSource; field: string }) {
+  const { field } = options
+
+  return <TValue>(callback: (value: TValue) => unknown) => {
+    const source = options.source as unknown as Record<string, TValue | TValue[] | undefined | null>
+
+    if (Array.isArray(source[field])) {
+      source[field] = source[field].filter(callback)
+    } else {
+      if (source[field] && !callback(source[field])) source[field] = null
+    }
+  }
 }
