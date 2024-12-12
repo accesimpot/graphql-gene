@@ -1,9 +1,8 @@
 import { defineDirective } from 'graphql-gene'
 import type { ProductVariant } from './ProductVariant.model'
 
-export const filterBySizeDirective = defineDirective(args => ({
+export const filterBySizeDirective = defineDirective(() => ({
   name: 'filterBySize',
-  args,
 
   async handler({ context, filter }) {
     // For testing purposes
