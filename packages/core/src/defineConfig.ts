@@ -263,7 +263,9 @@ export type GeneDirective<
   TSource = Record<string, unknown> | undefined,
   TContext = GeneContext,
   TArgs = Record<string, unknown> | undefined,
-> = (args?: TDirectiveArgs) => GeneDirectiveConfig<TDirectiveArgs, TSource, TContext, TArgs>
+> = TDirectiveArgs extends undefined
+  ? (args?: TDirectiveArgs) => GeneDirectiveConfig<TDirectiveArgs, TSource, TContext, TArgs>
+  : (args: TDirectiveArgs) => GeneDirectiveConfig<TDirectiveArgs, TSource, TContext, TArgs>
 
 export type GeneDirectiveConfig<
   TDirectiveArgs = Record<string, string | number | boolean | null> | undefined,
