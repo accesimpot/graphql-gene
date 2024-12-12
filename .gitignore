@@ -84,8 +84,8 @@ web_modules/
 .parcel-cache
 
 # build output
-.nuxt
 dist
+/packages/*/cjs
 
 # Gatsby files
 .cache/

@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.compiler.json",
+
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": "cjs"
+  },
+  "include": ["src/database/sequelize.config.ts"],
+  "exclude": []
+}

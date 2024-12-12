@@ -7,8 +7,10 @@
     "dev": "NODE_ENV=development concurrently --kill-others -p=none \"pnpm build --watch --emptyOutDir=false\" \"nodemon --inspect=8805 --watch ./src/schema.gql --watch ./dist --watch ../core/dist --watch ../plugin-sequelize/dist -e js dist/server\"",
     "console": "node dist/console.js",
     "build": "NODE_ENV=${NODE_ENV:-development} vite build",
+    "build:cjs": "NODE_ENV=${NODE_ENV:-development} vite build --config vite.cjs.config.ts",
     "start": "node dist/server",
-    "types:check": "tsc --noEmit"
+    "types:check": "tsc --noEmit",
+    "sequelize": "sequelize"
   },
   "devDependencies": {
     "@faker-js/faker": "^9.3.0",
@@ -25,6 +27,7 @@
     "nodemon": "^3.1.4",
     "sqlite3": "^5.1.7",
     "sequelize": "^6.37.5",
+    "sequelize-cli": "^6.6.2",
     "sequelize-typescript": "^2.1.6",
     "typescript": "^5.6.3",
     "vite": "^5.4.1"

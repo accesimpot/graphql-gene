@@ -28,6 +28,7 @@
     "dev-utils:": "pnpm -F=dev-utils",
     "playground": "NX_DISABLE_DB=true bash -c 'nx ${0} dev-playground $@'",
     "playground:": "pnpm -F=dev-playground",
+    "playground:npx": "cd packages/dev-playground && bash -c 'pnpx ${0}'",
     "core": "NX_DISABLE_DB=true bash -c 'nx ${0} graphql-gene $@'",
     "core:": "pnpm -F=graphql-gene",
     "sequelize": "NX_DISABLE_DB=true bash -c 'nx ${0} @graphql-gene/plugin-sequelize $@'",
