@@ -293,6 +293,7 @@ export type GeneDirectiveHandler<
   context: Parameters<GraphQLFieldResolver<TSource, TContext, TArgs, TResult>>[2]
   info: Parameters<GraphQLFieldResolver<TSource, TContext, TArgs, TResult>>[3]
   field: string
+  filter: <TValue>(callback: (value: TValue) => unknown) => void
   resolve: () => Promise<TResult> | TResult
 }) => Promise<void> | void
 

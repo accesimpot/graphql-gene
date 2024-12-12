@@ -14,6 +14,10 @@ query orderById($id: String!) {
         group {
           categories
         }
+
+        variants {
+          size
+        }
       }
     }
   }
