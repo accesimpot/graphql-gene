@@ -13,6 +13,7 @@ import { extendTypes } from 'graphql-gene'
 import { authorizationDirective } from '../../directives/authorization.directive'
 import { ProductGroup } from '../ProductGroup/ProductGroup.model'
 import { ProductVariant } from '../ProductVariant/ProductVariant.model'
+import { sanitizeColorDirective } from './sanitizeColor.directive'
 
 export
 @Table
@@ -42,6 +43,11 @@ extendTypes({
   Product: {
     isPublished: {
       directives: [authorizationDirective()],
+    },
+
+    color: {
+      // Test case: ensure that generating the schema won't fail when providing an empty array
+      directives: [sanitizeColorDirective({ exclude: [] })],
     },
   },
 })

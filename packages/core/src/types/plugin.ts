@@ -16,7 +16,7 @@ export type PluginSettings<
 
 export type GraphQLTypeName = string
 export type GraphQLFieldName = string
-export type ArgsDef = Record<string, Set<string | null>>
+export type ArgsDef = Record<string, Set<string | string[] | null>>
 
 export type FieldLines = Record<
   GraphQLFieldName,
