@@ -245,10 +245,7 @@ function generateGeneTypeDefs<SchemaTypes extends AnyObject, DataTypes extends A
     const argsDefEntries = rawArgsDefEntries.filter(([, types]) => [...types].some(t => t !== null))
 
     const printTypes = (types: Set<string | null>) =>
-      [
-        [...types].filter(t => t !== null).map(t => getGraphqlType(t)),
-        types.has(null) ? '' : '!',
-      ].join('')
+      [[...types].filter(t => t !== null), types.has(null) ? '' : '!'].join('')
 
     if (argsDefEntries.length) {
       directiveDef += '(\n'
@@ -551,13 +548,24 @@ function stringifyDirectiveConfig(directive: GeneDirectiveConfig) {
 
   if (directive.args) {
     // Null is not valid in GraphQL Language so we remove it from the possible argument types
-    const entries = Object.entries(directive.args).filter(([, v]) => v !== null)
+    const entries = Object.entries(directive.args).filter(([, value]) => {
+      return Array.isArray(value) ? value.every(v => v !== null) : value !== null
+    })
 
     // Add the parentheses only if the directive has possible argument types
     if (entries.length) {
       directiveDef += '('
-      directiveDef += Object.entries(directive.args)
-        .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
+      directiveDef += entries
+        .map(([argKey, value]) => {
+          const formatted = Array.isArray(value)
+            ? `[${value
+                .filter(v => v !== null)
+                .map(v => JSON.stringify(v))
+                .join(', ')}]`
+            : JSON.stringify(value)
+
+          return `${argKey}: ${formatted}`
+        })
         .join(', ')
       directiveDef += ')'
     }

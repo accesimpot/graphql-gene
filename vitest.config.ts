@@ -15,6 +15,10 @@ export default defineConfig({
 
       // Use the source files for test coverage
       'graphql-gene': path.resolve(__dirname, './packages/core/src/index.ts'),
+      '@graphql-gene/plugin-sequelize': path.resolve(
+        __dirname,
+        './packages/plugin-sequelize/src/index.ts'
+      ),
     },
   },
 
@@ -29,10 +33,10 @@ export default defineConfig({
       include: ['packages/core/src/**', 'packages/plugin-sequelize/src/**'],
 
       thresholds: {
-        lines: 57,
-        functions: 55,
-        statements: 56,
-        branches: 48,
+        lines: 83,
+        functions: 77,
+        statements: 81,
+        branches: 68,
       },
     },
   },

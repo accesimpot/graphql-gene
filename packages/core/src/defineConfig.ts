@@ -124,7 +124,7 @@ export interface GeneConfig<
 
   /** Directives to apply at the type level (also possible at the field level). */
   directives?: GeneDirectiveConfig<
-    Record<string, string | number | boolean | null> | undefined,
+    Record<string, string | number | boolean | string[] | number[] | boolean[] | null> | undefined,
     TSource extends M ? PrototypeOrNot<M> : TSource
   >[]
 
@@ -174,7 +174,7 @@ export type GeneTypeConfig<
   TReturnType extends string | unknown = unknown,
 > = {
   directives?: GeneDirectiveConfig<
-    Record<string, string | number | boolean | null> | undefined,
+    Record<string, string | number | boolean | string[] | number[] | boolean[] | null> | undefined,
     TSource
   >[]
   args?: TArgDefs extends undefined ? undefined : TArgDefs
@@ -268,7 +268,9 @@ export type GeneDirective<
   : (args: TDirectiveArgs) => GeneDirectiveConfig<TDirectiveArgs, TSource, TContext, TArgs>
 
 export type GeneDirectiveConfig<
-  TDirectiveArgs = Record<string, string | number | boolean | null> | undefined,
+  TDirectiveArgs =
+    | Record<string, string | number | boolean | string[] | number[] | boolean[] | null>
+    | undefined,
   TSource = Record<string, unknown> | undefined,
   TContext = GeneContext,
   TArgs = Record<string, unknown> | undefined,

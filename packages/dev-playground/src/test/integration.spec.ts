@@ -160,7 +160,7 @@ describe('integration', () => {
       it('filters out the XXL variants', () => {
         expect(result.data?.order.items?.length).toBeTruthy()
         expect(apparelProduct?.variants?.length).toBeTruthy()
-        expect(apparelProduct?.variants?.map(v => v.size).join(',')).toBe('XS,S,M,L,XL')
+        expect(apparelProduct?.variants?.map(v => v.size).join(',')).toBe('S,M,L,XL')
       })
     })
 
@@ -181,7 +181,7 @@ describe('integration', () => {
       it('does not filter out the XXL variants', () => {
         expect(result.data?.order.items?.length).toBeTruthy()
         expect(apparelProduct?.variants?.length).toBeTruthy()
-        expect(apparelProduct?.variants?.map(v => v.size).join(',')).toBe('XS,S,M,L,XL,XLL')
+        expect(apparelProduct?.variants?.map(v => v.size).join(',')).toBe('XS,S,M,L,XL,XXL')
       })
     })
   })

@@ -7,7 +7,11 @@ import { OrderItem } from '../models/OrderItem/OrderItem.model'
 import { Product } from '../models/Product/Product.model'
 import { ProductCategory } from '../models/ProductCategory/ProductCategory.model'
 import { ProductGroup } from '../models/ProductGroup/ProductGroup.model'
-import { ProductVariant } from '../models/ProductVariant/ProductVariant.model'
+import {
+  APPAREL_SIZES,
+  ProductVariant,
+  SHOE_SIZES,
+} from '../models/ProductVariant/ProductVariant.model'
 
 import { SHOE_PRODUCTS } from './data/shoes'
 import { APPAREL_PRODUCTS } from './data/apparel'
@@ -40,22 +44,6 @@ const COUNTRY_SETTINGS = {
   [COUNTRIES.us]: { faker: fakerEN_US, tax: 0.1 },
   [COUNTRIES.mx]: { faker: fakerES_MX, tax: 0 },
 }
-
-const SHOE_SIZES = [
-  'US 7',
-  'US 7.5',
-  'US 8',
-  'US 8.5',
-  'US 9',
-  'US 9.5',
-  'US 10',
-  'US 10.5',
-  'US 11',
-  'US 11.5',
-  'US 12',
-  'US 13',
-]
-const APPAREL_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XLL']
 
 const allProductIds = new Set<Product['id']>([])
 
@@ -149,7 +137,7 @@ async function createAllProducts() {
 
     const product = await Product.create(creationAttributes)
     allProductIds.add(product.id)
-    const sizes = productType === 'shoes' ? SHOE_SIZES : APPAREL_SIZES
+    const sizes = productType === 'shoes' ? Object.values(SHOE_SIZES) : Object.values(APPAREL_SIZES)
 
     for (const size of sizes) {
       await ProductVariant.create(
