@@ -1,8 +1,11 @@
 import { defineDirective } from 'graphql-gene'
-import type { ProductVariant } from './ProductVariant.model'
+import type { SHOE_SIZES, APPAREL_SIZES, ProductVariant } from './ProductVariant.model'
 
-export const filterBySizeDirective = defineDirective(() => ({
+export const filterBySizeDirective = defineDirective<{
+  exclude: (`${SHOE_SIZES}` | `${APPAREL_SIZES}`)[]
+}>(args => ({
   name: 'filterBySize',
+  args,
 
   async handler({ context, filter }) {
     // For testing purposes
@@ -10,6 +13,8 @@ export const filterBySizeDirective = defineDirective(() => ({
     if (!isActive) return
 
     // TODO: Improve by inferring the type from defineDirective
-    filter((variant: ProductVariant) => variant.size !== 'XLL')
+    filter((variant: ProductVariant) =>
+      args.exclude.every(excludedSize => variant.size !== excludedSize)
+    )
   },
 }))

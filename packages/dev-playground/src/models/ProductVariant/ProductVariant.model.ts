@@ -5,6 +5,30 @@ import { Product } from '../Product/Product.model'
 import { Inventory } from '../Inventory/Inventory.model'
 import { filterBySizeDirective } from './filterBySize.directive'
 
+export enum SHOE_SIZES {
+  us7 = 'US 7',
+  us7_5 = 'US 7.5',
+  us8 = 'US 8',
+  us8_5 = 'US 8.5',
+  us9 = 'US 9',
+  us9_5 = 'US 9.5',
+  us10 = 'US 10',
+  us10_5 = 'US 10.5',
+  us11 = 'US 11',
+  us11_5 = 'US 11.5',
+  us12 = 'US 12',
+  us13 = 'US 13',
+}
+
+export enum APPAREL_SIZES {
+  XS = 'XS',
+  S = 'S',
+  M = 'M',
+  L = 'L',
+  XL = 'XL',
+  XXL = 'XXL',
+}
+
 export
 @Table
 class ProductVariant extends Model<
@@ -12,7 +36,7 @@ class ProductVariant extends Model<
   InferCreationAttributes<ProductVariant>
 > {
   @Column(DataType.STRING)
-  declare size: string | null
+  declare size: `${SHOE_SIZES}` | `${APPAREL_SIZES}` | null
 
   @HasOne(() => Inventory)
   declare inventory: Inventory | null
@@ -25,6 +49,6 @@ class ProductVariant extends Model<
   declare product: Product | null
 
   static readonly geneConfig = defineGraphqlGeneConfig(ProductVariant, {
-    directives: [filterBySizeDirective()],
+    directives: [filterBySizeDirective({ exclude: ['XS', 'XXL'] })],
   })
 }

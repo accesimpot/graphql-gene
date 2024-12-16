@@ -432,7 +432,9 @@ Directives are simply wrappers around resolvers following a middleware pattern. 
 
 ```ts
 type GeneDirectiveConfig<
-  TDirectiveArgs = Record<string, string | number | boolean | null> | undefined,
+  TDirectiveArgs =
+    | Record<string, string | number | boolean | string[] | number[] | boolean[] | null>
+    | undefined,
   TSource = Record<string, unknown> | undefined,
   TContext = GeneContext,
   TArgs = Record<string, unknown> | undefined,

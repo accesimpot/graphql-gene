@@ -133,13 +133,18 @@ export function findAccurateTypeDef(type: GraphQLOutputType) {
   if (typeDefinition && 'name' in typeDefinition) return typeDefinition
 }
 
-export function getGraphqlType(variable: string | number | boolean) {
+export function getGraphqlType(
+  variable: string | number | boolean | string[] | number[] | boolean[]
+) {
+  const isArray = Array.isArray(variable)
+  const varType = isArray ? typeof variable[0] : typeof variable
+
   const typeMap: Record<string, 'String' | 'Int' | 'Boolean'> = {
     string: 'String',
     number: 'Int',
     boolean: 'Boolean',
   }
-  return typeMap[typeof variable]
+  return isArray ? `[${typeMap[varType]}!]` : typeMap[varType]
 }
 
 /**
