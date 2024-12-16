@@ -244,8 +244,13 @@ function generateGeneTypeDefs<SchemaTypes extends AnyObject, DataTypes extends A
     const rawArgsDefEntries = Object.entries(directiveConfig.argsDef)
     const argsDefEntries = rawArgsDefEntries.filter(([, types]) => [...types].some(t => t !== null))
 
-    const printTypes = (types: Set<string | null>) =>
-      [[...types].filter(t => t !== null), types.has(null) ? '' : '!'].join('')
+    const printTypes = (types: Set<string | string[] | null>) => {
+      const typeDefs = [...types]
+      return [
+        typeDefs.filter(t => t !== null),
+        types.has(null) || typeDefs.some(type => /^\[/.test(String(type))) ? '' : '!',
+      ].join('')
+    }
 
     if (argsDefEntries.length) {
       directiveDef += '(\n'
@@ -495,12 +500,16 @@ function registerDirectives(options: {
 
     if (directive.args) {
       Object.entries(directive.args).forEach(([key, value]) => {
+        if (Array.isArray(value) && !value.length) return
+
         options.defs[directive.name].argsDef = options.defs[directive.name].argsDef || {}
 
         options.defs[directive.name].argsDef[key] =
           options.defs[directive.name].argsDef[key] || new Set([])
 
-        options.defs[directive.name].argsDef[key].add(value === null ? null : getGraphqlType(value))
+        options.defs[directive.name].argsDef[key].add(
+          value === null ? null : Array.isArray(value) && !value.length ? [] : getGraphqlType(value)
+        )
       })
     }
 
@@ -549,7 +558,7 @@ function stringifyDirectiveConfig(directive: GeneDirectiveConfig) {
   if (directive.args) {
     // Null is not valid in GraphQL Language so we remove it from the possible argument types
     const entries = Object.entries(directive.args).filter(([, value]) => {
-      return Array.isArray(value) ? value.every(v => v !== null) : value !== null
+      return Array.isArray(value) ? !!value.length : value !== null
     })
 
     // Add the parentheses only if the directive has possible argument types
