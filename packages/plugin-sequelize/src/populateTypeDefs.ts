@@ -15,6 +15,7 @@ import {
   JSON_SCALAR,
   SEQUELIZE_TYPE_TO_GRAPHQL,
 } from './constants'
+import { markFieldAsAssociation } from './utils/associationMap'
 
 const BELONGS_TO_MANY = 'BelongsToMany'
 
@@ -118,6 +119,8 @@ function generateAssociationFields(
 
     lines[attributeKey] = { ...getDefaultFieldLinesObject(), ...lines[attributeKey] }
     lines[attributeKey].typeDef = returnType
+
+    markFieldAsAssociation(options.typeName, attributeKey)
 
     if (isList) {
       populateArgsDefForDefaultResolver({

@@ -14,6 +14,7 @@ import type { OrderItem } from 'sequelize'
 import type { Model } from 'sequelize-typescript'
 import type { DefaultResolverIncludeOptions, GeneSequelizeWhereOptions } from '../types'
 import { populateWhereOptions } from './internal'
+import { isMarkedAsAssociation } from './associationMap'
 
 const QUERY_TYPE = 'Query'
 const MUTATION_TYPE = 'Mutation'
@@ -78,7 +79,9 @@ export function getQueryInclude(info: GraphQLResolveInfo) {
     state: includeOptions,
     until: untilFindOptions,
 
-    next({ state, field, args, isList }) {
+    next({ state, sourceType, field, args, isList }) {
+      if (!isMarkedAsAssociation(sourceType, field)) return {}
+
       const include = getFieldIncludeOptions({ association: field, args, isList })
 
       state.include = state.include || []
@@ -111,7 +114,9 @@ export function getQueryIncludeOf(
       until: untilFindOptions,
       selectionSet: nextSelectionSet,
 
-      next({ state, field, args, isList }) {
+      next({ state, sourceType, field, args, isList }) {
+        if (!isMarkedAsAssociation(sourceType, field)) return {}
+
         const include = getFieldIncludeOptions({ association: field, args, isList })
 
         state.include = state.include || []

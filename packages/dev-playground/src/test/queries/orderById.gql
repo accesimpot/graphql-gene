@@ -18,6 +18,11 @@ query orderById($id: String!) {
         variants {
           size
         }
+
+        reviewAverage {
+          rating
+          total
+        }
       }
     }
   }
