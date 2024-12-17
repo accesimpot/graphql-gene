@@ -15,6 +15,8 @@ import type { CreationOptional, InferAttributes, InferCreationAttributes } from 
 export
 @Table
 class Inventory extends Model<InferAttributes<Inventory>, InferCreationAttributes<Inventory>> {
+  declare id: CreationOptional<number>
+
   @AllowNull(false)
   @Column(DataType.INTEGER)
   declare stock: number

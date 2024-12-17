@@ -1,3 +1,4 @@
+import type { CreationOptional, InferAttributes, InferCreationAttributes } from 'sequelize'
 import {
   AllowNull,
   BelongsTo,
@@ -14,6 +15,7 @@ import {
   defineField,
   defineType,
   defineEnum,
+  defineInput,
 } from 'graphql-gene'
 import { getQueryIncludeOf } from '@graphql-gene/plugin-sequelize'
 import { OrderItem } from '../OrderItem/OrderItem.model'
@@ -21,7 +23,9 @@ import { Address } from '../Address/Address.model'
 
 export
 @Table
-class Order extends Model {
+class Order extends Model<InferAttributes<Order>, InferCreationAttributes<Order>> {
+  declare id: CreationOptional<number>
+
   @AllowNull(false)
   @Column(DataType.STRING)
   declare status: string
@@ -67,6 +71,11 @@ export const MessageOutput = defineType({
 
 export const MessageTypeEnum = defineEnum(['info', 'success', 'warning', 'error'])
 
+// Test case: We also support GraphQL inputs
+export const SomeOtherInput = defineInput({
+  status: 'OrderStatusEnum!',
+})
+
 extendTypes({
   Query: {
     order: {
@@ -77,7 +86,7 @@ extendTypes({
 
   Mutation: {
     updateOrderStatus: {
-      args: { id: 'String!', status: 'OrderStatusEnum!' },
+      args: { id: 'String!', status: 'OrderStatusEnum!', someOtherInput: 'SomeOtherInput' },
 
       async resolver({ info, args }) {
         let messageType: (typeof MessageTypeEnum)[number] = 'success'

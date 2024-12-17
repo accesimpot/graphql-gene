@@ -1,5 +1,5 @@
 mutation updateOrderStatus($id: String!, $status: OrderStatusEnum!) {
-  updateOrderStatus(id: $id, status: $status) {
+  updateOrderStatus(id: $id, status: $status, someOtherInput: { status: $status }) {
     message {
       type
       text

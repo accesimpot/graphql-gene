@@ -16,6 +16,8 @@ class ProductGroup extends Model<
   InferAttributes<ProductGroup>,
   InferCreationAttributes<ProductGroup>
 > {
+  declare id: CreationOptional<number>
+
   @Column(DataType.STRING)
   declare name: string | null
 
