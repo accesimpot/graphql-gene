@@ -5,4 +5,5 @@ export {
   OrderStatusEnum,
   MessageOutput,
   MessageTypeEnum,
+  SomeOtherInput,
 } from './Order/Order.model'

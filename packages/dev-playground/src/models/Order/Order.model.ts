@@ -15,6 +15,7 @@ import {
   defineField,
   defineType,
   defineEnum,
+  defineInput,
 } from 'graphql-gene'
 import { getQueryIncludeOf } from '@graphql-gene/plugin-sequelize'
 import { OrderItem } from '../OrderItem/OrderItem.model'
@@ -70,6 +71,11 @@ export const MessageOutput = defineType({
 
 export const MessageTypeEnum = defineEnum(['info', 'success', 'warning', 'error'])
 
+// Test case: We also support GraphQL inputs
+export const SomeOtherInput = defineInput({
+  status: 'OrderStatusEnum!',
+})
+
 extendTypes({
   Query: {
     order: {
@@ -80,7 +86,7 @@ extendTypes({
 
   Mutation: {
     updateOrderStatus: {
-      args: { id: 'String!', status: 'OrderStatusEnum!' },
+      args: { id: 'String!', status: 'OrderStatusEnum!', someOtherInput: 'SomeOtherInput' },
 
       async resolver({ info, args }) {
         let messageType: (typeof MessageTypeEnum)[number] = 'success'
