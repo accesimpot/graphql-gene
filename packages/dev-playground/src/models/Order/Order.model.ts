@@ -1,3 +1,4 @@
+import type { CreationOptional, InferAttributes, InferCreationAttributes } from 'sequelize'
 import {
   AllowNull,
   BelongsTo,
@@ -21,7 +22,9 @@ import { Address } from '../Address/Address.model'
 
 export
 @Table
-class Order extends Model {
+class Order extends Model<InferAttributes<Order>, InferCreationAttributes<Order>> {
+  declare id: CreationOptional<number>
+
   @AllowNull(false)
   @Column(DataType.STRING)
   declare status: string

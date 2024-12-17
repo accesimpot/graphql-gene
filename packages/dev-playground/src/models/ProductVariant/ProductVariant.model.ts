@@ -1,4 +1,4 @@
-import type { InferAttributes, InferCreationAttributes } from 'sequelize'
+import type { CreationOptional, InferAttributes, InferCreationAttributes } from 'sequelize'
 import { BelongsTo, Column, DataType, ForeignKey, HasOne, Model, Table } from 'sequelize-typescript'
 import { defineGraphqlGeneConfig } from 'graphql-gene'
 import { Product } from '../Product/Product.model'
@@ -35,6 +35,8 @@ class ProductVariant extends Model<
   InferAttributes<ProductVariant>,
   InferCreationAttributes<ProductVariant>
 > {
+  declare id: CreationOptional<number>
+
   @Column(DataType.STRING)
   declare size: `${SHOE_SIZES}` | `${APPAREL_SIZES}` | null
 

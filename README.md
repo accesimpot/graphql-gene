@@ -380,6 +380,8 @@ import { isEmail } from '../someUtils.ts'
 export
 @Table
 class Prospect extends Model<InferAttributes<Prospect>, InferCreationAttributes<Prospect>> {
+  declare id: CreationOptional<number>
+
   @Unique
   @AllowNull(false)
   @Column(DataType.STRING)
@@ -538,6 +540,7 @@ import { userAuthDirective } from '.userAuthDirective.ts'
 export
 @Table
 class User extends Model<InferAttributes<User>, InferCreationAttributes<User>> {
+  declare id: CreationOptional<number>
 
   // ...
 

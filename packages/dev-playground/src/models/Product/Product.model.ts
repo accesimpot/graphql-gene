@@ -8,8 +8,8 @@ import {
   Model,
   Table,
 } from 'sequelize-typescript'
-import type { InferAttributes, InferCreationAttributes } from 'sequelize'
 import { extendTypes } from 'graphql-gene'
+import type { CreationOptional, InferAttributes, InferCreationAttributes } from 'sequelize'
 import { authorizationDirective } from '../../directives/authorization.directive'
 import { ProductGroup } from '../ProductGroup/ProductGroup.model'
 import { ProductVariant } from '../ProductVariant/ProductVariant.model'
@@ -18,6 +18,8 @@ import { sanitizeColorDirective } from './sanitizeColor.directive'
 export
 @Table
 class Product extends Model<InferAttributes<Product>, InferCreationAttributes<Product>> {
+  declare id: CreationOptional<number>
+
   @AllowNull(false)
   @Column(DataType.STRING)
   declare name: string
