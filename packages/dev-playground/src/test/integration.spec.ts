@@ -74,7 +74,8 @@ describe('integration', () => {
       it('returns null for each field returning the type with the directive', () => {
         expect(result.data?.order.items?.length).toBeTruthy()
         expect(
-          result.data?.order.items?.every(item => {
+          result.data?.order.items?.every(_item => {
+            const item = _item as unknown as { product?: Product }
             return (
               item.product?.variants?.length &&
               item.product?.variants?.every(variant => {
@@ -98,7 +99,8 @@ describe('integration', () => {
       it('returns the real value of each field returning the type with the directive', () => {
         expect(result.data?.order.items?.length).toBeTruthy()
         expect(
-          result.data?.order.items?.every(item => {
+          result.data?.order.items?.every(_item => {
+            const item = _item as unknown as { product?: Product }
             return (
               item.product?.variants?.length &&
               item.product?.variants?.every(variant => {
@@ -119,9 +121,11 @@ describe('integration', () => {
 
       it('returns null for each field having the directive', () => {
         expect(result.data?.order.items?.length).toBeTruthy()
-        expect(result.data?.order.items?.every(item => item.product?.isPublished === null)).toBe(
-          true
-        )
+        expect(
+          result.data?.order.items?.every(
+            item => (item as unknown as { product?: Product }).product?.isPublished === null
+          )
+        ).toBe(true)
       })
     })
 
@@ -134,7 +138,10 @@ describe('integration', () => {
       it('returns the real value of each field having the directive', () => {
         expect(result.data?.order.items?.length).toBeTruthy()
         expect(
-          result.data?.order.items?.every(item => typeof item.product?.isPublished === 'boolean')
+          result.data?.order.items?.every(
+            item =>
+              typeof (item as unknown as { product?: Product }).product?.isPublished === 'boolean'
+          )
         ).toBe(true)
       })
     })
@@ -152,9 +159,10 @@ describe('integration', () => {
         { headers: { 'x-test-size-filter-active': 'true' } }
       )
 
-      const apparelOrderItem = result.data?.order.items?.find(item =>
-        (item.product?.group?.categories as unknown as string[]).includes('apparel')
-      )
+      const apparelOrderItem = result.data?.order.items?.find(_item => {
+        const item = _item as unknown as { product?: Product }
+        return (item.product?.group?.categories as unknown as string[]).includes('apparel')
+      }) as unknown as { product?: Product }
       const apparelProduct = apparelOrderItem?.product
 
       it('filters out the XXL variants', () => {
@@ -173,9 +181,10 @@ describe('integration', () => {
         { headers: { 'x-test-size-filter-active': 'false' } }
       )
 
-      const apparelOrderItem = result.data?.order.items?.find(item =>
-        (item.product?.group?.categories as unknown as string[]).includes('apparel')
-      )
+      const apparelOrderItem = result.data?.order.items?.find(_item => {
+        const item = _item as unknown as { product?: Product }
+        return (item.product?.group?.categories as unknown as string[]).includes('apparel')
+      }) as unknown as { product?: Product }
       const apparelProduct = apparelOrderItem?.product
 
       it('does not filter out the XXL variants', () => {
@@ -212,11 +221,11 @@ describe('integration', () => {
 
       it('returns all items', () => {
         expect(result.data?.order.items?.length).toBeTruthy()
-        expect(result.data?.order.items?.map(item => item.product?.id)).toEqual([
-          firstProductId,
-          secondProductId,
-          thirdProductId,
-        ])
+        expect(
+          result.data?.order.items?.map(
+            item => (item as unknown as { product?: Product }).product?.id
+          )
+        ).toEqual([firstProductId, secondProductId, thirdProductId])
       })
     })
 
@@ -230,10 +239,11 @@ describe('integration', () => {
 
       it('returns all items except the one unpublished', () => {
         expect(result.data?.order.items?.length).toBeTruthy()
-        expect(result.data?.order.items?.map(item => item.product?.id)).toEqual([
-          firstProductId,
-          thirdProductId,
-        ])
+        expect(
+          result.data?.order.items?.map(
+            item => (item as unknown as { product?: Product }).product?.id
+          )
+        ).toEqual([firstProductId, thirdProductId])
       })
     })
   })
