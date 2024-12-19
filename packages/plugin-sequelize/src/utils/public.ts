@@ -98,13 +98,19 @@ export function getQueryInclude(info: GraphQLResolveInfo) {
 
 export function getQueryIncludeOf(
   info: GraphQLResolveInfo,
-  targetType: ValidGraphqlType,
+  target:
+    | ValidGraphqlType
+    | ((details: UntilHandlerDetails<DefaultResolverIncludeOptions>) => boolean),
   options: { depth?: number; lookFromOperationRoot?: boolean } = {}
 ) {
   const includeOptions: DefaultResolverIncludeOptions = {}
+  const isMatchingTarget: Exclude<typeof target, string> =
+    typeof target === 'string' ? ({ type }) => type === target : target
 
-  const until: Parameters<typeof lookahead>[0]['until'] = ({ type, nextSelectionSet }) => {
-    if (type !== targetType) return false
+  const until = (details: UntilHandlerDetails<DefaultResolverIncludeOptions>) => {
+    if (!isMatchingTarget(details)) return false
+
+    const { type, nextSelectionSet } = details
     if (!nextSelectionSet) return false
 
     lookDeeper({
@@ -195,12 +201,14 @@ export function getFieldIncludeOptions(options: {
     includeOptions.order = orderOptions
   }
 
-  const argPage = typeof options.args.page === 'number' ? options.args.page : PAGE_ARG_DEFAULT
-  const argPerPage =
-    typeof options.args.perPage === 'number' ? options.args.perPage : PER_PAGE_ARG_DEFAULT
+  if (options.isList) {
+    const argPage = typeof options.args.page === 'number' ? options.args.page : PAGE_ARG_DEFAULT
+    const argPerPage =
+      typeof options.args.perPage === 'number' ? options.args.perPage : PER_PAGE_ARG_DEFAULT
 
-  includeOptions.offset = (argPage - 1) * argPerPage
-  includeOptions.limit = argPerPage
+    includeOptions.offset = (argPage - 1) * argPerPage
+    includeOptions.limit = argPerPage
+  }
 
   return includeOptions
 }
