@@ -10,7 +10,7 @@
     "@types/node": "^20.17.8",
     "glob": "^11.0.0",
     "vite": "^6.0.1",
-    "vite-plugin-dts": "^4.3.0"
+    "vite-plugin-dts": "^4.4.0"
   },
   "devDependencies": {
     "typescript": "^5.7.2"
