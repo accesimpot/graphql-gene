@@ -630,8 +630,9 @@ type Query {
   ```bash
   # Install dependencies
   pnpm install
-  # or if you're having issues on Apple M Chips
-  arch -arm64 pnpm install -f
+  #
+  # or if you're having issues on Apple M Chips:
+  # arch -arm64 pnpm install -f
 
   # Develop
   pnpm playground: dev
