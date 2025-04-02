@@ -507,6 +507,7 @@ export const userAuthDirective = defineDirective<{
       return // Proceed if user is fetched and authorized
     }
 
+    // i.e. `context.request` coming from Fastify
     const authHeader = context.request.headers.get('authorization')
     const [, token] =
       authHeader?.match(/^Bearer\s+(\S+)$/) || ([] as (string | undefined)[])
