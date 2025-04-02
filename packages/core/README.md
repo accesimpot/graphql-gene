@@ -465,7 +465,6 @@ type GeneDirectiveHandler<TSource, TContext, TArgs, TResult = unknown> = (option
 import { GraphQLError } from 'graphql'
 import { defineDirective } from 'graphql-gene'
 import { getQueryIncludeOf } from '@graphql-gene/plugin-sequelize'
-import type { WhereAttributeHash } from 'sequelize'
 import { User } from './User.model'
 import { getJwtTokenPayload } from './someUtils'
 
@@ -490,7 +489,7 @@ function throwUnauthorized(): never {
  */
 export const userAuthDirective = defineDirective<{
   // Convert ADMIN_ROLES enum to a union type
-  role: `${ADMIN_ROLES}` | null
+  roles: `${ADMIN_ROLES}`[]
 }>(args => ({
   name: 'userAuth', // only used to add `@userAuth` to the schema in graphql language
   args,
@@ -499,7 +498,15 @@ export const userAuthDirective = defineDirective<{
     // If it was previously set to `null`
     if (context.authenticatedUser === null) return throwUnauthorized()
 
-    // i.e. `context.request` coming from Fastify
+    const isAuthorized = (user: User | null) =>
+      !args.roles.length || args.roles.some(role => user?.adminRole === role)
+
+    if (context.authenticatedUser) {
+      if (!isAuthorized(context.authenticatedUser)) throwUnauthorized()
+
+      return // Proceed if user is fetched and authorized
+    }
+
     const authHeader = context.request.headers.get('authorization')
     const [, token] =
       authHeader?.match(/^Bearer\s+(\S+)$/) || ([] as (string | undefined)[])
@@ -516,13 +523,10 @@ export const userAuthDirective = defineDirective<{
     const { id, email } = getJwtTokenPayload(token) || {}
     if (!id && !email) return throwUnauthorized()
 
-    const where: WhereAttributeHash = { id, email }
-    if (args.role) where.adminRole = args.role
-
-    const user = await User.findOne({ where, ...includeOptions })
+    const user = await User.findOne({ where: { id, email }, ...includeOptions })
     context.authenticatedUser = user
 
-    if (!user) throwUnauthorized()
+    if (!user || !isAuthorized(user)) throwUnauthorized()
   },
 }))
 ```
@@ -552,9 +556,9 @@ class User extends Model<InferAttributes<User>, InferCreationAttributes<User>> {
       // different scope than a public `User`.
       AuthenticatedUser: {
         include: ['id', 'email', 'username', 'role', 'address', 'orders'],
-        // `role: null` means no specific admin `role` needed
-        // it just needs to be authenticated.
-        directives: [userAuthDirective({ role: null })],
+        // `roles: []` means no specific admin `role` needed
+        // The user just needs to be authenticated.
+        directives: [userAuthDirective({ roles: [] })],
       },
     },
   })
@@ -593,7 +597,7 @@ Another example for `superAdmin` role:
 ```ts
 static readonly geneConfig = defineGraphqlGeneConfig(AdminAccount, {
   // i.e. Only allow super admin users to access the `AdminAccount` data
-  directives: [userAuthDirective({ role: 'superAdmin' })],
+  directives: [userAuthDirective({ roles: ['superAdmin'] })],
 })
 ```
 
@@ -630,8 +634,9 @@ type Query {
   ```bash
   # Install dependencies
   pnpm install
-  # or if you're having issues on Apple M Chips
-  arch -arm64 pnpm install -f
+  #
+  # or if you're having issues on Apple M Chips:
+  # arch -arm64 pnpm install -f
 
   # Develop
   pnpm playground: dev
