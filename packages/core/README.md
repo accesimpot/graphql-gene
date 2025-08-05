@@ -639,7 +639,7 @@ type Query {
   # arch -arm64 pnpm install -f
 
   # Develop
-  pnpm playground: dev
+  pnpm dev
 
   # Run ESLint
   pnpm lint
