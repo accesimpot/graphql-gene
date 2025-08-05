@@ -289,7 +289,6 @@ query productsByColor($color: String) {
 | `page` | `Int` - Page number for query pagination. Default: `1`. |
 | `perPage` | `Int` - Amount of results per page. Default: `10`. |
 | `where` | `Record<Attribute, Record<Operator, T>>` - Where options generated based on the fields of the return type (i.e. `where: { name: { eq: "Foo" } }`). |
-| `where` | `Record<Attribute, Record<Operator, T>>` - Where options generated based on the fields of the return type (i.e. `where: { name: { eq: "Foo" } }`). |
 | `order` | `[foo_ASC]` - Array of enum values representing the order in which the results should be sorted. The enum values are defined based on the attribute name + `_ASC` or `_DESC` (i.e. `order: [name_ASC, foo_DESC]`). |
 
 <br>
@@ -312,8 +311,8 @@ query productsByColor($color: String) {
 
 | Operator | Description |
 | :--- | :---------- |
-| `lt` | `String` - The value is like... (i.e. `{ like: "%foo%" }`) |
-| `lte` | `String` - The value is not like... (i.e. `{ notLike: "%foo%" }`) |
+| `like` | `String` - The value is like... (i.e. `{ like: "%foo%" }`) |
+| `notLike` | `String` - The value is not like... (i.e. `{ notLike: "%foo%" }`) |
 
 #### Date and number operators
 
