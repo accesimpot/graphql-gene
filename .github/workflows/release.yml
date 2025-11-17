@@ -22,10 +22,11 @@ jobs:
       CI_FORCE_RELEASE_RUN: ${{ secrets.CI_FORCE_RELEASE_RUN }}
 
     steps:
+      # https://semantic-release.gitbook.io/semantic-release/recipes/ci-configurations/github-actions#pushing-package.json-changes-to-your-repository
       - name: Checkout branch 🛎
         uses: actions/checkout@v4
         with:
-          persist-credentials: true # Required for @semantic-release/git to push commits and tags
+          persist-credentials: false # Required per semantic-release docs for GitHub Actions
           fetch-depth: 0
 
       # https://nx.dev/packages/nx/documents/affected
