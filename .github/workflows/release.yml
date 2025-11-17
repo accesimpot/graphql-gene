@@ -90,4 +90,6 @@ jobs:
       #
       - name: Release
         if: steps.public-package-affected.outputs.count > 0 || ${{ env.CI_FORCE_RELEASE_RUN }} == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }} # Required by @semantic-release/github
         run: pnpm -r --filter='!dev-*' --workspace-concurrency=1 exec semantic-release -e semantic-release-monorepo
