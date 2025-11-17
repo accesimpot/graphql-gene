@@ -9,7 +9,7 @@ on:
 # https://docs.npmjs.com/trusted-publishers#step-2-configure-your-cicd-workflow
 permissions:
   id-token: write # Required for OIDC
-  contents: read
+  contents: write # Required for semantic-release to push commits, tags, and create releases
 
 jobs:
   release:
