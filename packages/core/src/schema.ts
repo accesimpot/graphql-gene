@@ -29,6 +29,7 @@ import {
   getReturnTypeName,
   getFieldDefinition,
   setGeneConfigByType,
+  parseGetterConfig,
 } from './utils'
 import { addResolversToSchema } from './resolvers'
 import SCHEMA_TEMPLATE_HTML from './schema.html?raw'
@@ -348,7 +349,7 @@ function generateTypeDefs<M, SchemaTypes extends AnyObject>(options: {
 
   registerDirectives({
     // @ts-expect-error Fix type issue raised by incompatible TSource
-    configs: geneConfig?.directives,
+    configs: parseGetterConfig(geneConfig?.directives),
     defs: options.directiveDefs,
     each: ({ directiveDef }) => {
       options.typeDefLines[options.modelKey].directives.add(directiveDef)
@@ -453,7 +454,7 @@ function generateTypeDefLines(options: {
     }
     if (normalizedFieldConfig.directives) {
       registerDirectives({
-        configs: normalizedFieldConfig.directives,
+        configs: parseGetterConfig(normalizedFieldConfig.directives),
         defs: options.directiveDefs,
         each: ({ directiveDef }) => {
           options.typeDefLines[options.graphqlType].lines[fieldKey].directives.add(directiveDef)

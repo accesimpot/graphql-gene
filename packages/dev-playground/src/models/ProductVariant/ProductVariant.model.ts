@@ -51,6 +51,8 @@ class ProductVariant extends Model<
   declare product: Product | null
 
   static readonly geneConfig = defineGraphqlGeneConfig(ProductVariant, {
-    directives: [filterBySizeDirective({ exclude: ['XS', 'XXL'] })],
+    // Test case: ensure that directives can be provided as a function to avoid potential issues
+    // with circular dependencies
+    directives: () => [filterBySizeDirective({ exclude: ['XS', 'XXL'] })],
   })
 }

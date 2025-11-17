@@ -20,7 +20,7 @@ import {
   type GraphQLOutputType,
 } from 'graphql'
 import type { GeneContext } from 'graphql-gene/context'
-import type { AnyObject, FieldLines, GraphQLVarType, TypeDefLines } from '../types'
+import type { AnyObject, FieldLines, GraphQLVarType, TypeDefLines, TypeOrFunction } from '../types'
 import type { GeneConfig, GeneTypeConfig } from '../defineConfig'
 
 export * from './extend'
@@ -279,6 +279,10 @@ export function getGeneConfigFromOptions<M>(options: {
       options.model.geneConfig) ||
     undefined
   )
+}
+
+export function parseGetterConfig<T>(config: TypeOrFunction<T>): T {
+  return config instanceof Function ? config() : config
 }
 
 export function isFieldIncluded<M>(
