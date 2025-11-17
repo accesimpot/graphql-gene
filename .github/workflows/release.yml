@@ -92,7 +92,4 @@ jobs:
         if: steps.public-package-affected.outputs.count > 0 || ${{ env.CI_FORCE_RELEASE_RUN }} == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }} # Required by @semantic-release/github
-          # NPM_TOKEN is required by @semantic-release/npm for verifyConditions.
-          # The npm CLI will still use OIDC (Trusted Publishers) for actual publishing when available.
-          NPM_TOKEN: 'dummy-token-for-semantic-release-npm-verify'
         run: pnpm -r --filter='!dev-*' --workspace-concurrency=1 exec semantic-release -e semantic-release-monorepo
