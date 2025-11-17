@@ -65,6 +65,24 @@ jobs:
         if: steps.public-package-affected.outputs.count > 0 || ${{ env.CI_FORCE_RELEASE_RUN }} == 'true'
         run: pnpm build
 
+      - name: Verify Git push permissions 🔐
+        if: steps.public-package-affected.outputs.count > 0 || ${{ env.CI_FORCE_RELEASE_RUN }} == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          # Configure git to use GITHUB_TOKEN for authentication
+          git config --local credential.helper '!f() { echo "username=git"; echo "password=$GITHUB_TOKEN"; }; f'
+          git remote set-url origin https://git@github.com/${{ github.repository }}.git
+
+          # Verify we can push (dry-run) - this will fail early if branch protection blocks us
+          git push --dry-run --no-verify origin HEAD:${{ github.ref_name }} || {
+            echo "::error::Cannot push to ${{ github.ref_name }}. Check branch protection settings."
+            echo "::error::You need to disable branch protection temporarily and re-run the workflow to allow the release to succeed."
+            exit 1
+          }
+
+          echo "✅ Git push permissions verified"
+
       #
       # A release is made if the prefix is feat, fix, perf, chore(deps), or docs(README)
       #
