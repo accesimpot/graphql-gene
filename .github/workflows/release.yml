@@ -6,6 +6,11 @@ on:
       - main
       - beta
 
+# https://docs.npmjs.com/trusted-publishers#step-2-configure-your-cicd-workflow
+permissions:
+  id-token: write # Required for OIDC
+  contents: read
+
 jobs:
   release:
     name: Release
@@ -85,5 +90,4 @@ jobs:
         if: steps.public-package-affected.outputs.count > 0 || ${{ env.CI_FORCE_RELEASE_RUN }} == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: pnpm -r --filter='!dev-*' --workspace-concurrency=1 exec semantic-release -e semantic-release-monorepo
