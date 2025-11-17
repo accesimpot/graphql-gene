@@ -57,7 +57,9 @@ extendTypes({
 
     color: {
       // Test case: ensure that generating the schema won't fail when providing an empty array
-      directives: [sanitizeColorDirective({ exclude: [] })],
+      // Test case: ensure that directives can be provided as a function to avoid potential issues
+      // with circular dependencies
+      directives: () => [sanitizeColorDirective({ exclude: [] })],
     },
 
     /**

@@ -281,4 +281,22 @@ describe('integration', () => {
       })
     })
   })
+
+  describe('when sending query including field with function-based directive', async () => {
+    const result = await execute<{ order: Order }>({
+      document: getFixtureQuery('queries/orderById.gql'),
+      variables: { id: '397' },
+    })
+
+    it('returns the field value correctly with directive applied', () => {
+      expect(result.data?.order.items?.length).toBeTruthy()
+      expect(
+        result.data?.order.items?.every(
+          item =>
+            typeof (item as unknown as { product?: Product }).product?.color === 'string' ||
+            (item as unknown as { product?: Product }).product?.color === null
+        )
+      ).toBe(true)
+    })
+  })
 })

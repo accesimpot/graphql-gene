@@ -15,6 +15,7 @@ import type {
   Prop,
   PrototypeOrNot,
   SomeRequired,
+  TypeOrFunction,
   ValidGraphqlType,
 } from './types'
 import type { GENE_RESOLVER_TEMPLATES, QUERY_ORDER_ENUM } from './constants'
@@ -123,10 +124,13 @@ export interface GeneConfig<
   varType?: TVarType
 
   /** Directives to apply at the type level (also possible at the field level). */
-  directives?: GeneDirectiveConfig<
-    Record<string, string | number | boolean | string[] | number[] | boolean[] | null> | undefined,
-    TSource extends M ? PrototypeOrNot<M> : TSource
-  >[]
+  directives?: TypeOrFunction<
+    GeneDirectiveConfig<
+      | Record<string, string | number | boolean | string[] | number[] | boolean[] | null>
+      | undefined,
+      TSource extends M ? PrototypeOrNot<M> : TSource
+    >[]
+  >
 
   /**
    * The values of "aliases" would be nested GeneConfig properties that overwrites the ones se
@@ -173,10 +177,13 @@ export type GeneTypeConfig<
   TArgDefs extends ArgsDefinition = undefined,
   TReturnType extends string | unknown = unknown,
 > = {
-  directives?: GeneDirectiveConfig<
-    Record<string, string | number | boolean | string[] | number[] | boolean[] | null> | undefined,
-    TSource
-  >[]
+  directives?: TypeOrFunction<
+    GeneDirectiveConfig<
+      | Record<string, string | number | boolean | string[] | number[] | boolean[] | null>
+      | undefined,
+      TSource
+    >[]
+  >
   args?: TArgDefs extends undefined ? undefined : TArgDefs
   resolver?: GeneResolverOption<TSource, TContext, TArgDefs, TReturnType>
   returnType: TReturnType extends unknown ? GraphqlReturnTypes<ValidGraphqlType> : TReturnType

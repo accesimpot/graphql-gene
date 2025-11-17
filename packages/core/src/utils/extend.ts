@@ -5,11 +5,10 @@ import type {
   GeneDirectiveConfig,
   GeneConfig,
 } from '../defineConfig'
-import type { GraphqlReturnTypes, ValidGraphqlType } from '../types'
+import type { GraphqlReturnTypes, TypeOrFunction, ValidGraphqlType } from '../types'
 import { isObject } from '.'
 
 declare global {
-  // eslint-disable-next-line no-var
   var __graphqlGeneExtendedTypes:
     | { config: StrictExtendedTypes; geneConfig: { [type: string]: GeneConfig | undefined } }
     | undefined
@@ -46,7 +45,7 @@ export function extendTypes<
           : K extends 'args'
             ? StrictArgsDefinition
             : K extends 'directives'
-              ? GeneDirectiveConfig[]
+              ? TypeOrFunction<GeneDirectiveConfig[]>
               : T[TypeName][Field][K]
       }
     }

@@ -1,4 +1,6 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type AnyFunction = (...args: any) => any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyObject = Record<string, any>
 
 export type NestedObject = { [k: string]: NestedObject }
@@ -36,6 +38,12 @@ type TrimHyphen<T extends string> = T extends `-${infer R}` ? R : T
 
 export type Kebab<T extends string, A extends string = ''> = TrimHyphen<Hyphenize<T, A>>
 export type NeverToUnknown<T> = T extends never ? unknown : T
+
+/**
+ * A type that represents either a value of type T or a function that returns T.
+ * Useful for avoiding circular dependencies by allowing lazy evaluation.
+ */
+export type TypeOrFunction<T> = T | (() => T)
 
 /**
  * Allow you to infer the values of an object inside another object without using `as const`.
