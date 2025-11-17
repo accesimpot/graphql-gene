@@ -29,6 +29,15 @@ jobs:
           persist-credentials: false # Required per semantic-release docs for GitHub Actions
           fetch-depth: 0
 
+      - name: Get GitHub App token 🔐
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: graphql-gene
+
       # https://nx.dev/packages/nx/documents/affected
       - name: Set SHAs for `nx affected` commands
         id: setSHAs
@@ -92,5 +101,6 @@ jobs:
       - name: Release
         if: steps.public-package-affected.outputs.count > 0 || ${{ env.CI_FORCE_RELEASE_RUN }} == 'true'
         env:
-          GITHUB_TOKEN: ${{ github.token }} # Required by @semantic-release/github
+          # Give semantic-release the short-lived GitHub App token
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: pnpm -r --filter='!dev-*' --workspace-concurrency=1 exec semantic-release -e semantic-release-monorepo
