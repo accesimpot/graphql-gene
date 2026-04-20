@@ -9,15 +9,17 @@ Plan for a major version of GraphQL Gene: goals, breaking changes, and migration
 | Goal                                                  | Rationale                                                                                                                                                                                                                                                                                                              |
 | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Predictable association APIs**                      | List associations should expose filtering and pagination in a shape that scales (metadata like total count vs. row selection), not only flattened list arguments and child-scalar `where` inputs.                                                                                                                      |
-| **Deep filtering (parent-level predicates)**          | Filters on nested relations should be expressible on the **association field’s `where`** (join-aware / nested input), not only on inner fields—so resolvers match ORM capabilities and **client caches** (e.g. Apollo) get distinct field arguments when queries differ (see §2.7).                                         |
+| **Deep filtering (parent-level predicates)**          | Filters on nested relations should be expressible on the **association field’s `where`** (join-aware / nested input), not only on inner fields—so resolvers match ORM capabilities and **client caches** (e.g. Apollo) get distinct field arguments when queries differ (see §2.7).                                    |
 | **Admin CRUD (CMS backend) in the library**           | A production integration already implements an “admin CRUD” pattern (`enableAdminCrud`, `cms` query/mutation namespace, metadata for dynamic forms). Moving **only the backend integration** into `graphql-gene` lets open-source consumers build their own CMS UIs; product-specific frontends stay out of this repo. |
 | **Authorization that matches the rest of the schema** | Today, admin CRUD attaches roles **per model** while the public API often uses **type/field directives** (`@userAuth`, etc.). v2 should unify how roles are declared and applied so metadata and field visibility stay consistent.                                                                                     |
 | **Explicit breaking changes**                         | v2 may change generated schema and TypeScript types; document deltas and codemods where feasible.                                                                                                                                                                                                                      |
+| **Readable documentation in-repo**                    | Ship prose as **Markdown** in a **dedicated workspace package** (see §11): a folder layout that **renders well in the GitHub UI** (navigation via `README.md` files and clear paths). Keeps the first release small—**no** full static-site documentation build in scope yet.                                          |
 
 **Non-goals for the open-source package**
 
 - **No default “global” mutations for arbitrary model types.** Automatic create/update/delete belong to the **optional CMS / admin CRUD module**, not to the core idea that “every model gets default Mutation fields.” That keeps the public API surface intentional and avoids accidental exposure.
 - **No reference CMS frontend** in the repo. The library exposes the **GraphQL contract** (queries, mutations, metadata) needed to build a CMS; product-specific UI stays out of scope.
+- **No documentation static-site generator** (Docusaurus, VitePress, custom Gatsby, etc.) for the **initial** v2 documentation push. Prefer **Markdown files** and GitHub-native rendering first (§11); a generated docs site can be revisited later.
 
 ---
 
@@ -68,11 +70,11 @@ Gene today distinguishes **list** associations (GraphQL list of objects) from **
 
 **Does the same “one level deep” wrapper make sense for a single association?**
 
-| | **List (e.g. has-many)** | **Single (e.g. belongs-to / has-one)** |
-|---|--------------------------|----------------------------------------|
-| **Primary job of the field** | Return **many** rows, often filtered and paginated | Return **at most one** related row (or null) |
-| **What “metadata” usually means here** | `count` under the same filters, plus arguments on `items` (`where`, `skip`, `limit`) | Often **nothing extra** at the edge: the FK join picks the row |
-| **Wrapper adds value?** | **Yes**: separates aggregate (`count`) from row selection (`items`) and holds list args | **Usually no**: there is no meaningful `count` (only present/absent), and no `skip`/`limit` |
+|                                        | **List (e.g. has-many)**                                                                | **Single (e.g. belongs-to / has-one)**                                                      |
+| -------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| **Primary job of the field**           | Return **many** rows, often filtered and paginated                                      | Return **at most one** related row (or null)                                                |
+| **What “metadata” usually means here** | `count` under the same filters, plus arguments on `items` (`where`, `skip`, `limit`)    | Often **nothing extra** at the edge: the FK join picks the row                              |
+| **Wrapper adds value?**                | **Yes**: separates aggregate (`count`) from row selection (`items`) and holds list args | **Usually no**: there is no meaningful `count` (only present/absent), and no `skip`/`limit` |
 
 **Recommendation:** Keep the **wrapper + list metadata** pattern for **array-returning** association fields only. For **single** associations, keep the **flat nullable object** as the default GraphQL shape: the field resolves directly to `Child` or `null`. That matches common GraphQL style and avoids noisy nesting (`brand { … }` rather than `brand { node { … } }` or `brand { meta { … } value { … } }`) when there is no second dimension of data to expose at the edge.
 
@@ -83,7 +85,7 @@ Gene today distinguishes **list** associations (GraphQL list of objects) from **
 
 **Examples**
 
-*List association (wrapper justified):*
+_List association (wrapper justified):_
 
 ```graphql
 # Product has many Variants — collection semantics
@@ -98,7 +100,7 @@ product {
 }
 ```
 
-*Single association (flat default; filters on the association field, same idea as `items(where: …)`):*
+_Single association (flat default; filters on the association field, same idea as `items(where: …)`):_
 
 ```graphql
 # Product belongs to Brand — at most one row; filter on the edge like the list case
@@ -337,16 +339,17 @@ Exact query names can evolve; the **contract** is: **roles are field/type-level 
 - **Naming collisions**: Wrapper types and new inputs need deterministic naming (`generateGraphqlTypeName` style) and escape hatches when user-defined types clash.
 - **`count` + `items` and database work:** This is **not** an automatic “double query” problem. GraphQL runs a field’s resolver **only if that field appears in the operation**—so the `count` resolver executes **only when `count` is selected**, and the resolver that loads rows runs **only when `items` is selected** (or whatever the list field is named). A client that asks for `items` alone never pays for `count`, and vice versa. When **both** are requested, the implementation may still use one SQL statement or two, depending on the ORM and indexes; document the chosen approach in the Sequelize plugin. For nested includes and association loading, Gene already relies on **[graphql-lookahead](https://www.npmjs.com/package/graphql-lookahead)** (see `getQueryInclude` in `plugin-sequelize`) to walk the selection set and avoid work that was not asked for—apply the same idea to list wrappers so lookahead / `GraphQLResolveInfo` informs whether to issue aggregate `COUNT` vs. row `SELECT` paths.
 - **Plugins**: Non-Sequelize plugins need extension points for association wrappers and the CMS module.
-- **Docs & playground**: Refresh READMEs with v2 examples; extend dev playground with association wrappers and **CMS namespace** demo (backend schema only).
+- **Docs & playground**: Refresh READMEs with v2 examples; extend dev playground with association wrappers and **CMS namespace** demo (backend schema only). Long-form docs live in **`packages/docs`** (or similar)—see §11.
 
 ---
 
 ## 7. Suggested rollout phases
 
-1. **Design lock**: List wrapper shape + **deep filtering** input shape (section 2, incl. §2.7); pagination naming (section 3); CMS namespace + registration API + **translation model / `translations` field conventions** (section 4); auth config (`roles` + `authDirective`) (section 5).
+1. **Design lock**: List wrapper shape + **deep filtering** input shape (section 2, incl. §2.7); pagination naming (section 3); CMS namespace + registration API + **translation model / `translations` field conventions** (section 4); auth config (`roles` + `authDirective`) (section 5); **Markdown docs package** layout (§11).
 2. **Schema generation**: New types; optional deprecation flag for v1-shaped lists if needed on v1.x.
 3. **Resolvers**: Sequelize paths for nested reads; port admin CRUD from the reference implementation into a `graphql-gene` submodule or package.
 4. **Migration tooling**: Query codemods, changelog, semver-major release.
+5. **Documentation**: Add and grow **`.md` files** under the dedicated docs package; keep using GitHub for rendering until a static site is explicitly in scope.
 
 ---
 
@@ -380,3 +383,17 @@ This section should be updated if a **minimal, redacted example** or fixture lan
 ## 10. Contributing and PRs
 
 This file is safe to commit and discuss in **public pull requests**: it contains **no** private repository URLs, internal package names, or proprietary paths. If you extend the plan, keep **organization-specific** integration details in private notes or in code that stays outside the public `graphql-gene` tree.
+
+---
+
+## 11. Documentation (Markdown-first)
+
+**Direction:** Start **documenting v2 with Markdown** (`.md`) as the **source of truth** for guides, migration notes, and API overviews. Keep the **first wave** of public documentation **small in scope**: prioritize clarity and discoverability over tooling.
+
+**Where it lives:** Add a **separate package** in the **pnpm workspace**—for example `packages/docs`—so documentation is not buried inside `packages/core` or a single root `README`. The workspace already uses `packages/*`; this package can be **content-only** (no build step, or a minimal `package.json` if needed for workspace consistency). **Boundary on purpose:** keeping prose in its **own package** means that later, if you adopt a **documentation site or app** (Docusaurus, VitePress, a thin Next wrapper, etc.), you can **point that tool at this package** as the Markdown root or depend on it as a workspace package—without reshuffling the repo or mixing build tooling into `packages/core`.
+
+**Rendering:** Rely on the **GitHub UI** (repository file browser, Markdown preview, and folder-level `README.md` files as section landing pages). A **nested folder structure** with sensible names reads well online without a custom site.
+
+**Out of scope (initially):** A **full static documentation website** (generated HTML, search, versioned microsites) is **not** required for the first v2 documentation milestone. Revisit **Docusaurus, VitePress, Nextra**, or similar **after** the Markdown corpus stabilizes.
+
+**In scope:** Root `README` links into `packages/docs/`, migration guides next to `PLAN_V2.md` or under `packages/docs/migration/`, and ongoing PRs that extend `.md` files like any other source.
