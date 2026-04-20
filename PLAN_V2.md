@@ -64,6 +64,18 @@ variants {
 }
 ```
 
+### 2.4.1 Naming the aggregate: `count` vs `total`
+
+There is **no single universal name** for “how many rows match this filter” next to a list facet. Common options:
+
+| Name             | Where you see it                                                                                                                                       | Notes                                                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`count`**      | Many hand-rolled GraphQL APIs; pairs naturally with **`skip` / `limit`**                                                                               | Aligns with SQL **`COUNT`**, the same way `limit`/`skip` echo **`LIMIT` / `OFFSET`**. Reads as “count of matching rows,” not “page number.” |
+| **`total`**      | [Contentful GraphQL Content API](https://www.contentful.com/developers/docs/references/graphql/) collection-style fields (often alongside **`items`**) | Familiar in **CMS / content** APIs; “total” emphasizes the full result set size under the filter, not just the current page.                |
+| **`totalCount`** | Relay-style connections, some schemas                                                                                                                  | Most explicit; slightly verbose next to short field names.                                                                                  |
+
+**Winner: `count`** as the **default** name in generated wrappers: it stays **one vocabulary** with **`skip` + `limit`** (SQL-shaped) and avoids overloading “total” in domains where it might mean something else (bytes, price, etc.). Teams coming from **Contentful-style** APIs can still map mentally: **`count` ≈ `total`** for the same semantics (matching rows under the same filter).
+
 ### 2.5 List vs single association: wrapper and “one level of metadata”
 
 Gene today distinguishes **list** associations (GraphQL list of objects) from **single** associations (one nullable object, e.g. belongs-to / has-one). The v2 **wrapper** (`count` + `items` + filters) is motivated by **collections**: pagination, total count, and “which rows” are separate concerns.
@@ -355,8 +367,6 @@ Exact query names can evolve; the **contract** is: **roles are field/type-level 
 
 ## 8. Open decisions
 
-- Whether to expose **optional** `page` / `pageSize` (or legacy `page` / `perPage`) as **aliases** that normalize to `skip` / `limit`, and whether those aliases appear in SDL or only in docs.
-- When **both** `count` and `items` are selected, whether to use **one SQL** (e.g. window `COUNT`) vs **two**—orthogonal to “always paying for both,” since each field is optional in the operation (see §6).
 - Edge cases where a **single** association might need an **opt-in** wrapper (see §2.5 — default is **no** wrapper).
 - Global config vs. per-field overrides for wrapper field names (`items` vs. `nodes`).
 - Exact GraphQL names for **role-aware meta** (extend `*Meta` vs. new root fields).
