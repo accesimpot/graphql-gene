@@ -44,7 +44,7 @@ Plan for a major version of GraphQL Gene: goals, breaking changes, and migration
 | **B. Simple list result**                            | `{ count: Int!, items: [Child!]! }` (or `nodes`)            | Easy to document; matches “count + page of rows”; fits admin tooling                      | Not cursor-based; offset semantics unless extended later    |
 | **C. Keep v1 flat list + add a sibling count field** | e.g. `variantsCount(where: …)` next to `variants(…)`        | Minimal change to list field                                                              | Two fields to keep in sync; awkward for nested associations |
 
-**Winner: B** as the **default** generated shape for Gene list associations, with **A** documented as an optional plugin or per-field opt-in for Relay-shaped clients.
+**Winner: B** as the **default** generated shape for Gene list associations. **Pattern A** (Relay-style connections: `edges`, `pageInfo`, cursors) is **planned for a future release**—not the v2 default—so integrators who need the GraphQL Cursor Connections model can get first-class support later without changing the offset + simple-result story for everyone else (see also section 3 on cursor pagination).
 
 ### 2.4 Target API (breaking, illustrative)
 
@@ -116,7 +116,7 @@ product {
 
 ### 2.6 Work items
 
-- Define generated type names (e.g. `ProductVariantsResult` vs. `…Connection` for Relay opt-in).
+- Define generated type names (e.g. `ProductVariantsResult` vs. future `…Connection` when Relay-style lists ship).
 - Move `where` / `order` / `skip` / `limit` to the wrapper-owned list field (see section 3 for naming rationale).
 - Implement `count` with clearly documented semantics (filtered vs. unfiltered).
 - Update Sequelize include / resolver path in `packages/plugin-sequelize` for nested reads.
