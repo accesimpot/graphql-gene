@@ -61,13 +61,80 @@ variants {
 }
 ```
 
-### 2.5 Work items
+### 2.5 List vs single association: wrapper and “one level of metadata”
+
+Gene today distinguishes **list** associations (GraphQL list of objects) from **single** associations (one nullable object, e.g. belongs-to / has-one). The v2 **wrapper** (`count` + `items` + filters) is motivated by **collections**: pagination, total count, and “which rows” are separate concerns.
+
+**Does the same “one level deep” wrapper make sense for a single association?**
+
+| | **List (e.g. has-many)** | **Single (e.g. belongs-to / has-one)** |
+|---|--------------------------|----------------------------------------|
+| **Primary job of the field** | Return **many** rows, often filtered and paginated | Return **at most one** related row (or null) |
+| **What “metadata” usually means here** | `count` under the same filters, plus arguments on `items` (`where`, `skip`, `limit`) | Often **nothing extra** at the edge: the FK join picks the row |
+| **Wrapper adds value?** | **Yes**: separates aggregate (`count`) from row selection (`items`) and holds list args | **Usually no**: there is no meaningful `count` (only present/absent), and no `skip`/`limit` |
+
+**Recommendation:** Keep the **wrapper + list metadata** pattern for **array-returning** association fields only. For **single** associations, keep the **flat nullable object** as the default GraphQL shape: the field resolves directly to `Child` or `null`. That matches common GraphQL style and avoids noisy nesting (`brand { … }` rather than `brand { node { … } }` or `brand { meta { … } value { … } }`) when there is no second dimension of data to expose at the edge.
+
+**When a single association might still get an extra level** (opt-in or rare types):
+
+- **Polymorphic or ambiguous edges** where the client needs **discriminator / type metadata** next to the object (still unusual; often modeled as a union or explicit `__typename`).
+- **Explicit CMS / auth hints** at the edge (e.g. “hidden by policy”)—prefer **field-level authorization** or **trimmed SDL** (section 5) instead of a generic wrapper for every belongs-to.
+
+**Examples**
+
+*List association (wrapper justified):*
+
+```graphql
+# Product has many Variants — collection semantics
+product {
+  variants {
+    count
+    items(where: { size: { in: ["M"] } }, limit: 20, skip: 0) {
+      id
+      size
+    }
+  }
+}
+```
+
+*Single association (flat default; no extra wrapper for metadata):*
+
+```graphql
+# Product belongs to Brand — at most one row; no pagination
+product {
+  brand {
+    id
+    name
+  }
+}
+```
+
+*Single association (hypothetical wrapper — generally **not** the default):*
+
+```graphql
+# Only if we had a strong, repeated need for edge-level data alongside the one row
+product {
+  brandEdge {
+    # illustrative — not the default v2 shape
+    canView
+    brand {
+      id
+      name
+    }
+  }
+}
+```
+
+**Relation to CMS `*Meta`:** Form-building metadata (field kinds, targets, nested `attributes`) is already modeled in **separate meta queries** (`*Meta` / JSON), not by wrapping every association resolver. That stays the right place for **rich** structural metadata; the **read** field for a single association should stay **thin** unless a concrete use case requires an edge wrapper.
+
+### 2.6 Work items
 
 - Define generated type names (e.g. `ProductVariantsResult` vs. `…Connection` for Relay opt-in).
 - Move `where` / `order` / `skip` / `limit` to the wrapper-owned list field (see section 3 for naming rationale).
 - Implement `count` with clearly documented semantics (filtered vs. unfiltered).
 - Update Sequelize include / resolver path in `packages/plugin-sequelize` for nested reads.
 - Migration: codemod or guide for persisted `.gql` documents.
+- **Single associations:** default remains **unwrapped** nullable type; document exceptions (see §2.5).
 
 ---
 
@@ -257,7 +324,7 @@ Exact query names can evolve; the **contract** is: **roles are field/type-level 
 
 - Whether to expose **optional** `page` / `pageSize` (or legacy `page` / `perPage`) as **aliases** that normalize to `skip` / `limit`, and whether those aliases appear in SDL or only in docs.
 - When **both** `count` and `items` are selected, whether to use **one SQL** (e.g. window `COUNT`) vs **two**—orthogonal to “always paying for both,” since each field is optional in the operation (see §6).
-- Whether **single** association (non-list) fields get a trivial wrapper for consistency.
+- Edge cases where a **single** association might need an **opt-in** wrapper (see §2.5 — default is **no** wrapper).
 - Global config vs. per-field overrides for wrapper field names (`items` vs. `nodes`).
 - Exact GraphQL names for **role-aware meta** (extend `*Meta` vs. new root fields).
 - Whether **`translations`** must always be the GraphQL alias or a **`geneConfig`** key (e.g. `cmsTranslationField: 'translations'`) is allowed when legacy schemas cannot rename the association.
