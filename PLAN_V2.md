@@ -9,6 +9,7 @@ Plan for a major version of GraphQL Gene: goals, breaking changes, and migration
 | Goal                                                  | Rationale                                                                                                                                                                                                                                                                                                              |
 | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Predictable association APIs**                      | List associations should expose filtering and pagination in a shape that scales (metadata like total count vs. row selection), not only flattened list arguments and child-scalar `where` inputs.                                                                                                                      |
+| **Deep filtering (parent-level predicates)**          | Filters on nested relations should be expressible on the **association field’s `where`** (join-aware / nested input), not only on inner fields—so resolvers match ORM capabilities and **client caches** (e.g. Apollo) get distinct field arguments when queries differ (see §2.7).                                         |
 | **Admin CRUD (CMS backend) in the library**           | A production integration already implements an “admin CRUD” pattern (`enableAdminCrud`, `cms` query/mutation namespace, metadata for dynamic forms). Moving **only the backend integration** into `graphql-gene` lets open-source consumers build their own CMS UIs; product-specific frontends stay out of this repo. |
 | **Authorization that matches the rest of the schema** | Today, admin CRUD attaches roles **per model** while the public API often uses **type/field directives** (`@userAuth`, etc.). v2 should unify how roles are declared and applied so metadata and field visibility stay consistent.                                                                                     |
 | **Explicit breaking changes**                         | v2 may change generated schema and TypeScript types; document deltas and codemods where feasible.                                                                                                                                                                                                                      |
@@ -97,30 +98,14 @@ product {
 }
 ```
 
-*Single association (flat default; no extra wrapper for metadata):*
+*Single association (flat default; filters on the association field, same idea as `items(where: …)`):*
 
 ```graphql
-# Product belongs to Brand — at most one row; no pagination
+# Product belongs to Brand — at most one row; filter on the edge like the list case
 product {
-  brand {
+  brand(where: { active: { eq: true } }) {
     id
     name
-  }
-}
-```
-
-*Single association (hypothetical wrapper — generally **not** the default):*
-
-```graphql
-# Only if we had a strong, repeated need for edge-level data alongside the one row
-product {
-  brandEdge {
-    # illustrative — not the default v2 shape
-    canView
-    brand {
-      id
-      name
-    }
   }
 }
 ```
@@ -135,6 +120,51 @@ product {
 - Update Sequelize include / resolver path in `packages/plugin-sequelize` for nested reads.
 - Migration: codemod or guide for persisted `.gql` documents.
 - **Single associations:** default remains **unwrapped** nullable type; document exceptions (see §2.5).
+- **Deep filtering:** parent-level / join-aware `where` inputs; warn on overlapping parent + nested `where` on the same path (see §2.7).
+
+### 2.7 Deep filtering (parent-level predicates)
+
+**Problem in v1:** Filters are often attached only to **nested** association fields (e.g. `child(where: { … })` under a list). Two different operations can traverse the **same** parent path and field name (e.g. `blog { posts { … } }`) with the **same arguments on `posts`**, while the meaningful difference lives **deeper** in the selection (different nested `where` clauses). GraphQL clients that normalize by **field + arguments** (notably **Apollo Client**) may then treat those operations as the **same** cache entry, causing merge warnings and **wrong data** (e.g. a filtered empty list overwriting an unfiltered full list when navigating between screens).
+
+**Workaround today:** Invent **dummy** or redundant predicates on the **parent** association field so its **GraphQL arguments** differ between operations—otherwise clients that key cache entries by `fieldName + args` (e.g. Apollo) can merge incompatible results. The meaningful filter often stays on a **nested** field (`category(where: …)`), while `posts` carries a **no-op** predicate only to **bump the cache key**. That is fragile, obscure to readers, and easy to get wrong.
+
+```graphql
+# v1-style: real intent is “posts whose related category matches $slug”, but that can only
+# be expressed on the nested `category` field. `posts` uses a dummy `where` so this query
+# is not cached as the same field as a sibling query that also uses `posts { … }` with
+# different nested filters (same problem, same workaround pattern).
+
+blog {
+  posts(where: { id: { null: false } }) {
+    id
+    category(where: { slug: { eq: $slug } }) {
+      id
+      slug
+    }
+  }
+}
+```
+
+**v2 target:** Support **deep filtering**—expressing constraints on the **parent** association’s `where` input using a **structured filter** that can reference **nested / joined** relations (same expressive power you need for Sequelize `include` + `where` on associations). The **real** predicate moves onto `posts`; no dummy argument is required for cache safety. Typical shape (illustrative):
+
+```graphql
+# Illustrative — exact input shape TBD; goal is one predicate tree on `posts`, not only on nested fields
+blog {
+  posts(where: { category: { slug: { eq: $slug } } }) {
+    id
+    category {
+      id
+      slug
+    }
+  }
+}
+```
+
+**Why it matters:** Predicates live where clients and caches already key them—on the **association field’s arguments**—so different queries are **first-class** different operations without hacks. Resolver work should translate these trees into correct SQL/ORM includes.
+
+**Overlapping filters (warning):** Once **parent-level** `where` can express nested predicates (e.g. `posts(where: { category: { … } })`), a query might still pass **`where` on the nested field** (e.g. `category(where: { … })`) for the same relation. The implementation should **detect** that situation (same association constrained in both places) and emit a **clear warning** (e.g. dev-only log or documented GraphQL extension)—not fail silently with ambiguous merge semantics. Exact merge rules can be “nested wins” or “combine with AND,” but callers should be nudged toward **one** expression of the filter.
+
+**Scope:** Applies to **list** and **single** association fields that accept `where` (aligned with §2.5: single associations stay **unwrapped**, but can still take `where` on the field).
 
 ---
 
@@ -313,7 +343,7 @@ Exact query names can evolve; the **contract** is: **roles are field/type-level 
 
 ## 7. Suggested rollout phases
 
-1. **Design lock**: List wrapper shape (section 2); pagination naming (section 3); CMS namespace + registration API + **translation model / `translations` field conventions** (section 4); auth config (`roles` + `authDirective`) (section 5).
+1. **Design lock**: List wrapper shape + **deep filtering** input shape (section 2, incl. §2.7); pagination naming (section 3); CMS namespace + registration API + **translation model / `translations` field conventions** (section 4); auth config (`roles` + `authDirective`) (section 5).
 2. **Schema generation**: New types; optional deprecation flag for v1-shaped lists if needed on v1.x.
 3. **Resolvers**: Sequelize paths for nested reads; port admin CRUD from the reference implementation into a `graphql-gene` submodule or package.
 4. **Migration tooling**: Query codemods, changelog, semver-major release.
@@ -327,6 +357,7 @@ Exact query names can evolve; the **contract** is: **roles are field/type-level 
 - Edge cases where a **single** association might need an **opt-in** wrapper (see §2.5 — default is **no** wrapper).
 - Global config vs. per-field overrides for wrapper field names (`items` vs. `nodes`).
 - Exact GraphQL names for **role-aware meta** (extend `*Meta` vs. new root fields).
+- Exact **nested `where` input** grammar for deep filters (relation paths, depth limits, alignment with Sequelize `include`/`where`).
 - Whether **`translations`** must always be the GraphQL alias or a **`geneConfig`** key (e.g. `cmsTranslationField: 'translations'`) is allowed when legacy schemas cannot rename the association.
 
 ---
