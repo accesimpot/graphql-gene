@@ -2,6 +2,13 @@
 
 Plan for a major version of GraphQL Gene: goals, breaking changes, and migration notes. The plan ties library design to real usage (CMS-style admin APIs, predictable association reads) and records **why** each change exists, **alternatives considered**, and the **chosen direction**.
 
+#### Abbreviations
+
+- **RBAC** — role-based access control (permissions expressed as roles assigned to users or clients).
+- **CRUD** — create, read, update, delete (the basic set of operations to manage records in an API or database).
+- **CMS** — content management system (tools and workflows for authoring and maintaining structured content).
+- **ORM** — object–relational mapping (library that maps between application objects/classes and relational database tables and queries, e.g. Sequelize, TypeORM).
+
 ---
 
 ## 1. Goals
@@ -303,7 +310,7 @@ To keep CMS metadata and UIs consistent across consumers, v2 should **document a
 
 ---
 
-## 5. Authorization: roles at type/field level + global auth directive factory
+## 5. Authorization: `roles` in field config + auth directive factory on `generateSchema`
 
 ### 5.1 Problem
 
@@ -321,20 +328,32 @@ Today, admin CRUD stores **roles per model** (`enableAdminCrud(Model, { roles })
 | **C. `roles` (and optional `auth`) in field/type config** | Same ergonomics as `directives` in Gene config, but **first-class** for RBAC: e.g. `roles: ['editor']` on a field or type | Central place for codegen (meta, schema introspection helpers); can still **emit** directives for runtime | Requires defining how roles merge (type vs. field vs. operation)  |
 | **D. Schema directives only in SDL**                      | No TS-level `roles`                                                                                                       | Pure GraphQL                                                                                              | Harder for Gene to generate meta and filtered schemas             |
 
-**Winner: C**, with directives still generated where needed: introduce **`roles`** (and related metadata) at **type and field level** in Gene config (alongside `directives`), so admin CRUD and public types use the **same** declaration style.
+**Winner: C**, with two distinct knobs:
 
-### 5.3 Global `authDirective` (name TBD)
+_Note: RBAC stands for role-based access control_
 
-The library should not hardcode `@userAuth` or app-specific directive names.
+1. **`roles`** — a **dedicated** option on **type and field** definitions in Gene config (alongside existing fields like `directives`, `returnType`, `resolver`, …). It holds the RBAC list (e.g. `roles: ['editor']`) and drives **metadata, CMS discovery, and role-based schema search**—workflows that need a **declared** access model. Folding those into a generic `directives` list would force Gene to **guess** which directives imply RBAC, alongside unrelated concerns such as `@deprecated`.
+2. **`directives`** — unchanged as the **general** hook for **any** GraphQL directive (`@deprecated`, custom composition directives, etc.). Gene must **not** infer authorization semantics by scanning arbitrary directive factories.
 
-- **Option**: `createGenePlugin` / `initGene({ authDirective: (ctx) => [...] })` or **`authDirective: ({ roles }) => Directive`** passed **once** at initialization.
-- Resolvers and generated CMS fields call this factory so **roles flow** from config → directive → runtime context consistently.
+**Why not only `directives`?** Today you could attach an auth directive via `directives: () => [myAuthDirective({ roles: [...] })]`, but Gene has **no typed, uniform signal** that this field is **authorization-gated** vs any other directive. A first-class **`roles`** property marks **exactly** “this surface participates in RBAC,” which is what **role-scoped discovery** (`modelNames`, meta, future helpers) needs without heuristics.
 
-**Open design detail (how `roles` affect what clients _see_):** `roles` will always drive **runtime authorization** (directives, resolvers). Separately, we need a clear story for **how little-privilege callers discover what they may query** without treating that as “optional hardening.”
+### 5.3 Auth directive factory on `generateSchema`
+
+**Where it is configured:** Extend **`generateSchema`** (the same entry point used today, e.g. `packages/dev-playground/src/server/schema.ts`) with a **single optional parameter**—name TBD, e.g. **`authDirective`** or **`createAuthDirective`**—whose value is a **factory function**.
+
+**What the factory is:** A function that Gene invokes whenever it **emits** a type or field that declares **`roles`** in config. Its **return type / contract** matches Gene’s existing directive model—**`GeneDirective` / `GeneDirectiveConfig`** in `packages/core/src/defineConfig.ts` (`name`, `args`, `handler` per `GeneDirectiveConfig`). In other words: the factory produces the **same kind of object** you would return from a **`GeneDirective`** today, but driven by **`roles`** so apps wire their real auth directive once at schema build time.
+
+**Flow:** `roles` on a field or type → Gene calls the factory with the resolved role list (and any agreed context) → the returned **`GeneDirectiveConfig`** is attached for **runtime** authorization, consistent with how other directives are integrated.
+
+**Directive order:** At execution time, the **authentication / authorization directive** produced from **`roles`** (via the auth factory) must run **before** any other directives declared on the same field or type (`directives: …`). That gives a deterministic pipeline: **verify access first**, then apply **non-auth** concerns (e.g. deprecation, logging, rate hints). Document the exact chaining semantics in the implementation so resolvers and directive handlers do not depend on incidental ordering.
+
+**Docs:** Describe this option explicitly as the **auth directive factory** used **whenever `roles` is set**—not as a separate ad hoc path per model (e.g. legacy `enableAdminCrud(Model, { roles })` only).
+
+**Open design detail (how `roles` affect what clients _see_):** `roles` will always drive **runtime authorization** (directives, resolvers). A related design question is **how clients with limited roles learn which parts of the schema they may use** when full introspection is off or undesirable. That **discovery** story should be specified up front—not left as an informal afterthought.
 
 **Security requirement:** Users with **narrow roles** must not depend on **full GraphQL introspection** (`__schema`, etc.) to learn the API—introspection is often **disabled in production** precisely because it exposes the **entire** surface area. For CMS-style flows, the **first** requests that describe “what exists and what to select” should therefore return **only the subset** of types, fields, and operations that role is allowed to use, so the **effective** API is small even if someone could otherwise guess field names.
 
-**Design fork (to document in v2):** (1) **Minimum:** directives + **dedicated discovery fields** (e.g. `cms.modelNames`, role-aware `*Meta`, future `accessibleFields`) whose resolvers enforce RBAC and return **trimmed** metadata—not a dump of the whole schema. (2) **Stricter:** additionally **omit** forbidden types or fields from the **published SDL** for certain audiences (separate schema variants, gateway, or codegen), so unauthorized operations **do not appear** in the contract at all. The plan does **not** mean “filter SDL casually”; it means **align discovery and SDL policy** so low-permission users only ever see a **small, intentional** slice of the graph.
+**Design fork (to document in v2):** (1) **Minimum:** **`roles`** + auth directive from **`generateSchema`** + **dedicated discovery fields** (e.g. `cms.modelNames`, role-aware `*Meta`, future `accessibleFields`) whose resolvers enforce RBAC and return **trimmed** metadata—not a dump of the whole schema. (2) **Stricter:** additionally **omit** forbidden types or fields from the **published SDL** for certain audiences (separate schema variants, gateway, or codegen), so unauthorized operations **do not appear** in the contract at all. The plan does **not** mean “filter SDL casually”; it means **align discovery and SDL policy** so low-permission users only ever see a **small, intentional** slice of the graph.
 
 ### 5.4 CMS discovery flow (for consumers building their own UI)
 
@@ -342,7 +361,7 @@ The library should not hardcode `@userAuth` or app-specific directive names.
 2. **Fetch `*Meta`** for a model to build forms and nested selections.
 3. **Run list/detail/mutations** with selections aligned to allowed fields.
 
-Exact query names can evolve; the **contract** is: **roles are field/type-level in config**, **auth directive is pluggable globally**, and **model registration** for CMS does not use a second, incompatible role system.
+Exact query names can evolve; the **contract** is: **`roles` are declared at type/field level in Gene config**, the **auth directive implementation is supplied once** via **`generateSchema`** (factory compatible with **`GeneDirectiveConfig`**), and **CMS registration** does not use a second, incompatible role model.
 
 ---
 
@@ -357,7 +376,7 @@ Exact query names can evolve; the **contract** is: **roles are field/type-level 
 
 ## 7. Suggested rollout phases
 
-1. **Design lock**: List wrapper shape + **deep filtering** input shape (section 2, incl. §2.7); pagination naming (section 3); CMS namespace + registration API + **translation model / `translations` field conventions** (section 4); auth config (`roles` + `authDirective`) (section 5); **Markdown docs package** layout (§11).
+1. **Design lock**: List wrapper shape + **deep filtering** input shape (section 2, incl. §2.7); pagination naming (section 3); CMS namespace + registration API + **translation model / `translations` field conventions** (section 4); **`roles` vs `directives` + `generateSchema` auth directive factory** (section 5); **Markdown docs package** layout (§11).
 2. **Schema generation**: New types; optional deprecation flag for v1-shaped lists if needed on v1.x.
 3. **Resolvers**: Sequelize paths for nested reads; port admin CRUD from the reference implementation into a `graphql-gene` submodule or package.
 4. **Migration tooling**: Query codemods, changelog, semver-major release.
@@ -372,6 +391,7 @@ Exact query names can evolve; the **contract** is: **roles are field/type-level 
 - Exact GraphQL names for **role-aware meta** (extend `*Meta` vs. new root fields).
 - Exact **nested `where` input** grammar for deep filters (relation paths, depth limits, alignment with Sequelize `include`/`where`).
 - Whether **`translations`** must always be the GraphQL alias or a **`geneConfig`** key (e.g. `cmsTranslationField: 'translations'`) is allowed when legacy schemas cannot rename the association.
+- **`generateSchema` option name** for the auth factory (`authDirective` vs `createAuthDirective`, etc.) and **exact factory signature** (e.g. `{ roles }` only vs extra context) aligned with **`GeneDirective` / `GeneDirectiveConfig`** (`packages/core/src/defineConfig.ts`).
 
 ---
 
@@ -383,6 +403,7 @@ The **admin CRUD / CMS backend** described in this plan was first exercised in a
 
 - Sequelize plugin: `packages/plugin-sequelize/` (includes `getQueryInclude` and **`graphql-lookahead`** usage).
 - Core defaults: `packages/core/src/defaultResolver.ts` (`generateDefaultQueryFilterTypeDefs`, etc.).
+- Schema build: `packages/core/src/schema.ts` (`generateSchema`); directive types: `packages/core/src/defineConfig.ts` (`GeneDirective`, `GeneDirectiveConfig`).
 
 When porting, maintainers may diff against the internal CMS utility **inside the private repo** (entry points such as `enableAdminCrud`, `generateAdminCrudSchema`, model registration) without publishing those paths in docs or PRs.
 
