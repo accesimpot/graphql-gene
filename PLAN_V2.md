@@ -262,18 +262,18 @@ This is the **port** of a **reference CMS backend** pattern (validated in a priv
 
 - **`enableAdminCrud(Model, options?)`**: can run before Sequelize init; pending registrations flush after init. When it runs, it **walks the model’s attribute definitions** (for inputs, meta, excluded-field handling, etc.) in the **same spirit as graphql-gene during schema init**—respecting `geneConfig`, `isFieldIncluded`, and related rules. Today that is a **separate code path** from Gene’s own iteration.
 - **Schema**: `Query.cms` → `CmsQuery`, `Mutation.cms` → `CmsMutation`; per-model list, by-id, `*Meta`, create/update/delete.
-- **Global**: `cms.modelNames` filtered by user roles.
+- **Global**: `cms.modelNames` (flat list) filtered by roles—**v2 should supersede this** for primary UX with **hierarchy-based discovery** (§4.6).
 - **Metadata**: `*Meta { attributes: JSON! }` for form building (attributes + admin-enabled associations).
 - **Mutations**: explicit `create*`, `update*(id, input)`, `delete*` — **not** “default mutation” on the root for every model.
 
 ### 4.2 What moves into `graphql-gene` (backend only)
 
 - **Unified attribute iteration**: When porting CMS, **merge** the admin CRUD attribute walk with graphql-gene’s existing model/schema initialization so there is **one** canonical pass over attributes (and the same application of `geneConfig`, inclusion rules, virtual handling, etc.). CMS inputs, `*Meta`, and re-exposed excluded fields must not live in a second, divergent loop long term.
-- Registration API (most likely renaming `enableAdminCrud` to `registerCmsModel` for clarity).
+- Registration API (most likely renaming `enableAdminCrud` to `registerCmsModel` for clarity). **Call `registerCmsModel` only for models that should appear as top-level navigation roots**. Nested targets (e.g. child rows reached only through `User → orders → …`) stay **off** the flat menu; they appear in the tree under their parent path—see §4.6.
 - Lazy/pending registration until models are ready (same idea as today).
 - Appending/merging generated input types and meta types into the schema.
 - `extendTypes` wiring for `CmsQuery` / `CmsMutation` / `Query.cms` / `Mutation.cms`.
-- Resolvers for list, get-by-id, meta, CRUD mutations, and `modelNames`.
+- Resolvers for list, get-by-id, meta, CRUD mutations, and **discovery** shaped for hierarchy + nav (replacing a noisy flat `modelNames` as the main entry—§4.6).
 - Hooks for validation error formatting (optional callback, as today).
 - **Documentation** of the public GraphQL operations so any frontend can implement a CMS.
 
@@ -306,7 +306,13 @@ To keep CMS metadata and UIs consistent across consumers, v2 should **document a
 
 **Why reserve `translations`:** Other has-manys keep arbitrary names (`moduleItems`, etc.). Giving translation edges a **standard field name** lets generic CMS clients detect i18n without app-specific config. If a codebase today uses a different property key (e.g. a symbol or internal alias), the GraphQL exposure should still use **`translations`** for the CMS-facing schema, or the plan should allow an explicit `geneConfig` override with `translations` as the recommended default.
 
-**Registration:** Translation models (`*I18n`) are registered with the CMS the same way as other models (e.g. `registerCmsModel(ArticleI18n)` alongside the parent), so CRUD and meta stay available for per-locale editing.
+### 4.6 Navigation & discovery (association hierarchy, not flat model list)
+
+- **Problem:** A flat **`modelNames`** side menu is noisy (nested models without context) and weak for RBAC (e.g. a generic **“Case”** vs **“My Cases”**—rows tied to the current user).
+- **Direction:** Primary discovery should expose **association paths from the logged-in user** (or other explicit entry types): labeled edges (e.g. **tickets assigned to me**, **workspaces I own**) instead of dumping every registered model. Add **opt-in** “show in root nav” for models that are legitimately top-level.
+- **UI pattern:** **Nested, expandable nav** (similar to the VS Code docs site)—tree follows **parent → child** associations, not an alphabetical type list.
+- **URL:** Encode the **association chain** (path from user entry to current resource). The server uses that path to verify **reachability** (can we walk parents back to the current user?) as the **first** access gate; **`roles`** on types/fields remains the **second** gate (read vs write vs delete—§5.6).
+- **API:** Replace or supplement `modelNames` with a **hierarchy-aware discovery query** (exact name TBD) that returns tree nodes + labels + operations allowed for the caller.
 
 ---
 
@@ -332,10 +338,10 @@ Today, admin CRUD stores **roles per model** (`enableAdminCrud(Model, { roles })
 
 _Note: RBAC stands for role-based access control_
 
-1. **`roles`** — a **dedicated** option on **type and field** definitions in Gene config (alongside existing fields like `directives`, `returnType`, `resolver`, …). It holds the RBAC list (e.g. `roles: ['editor']`) and drives **metadata, CMS discovery, and role-based schema search**—workflows that need a **declared** access model. Folding those into a generic `directives` list would force Gene to **guess** which directives imply RBAC, alongside unrelated concerns such as `@deprecated`.
+1. **`roles`** — a **dedicated** option on **type and field** definitions in Gene config (alongside existing fields like `directives`, `returnType`, `resolver`, …). Values are **either** a string array **or** an object with **`read` / `write` / `delete` / `all`** keys, each holding the same string array (§5.5). Strings can be **role names** (`super-admin`) or **action identifiers** / scopes (`promo-code.create`, `users.manage`)—same mechanism (§5.5). Drives **metadata, discovery, and policy** without overloading generic `directives`.
 2. **`directives`** — unchanged as the **general** hook for **any** GraphQL directive (`@deprecated`, custom composition directives, etc.). Gene must **not** infer authorization semantics by scanning arbitrary directive factories.
 
-**Why not only `directives`?** Today you could attach an auth directive via `directives: () => [myAuthDirective({ roles: [...] })]`, but Gene has **no typed, uniform signal** that this field is **authorization-gated** vs any other directive. A first-class **`roles`** property marks **exactly** “this surface participates in RBAC,” which is what **role-scoped discovery** (`modelNames`, meta, future helpers) needs without heuristics.
+**Why not only `directives`?** Today you could attach an auth directive via `directives: () => [myAuthDirective({ roles: [...] })]`, but Gene has **no typed, uniform signal** that this field is **authorization-gated** vs any other directive. A first-class **`roles`** property marks **exactly** “this surface participates in RBAC,” which is what **discovery and policy** (including hierarchy-aware nav—§4.6) need without heuristics.
 
 ### 5.3 Auth directive factory on `generateSchema`
 
@@ -345,23 +351,47 @@ _Note: RBAC stands for role-based access control_
 
 **Flow:** `roles` on a field or type → Gene calls the factory with the resolved role list (and any agreed context) → the returned **`GeneDirectiveConfig`** is attached for **runtime** authorization, consistent with how other directives are integrated.
 
-**Directive order:** At execution time, the **authentication / authorization directive** produced from **`roles`** (via the auth factory) must run **before** any other directives declared on the same field or type (`directives: …`). That gives a deterministic pipeline: **verify access first**, then apply **non-auth** concerns (e.g. deprecation, logging, rate hints). Document the exact chaining semantics in the implementation so resolvers and directive handlers do not depend on incidental ordering.
+**Directive order (field / type resolution):** The **auth directive** from **`roles`** (via the auth factory) runs **before** other `directives` on the same field or type. **CMS mutations (§5.7)** are a special case: auth derived from **`roles`** and **type-level** directives must run **before** the mutation persists changes, so a failing check never leaves a committed write.
 
-**Docs:** Describe this option explicitly as the **auth directive factory** used **whenever `roles` is set**—not as a separate ad hoc path per model (e.g. legacy `enableAdminCrud(Model, { roles })` only).
+### 5.4 Global roles / actions in TypeScript (module augmentation)
+
+- **Optional but recommended:** Same **declaration merging** idea as **`GeneSchema`** / **`GeneContext`** in the README (**Typing** → `declare module 'graphql-gene/schema'` / `'graphql-gene/context'`): v2 can expose an **augmentable** slot (e.g. `GeneRole` under a `graphql-gene` module) that apps extend in **`*.d.ts`** so **`roles`**, auth factories, and context share **one type-checked** vocabulary of role names and action strings. **Recommended** for any non-trivial app so role/action strings stay consistent and refactors stay safe; **not** required to run.
+- **Fallback:** If the module is **not** augmented, **`roles`** (and related APIs) use plain **`string`** type.
+- Document the pattern **next to** the existing `graphql-gene.d.ts` example as **optional (recommended)**. (A **GraphQL enum** for roles in SDL, if ever added, is unrelated to this TS mechanism.)
+
+### 5.5 `roles` shape, actions, and when to use custom directives
+
+- **Shape:** `roles` accepts **`string[]`** (applies to all operations unless refined) **or** `{ read?: string[], write?: string[], delete?: string[], all?: string[] }` with the same string arrays per operation class.
+- **Actions / scopes:** Strings may denote **coarse roles** or **fine-grained actions** (e.g. `user.delete`, `promo-code.create`)—Gmail-style scopes. Implementation treats them uniformly at runtime; **§5.4** augmentation (**recommended**) gives a shared literal union (fallback to **`string`**).
+- **Dynamic rules** (e.g. “may change status only if …”): **do not** encode in `roles` alone—use a normal **`directives`** (or field resolver) that throws **unauthorized** / **forbidden**.
+
+### 5.6 Two-phase access for CMS (path, then `roles`)
+
+- **Phase 1 — reachability:** For read/write CMS operations, verify the resource is reachable through the **declared association path** from the **current user** (path reflected in the URL / client context—§4.6). No path to user ⇒ deny regardless of `roles`.
+- **Phase 2 — `roles`:** If the path is valid, apply **`roles`** for **read vs write vs delete** (or `all`) and **action** strings.
+- Keeps **tenant / ownership** logic structurally separate from **role** logic.
+
+### 5.7 CMS mutations vs type-level directives
+
+- **Issue:** Type-level directives run when resolving the **mutation return type**; the **mutation may already have committed** side effects, so a late “unauthorized” on the type is too late.
+- **Requirement:** For **`cms` mutations**, run **type-level** directives and **`roles`-derived auth** **before** executing the mutation body (create/update/delete). Aligns with §5.3 directive order for fields, but explicitly covers the **mutation-first** trap.
+
+**Docs:** Describe the **auth directive factory** on **`generateSchema`** as used **whenever `roles` is set**—not only legacy per-model registration.
 
 **Open design detail (how `roles` affect what clients _see_):** `roles` will always drive **runtime authorization** (directives, resolvers). A related design question is **how clients with limited roles learn which parts of the schema they may use** when full introspection is off or undesirable. That **discovery** story should be specified up front—not left as an informal afterthought.
 
 **Security requirement:** Users with **narrow roles** must not depend on **full GraphQL introspection** (`__schema`, etc.) to learn the API—introspection is often **disabled in production** precisely because it exposes the **entire** surface area. For CMS-style flows, the **first** requests that describe “what exists and what to select” should therefore return **only the subset** of types, fields, and operations that role is allowed to use, so the **effective** API is small even if someone could otherwise guess field names.
 
-**Design fork (to document in v2):** (1) **Minimum:** **`roles`** + auth directive from **`generateSchema`** + **dedicated discovery fields** (e.g. `cms.modelNames`, role-aware `*Meta`, future `accessibleFields`) whose resolvers enforce RBAC and return **trimmed** metadata—not a dump of the whole schema. (2) **Stricter:** additionally **omit** forbidden types or fields from the **published SDL** for certain audiences (separate schema variants, gateway, or codegen), so unauthorized operations **do not appear** in the contract at all. The plan does **not** mean “filter SDL casually”; it means **align discovery and SDL policy** so low-permission users only ever see a **small, intentional** slice of the graph.
+**Design fork (to document in v2):** (1) **Minimum:** **`roles`** (typed or `string`) + auth directive from **`generateSchema`** + **hierarchy discovery** (§4.6) + **`*Meta`**; **optional (recommended)** TS augmentation (§5.4) for role/action literals. (2) **Stricter:** **omit** forbidden operations from published SDL for some audiences. Align discovery with **path + `roles`** (§5.6), not a flat dump of every model.
 
-### 5.4 CMS discovery flow (for consumers building their own UI)
+### 5.8 CMS discovery flow (for consumers building their own UI)
 
-1. **Query** `cms.modelNames` (and/or future role-scoped helpers such as `cms.accessibleFields` / filtered `*Meta`) using the unified role model—**not** as a substitute for locking down resolvers, but as the **supported** way to get shape information when **introspection is off**.
-2. **Fetch `*Meta`** for a model to build forms and nested selections.
-3. **Run list/detail/mutations** with selections aligned to allowed fields.
+1. **Query** the **nav / discovery** API (association tree from user + explicit roots—§4.6); treat flat `modelNames` as **legacy** if kept.
+2. **Drive routing** with the **encoded path** so the server can enforce **reachability** (§5.6).
+3. **Fetch `*Meta`** for the current resource to build forms.
+4. **Run list/detail/mutations**; **`roles`** + custom directives enforce **read/write/delete** and conditional rules.
 
-Exact query names can evolve; the **contract** is: **`roles` are declared at type/field level in Gene config**, the **auth directive implementation is supplied once** via **`generateSchema`** (factory compatible with **`GeneDirectiveConfig`**), and **CMS registration** does not use a second, incompatible role model.
+**Contract:** Type/field **`roles`** (array or per-operation object; **`string`** or literals if §5.4 is augmented), **`generateSchema`** auth factory (**`GeneDirectiveConfig`**), **optional (recommended)** §5.4 **module augmentation** for typing, **mutation auth before persistence** (§5.7), **path-then-roles** for CMS, and **register only top-level nav models** unless explicitly flagged (§4.2).
 
 ---
 
@@ -376,7 +406,7 @@ Exact query names can evolve; the **contract** is: **`roles` are declared at typ
 
 ## 7. Suggested rollout phases
 
-1. **Design lock**: List wrapper shape + **deep filtering** input shape (section 2, incl. §2.7); pagination naming (section 3); CMS namespace + registration API + **translation model / `translations` field conventions** (section 4); **`roles` vs `directives` + `generateSchema` auth directive factory** (section 5); **Markdown docs package** layout (§11).
+1. **Design lock**: List wrapper + **deep filtering** (§2.7); pagination (§3); CMS + **§4.6 nav/discovery** + **`registerCmsModel` scope** + translations (§4); **§5.4–§5.8** (`roles` grammar, actions, path gate, mutation ordering, **optional (recommended) TS role augmentation**); **Markdown docs** (§11).
 2. **Schema generation**: New types; optional deprecation flag for v1-shaped lists if needed on v1.x.
 3. **Resolvers**: Sequelize paths for nested reads; port admin CRUD from the reference implementation into a `graphql-gene` submodule or package.
 4. **Migration tooling**: Query codemods, changelog, semver-major release.
@@ -392,6 +422,8 @@ Exact query names can evolve; the **contract** is: **`roles` are declared at typ
 - Exact **nested `where` input** grammar for deep filters (relation paths, depth limits, alignment with Sequelize `include`/`where`).
 - Whether **`translations`** must always be the GraphQL alias or a **`geneConfig`** key (e.g. `cmsTranslationField: 'translations'`) is allowed when legacy schemas cannot rename the association.
 - **`generateSchema` option name** for the auth factory (`authDirective` vs `createAuthDirective`, etc.) and **exact factory signature** (e.g. `{ roles }` only vs extra context) aligned with **`GeneDirective` / `GeneDirectiveConfig`** (`packages/core/src/defineConfig.ts`).
+- **Vocabulary:** keep the config key **`roles`** (RBAC-flavored) vs rename to **`scopes`** (closer to Gmail API / OAuth scope language) when values are often fine-grained actions (`resource.operation`).
+- **Discovery query shape** and **URL encoding** for association paths (§4.6 / §5.6).
 
 ---
 
