@@ -13,14 +13,15 @@ Plan for a major version of GraphQL Gene: goals, breaking changes, and migration
 
 ## 1. Goals
 
-| Goal                                                  | Rationale                                                                                                                                                                                                                                                                                                              |
-| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Predictable association APIs**                      | List associations should expose filtering and pagination in a shape that scales (metadata like total count vs. row selection), not only flattened list arguments and child-scalar `where` inputs.                                                                                                                      |
-| **Deep filtering (parent-level predicates)**          | Filters on nested relations should be expressible on the **association field’s `where`** (join-aware / nested input), not only on inner fields—so resolvers match ORM capabilities and **client caches** (e.g. Apollo) get distinct field arguments when queries differ (see §2.7).                                    |
-| **Admin CRUD (CMS backend) in the library**           | A production integration already implements an “admin CRUD” pattern (`enableAdminCrud`, `cms` query/mutation namespace, metadata for dynamic forms). Moving **only the backend integration** into `graphql-gene` lets open-source consumers build their own CMS UIs; product-specific frontends stay out of this repo. |
-| **Authorization that matches the rest of the schema** | Today, admin CRUD attaches roles **per model** while the public API often uses **type/field directives** (`@userAuth`, etc.). v2 should unify how roles are declared and applied so metadata and field visibility stay consistent.                                                                                     |
-| **Explicit breaking changes**                         | v2 may change generated schema and TypeScript types; document deltas and codemods where feasible.                                                                                                                                                                                                                      |
-| **Readable documentation in-repo**                    | Ship prose as **Markdown** in a **dedicated workspace package** (see §11): a folder layout that **renders well in the GitHub UI** (navigation via `README.md` files and clear paths). Keeps the first release small—**no** full static-site documentation build in scope yet.                                          |
+| Goal                                                  | Rationale                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Predictable association APIs**                      | List associations should expose filtering and pagination in a shape that scales (metadata like total count vs. row selection), not only flattened list arguments and child-scalar `where` inputs.                                                                                                                                                                                                                                                                                                                                 |
+| **Deep filtering (parent-level predicates)**          | Filters on nested relations should be expressible on the **association field’s `where`** (join-aware / nested input), not only on inner fields—so resolvers match ORM capabilities and **client caches** (e.g. Apollo) get distinct field arguments when queries differ (see §2.7).                                                                                                                                                                                                                                               |
+| **Admin CRUD (CMS backend) in the library**           | A production integration already implements an “admin CRUD” pattern (`enableAdminCrud`, `cms` query/mutation namespace, metadata for dynamic forms). Moving **only the backend integration** into `graphql-gene` lets open-source consumers build their own CMS UIs; product-specific frontends stay out of this repo.                                                                                                                                                                                                            |
+| **Authorization that matches the rest of the schema** | Today, admin CRUD attaches roles **per model** while the public API often uses **type/field directives** (`@userAuth`, etc.). v2 should unify how roles are declared and applied so metadata and field visibility stay consistent.                                                                                                                                                                                                                                                                                                |
+| **Explicit breaking changes**                         | v2 may change generated schema and TypeScript types; document deltas and codemods where feasible.                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| **Readable documentation in-repo**                    | Ship prose as **Markdown** in a **dedicated workspace package** (see §11): a folder layout that **renders well in the GitHub UI** (navigation via `README.md` files and clear paths). Keeps the first release small—**no** full static-site documentation build in scope yet.                                                                                                                                                                                                                                                     |
+| **Polymorphic blocks as GraphQL unions**              | CMS **pages composed of heterogeneous blocks** should be expressible as one **list of a `union` type** so clients can fetch **all block data in one round trip** using **`__typename`** and **fragments** (Relay-style colocation in Vue/React—see §2.8 and [gist](https://gist.github.com/pmrotule/45bd636e2f2f1abdf2cd4a2d2dc3d7ea)). The ORM layer uses a **hub row per block** with edges to concrete block tables; **graphql-gene** emits the union and **graphql-lookahead** maps inline fragments to the right `include`s. |
 
 **Non-goals for the open-source package**
 
@@ -142,6 +143,7 @@ product {
 - Migration: codemod or guide for persisted `.gql` documents.
 - **Single associations:** default remains **unwrapped** nullable type; document exceptions (see §2.5).
 - **Deep filtering:** parent-level / join-aware `where` inputs; warn on overlapping parent + nested `where` on the same path (see §2.7).
+- **Polymorphic unions:** hub model registration, schema `union` + `resolveType`, and **graphql-lookahead** includes for union members (see §2.8).
 
 ### 2.7 Deep filtering (parent-level predicates)
 
@@ -186,6 +188,70 @@ blog {
 **Overlapping filters (warning):** Once **parent-level** `where` can express nested predicates (e.g. `posts(where: { category: { … } })`), a query might still pass **`where` on the nested field** (e.g. `category(where: { … })`) for the same relation. The implementation should **detect** that situation (same association constrained in both places) and emit a **clear warning** (e.g. dev-only log or documented GraphQL extension)—not fail silently with ambiguous merge semantics. Exact merge rules can be “nested wins” or “combine with AND,” but callers should be nudged toward **one** expression of the filter.
 
 **Scope:** Applies to **list** and **single** association fields that accept `where` (aligned with §2.5: single associations stay **unwrapped**, but can still take `where` on the field).
+
+### 2.8 Polymorphic associations and GraphQL unions (page blocks)
+
+**Use case:** A **page** in the CMS has an ordered list of **blocks**. Each block is one of several concrete types (e.g. hero, rich text, gallery). In GraphQL this is naturally a **`union`** (or equivalent) so the client can request **different fields per member** in **one operation**, using **`__typename`** and **inline fragments** (or colocated codegen fragments)—the pattern described in [this gist](https://gist.github.com/pmrotule/45bd636e2f2f1abdf2cd4a2d2dc3d7ea) for Vue. That avoids a waterfall of per-block requests while keeping **each UI component responsible for its own selection set**.
+
+**Relational shape:** Model a **hub** row per block (e.g. `PageBlock`) that stores ordering and ownership (`pageId`, `sortOrder`, …) and points to **exactly one** concrete block row via the ORM—typically one optional **foreign key per concrete type** (or another discriminator strategy the plugin documents). The **page** only **`HasMany`** hub rows; it does not need to know every block table up front beyond what the schema generator registers.
+
+**Declarative registration (v2 target):** Prefer a **single hub-level declaration** (working name **`@UnionContent`**) that lists the concrete block models and the GraphQL field name for the union (e.g. `content`). The decorator (or equivalent generator hook) **injects** the per-type **`belongsTo` associations and foreign key columns** on the hub so authors do not hand-wire three (or _N_) optional FKs and aliases for every new block class. The same registration records a **stable map** from each **GraphQL object type name** (union member) to the **Sequelize association alias** on the hub—**graphql-lookahead** uses that map to turn `... on HeroBlock { … }` into the correct `include` without resolver hard-coding. A **`geneConfig`-only** path can remain for projects that do not use sequelize-typescript decorators; behavior should match.
+
+**Library split:**
+
+- **`graphql-gene`**: Generate the **`union`** type and the hub field; wire **`resolveType`** (or equivalent) from a documented discriminator rule; keep **member types** and field definitions consistent with the rest of the schema (including auth and CMS metadata if those blocks are admin-managed).
+- **`graphql-lookahead` / `plugin-sequelize`**: When the selection set asks for a given union member, add the mapped association to **`getQueryInclude`** so unused block tables are not joined.
+
+**Illustrative models:**
+
+`models/Page.ts`:
+
+```typescript
+import { Table, Column, Model, HasMany, DataType } from 'sequelize-typescript'
+import { PageBlock } from './PageBlock'
+
+@Table
+export class Page extends Model {
+  @Column(DataType.STRING)
+  path: string
+
+  // The Page simply knows it has many blocks
+  @HasMany(() => PageBlock)
+  blocks: PageBlock[]
+}
+```
+
+`models/PageBlock.ts`:
+
+```typescript
+import { Table, Column, Model, DataType, ForeignKey } from 'sequelize-typescript'
+import { Page } from './Page'
+import { HeroBlock } from './HeroBlock'
+import { TextBlock } from './TextBlock'
+import { GalleryBlock } from './GalleryBlock'
+
+/**
+ * We define the "Container" here.
+ * The @UnionContent decorator will dynamically inject
+ * foreign keys and associations for each model passed to it.
+ * It could also accept only the "types" arrow function instead of a config object.
+ */
+@UnionContent({
+  field: 'content', // default
+  types: () => [HeroBlock, TextBlock, GalleryBlock], // lazy: avoids circular deps
+})
+@Table
+export class PageBlock extends Model {
+  @Column(DataType.INTEGER)
+  order: number
+
+  @ForeignKey(() => Page)
+  @Column(DataType.INTEGER)
+  pageId: number
+}
+```
+
+**Limits and future work:** Sites with **very many** block types can produce **large** single operations; servers that support **`@defer` / incremental delivery** remain an optional optimization **outside** the core Gene contract (see the gist’s note). Relay-style **connections** for block lists are orthogonal—default is a simple **list of union elements** unless a product opts into connection wrapping for blocks.
 
 ---
 
@@ -400,14 +466,15 @@ _Note: RBAC stands for role-based access control_
 - **Naming collisions**: Wrapper types and new inputs need deterministic naming (`generateGraphqlTypeName` style) and escape hatches when user-defined types clash.
 - **`count` + `items` and database work:** This is **not** an automatic “double query” problem. GraphQL runs a field’s resolver **only if that field appears in the operation**—so the `count` resolver executes **only when `count` is selected**, and the resolver that loads rows runs **only when `items` is selected** (or whatever the list field is named). A client that asks for `items` alone never pays for `count`, and vice versa. When **both** are requested, the implementation may still use one SQL statement or two, depending on the ORM and indexes; document the chosen approach in the Sequelize plugin. For nested includes and association loading, Gene already relies on **[graphql-lookahead](https://www.npmjs.com/package/graphql-lookahead)** (see `getQueryInclude` in `plugin-sequelize`) to walk the selection set and avoid work that was not asked for—apply the same idea to list wrappers so lookahead / `GraphQLResolveInfo` informs whether to issue aggregate `COUNT` vs. row `SELECT` paths.
 - **Plugins**: Non-Sequelize plugins need extension points for association wrappers and the CMS module.
+- **Polymorphic unions (§2.8):** Union `resolveType`, discriminator vs. nullable-FK rules, and **lookahead** mapping must stay in sync; document behavior when **multiple** FKs are set (validation) or **none** are set (null union member).
 - **Docs & playground**: Refresh READMEs with v2 examples; extend dev playground with association wrappers and **CMS namespace** demo (backend schema only). Long-form docs live in **`packages/docs`** (or similar)—see §11.
 
 ---
 
 ## 7. Suggested rollout phases
 
-1. **Design lock**: List wrapper + **deep filtering** (§2.7); pagination (§3); CMS + **§4.6 nav/discovery** + **`registerCmsModel` scope** + translations (§4); **§5.4–§5.8** (`roles` grammar, actions, path gate, mutation ordering, **optional (recommended) TS role augmentation**); **Markdown docs** (§11).
-2. **Schema generation**: New types; optional deprecation flag for v1-shaped lists if needed on v1.x.
+1. **Design lock**: List wrapper + **deep filtering** (§2.7); **polymorphic unions / page blocks** (§2.8); pagination (§3); CMS + **§4.6 nav/discovery** + **`registerCmsModel` scope** + translations (§4); **§5.4–§5.8** (`roles` grammar, actions, path gate, mutation ordering, **optional (recommended) TS role augmentation**); **Markdown docs** (§11).
+2. **Schema generation**: New types (including **union** types and hub fields per §2.8); optional deprecation flag for v1-shaped lists if needed on v1.x.
 3. **Resolvers**: Sequelize paths for nested reads; port admin CRUD from the reference implementation into a `graphql-gene` submodule or package.
 4. **Migration tooling**: Query codemods, changelog, semver-major release.
 5. **Documentation**: Add and grow **`.md` files** under the dedicated docs package; keep using GitHub for rendering until a static site is explicitly in scope.
@@ -424,6 +491,7 @@ _Note: RBAC stands for role-based access control_
 - **`generateSchema` option name** for the auth factory (`authDirective` vs `createAuthDirective`, etc.) and **exact factory signature** (e.g. `{ roles }` only vs extra context) aligned with **`GeneDirective` / `GeneDirectiveConfig`** (`packages/core/src/defineConfig.ts`).
 - **Vocabulary:** keep the config key **`roles`** (RBAC-flavored) vs rename to **`scopes`** (closer to Gmail API / OAuth scope language) when values are often fine-grained actions (`resource.operation`).
 - **Discovery query shape** and **URL encoding** for association paths (§4.6 / §5.6).
+- **Polymorphic unions (§2.8):** Discriminator strategy (**explicit `type` column** vs **which optional FK is non-null**); GraphQL naming when the **Sequelize hub model** name would collide with the **union** name; whether **admin CRUD** generates **separate create/update** inputs per member or a **single tagged input**.
 
 ---
 
