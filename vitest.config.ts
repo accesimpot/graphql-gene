@@ -30,7 +30,9 @@ export default defineConfig({
     coverage: {
       enabled: true,
       provider: 'istanbul',
-      include: ['packages/core/src/**', 'packages/plugin-sequelize/src/**'],
+      // Only TS sources: `**` would match `.html` used via `?raw`, and Vitest rewrites those imports
+      // in a way that drops `raw` from the query, breaking transforms.
+      include: ['packages/core/src/**/*.ts', 'packages/plugin-sequelize/src/**/*.ts'],
 
       thresholds: {
         lines: 84,

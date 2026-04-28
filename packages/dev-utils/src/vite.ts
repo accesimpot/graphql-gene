@@ -101,6 +101,11 @@ export function generateViteConfig(options: {
 
       rollupOptions: {
         external: [...(isLibrary ? getDependenciesFromPackageJson(absoluteRootDir) : []), /^node:/],
+
+        output: {
+          preserveModules: true,
+          preserveModulesRoot: absoluteSrcDir,
+        },
       },
       commonjsOptions,
 
