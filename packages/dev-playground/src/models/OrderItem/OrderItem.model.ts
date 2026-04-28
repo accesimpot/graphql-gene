@@ -35,10 +35,10 @@ class OrderItem extends Model {
 
   @ForeignKey(() => Product)
   @Column(DataType.INTEGER)
-  declare productId: number | null;
+  declare productId: number | null
 
   @BelongsTo(() => Product)
-  declare [PRODUCT_ASSOCIATION]: Product | null
+  declare produit: Product | null
 
   static readonly geneConfig = defineGraphqlGeneConfig(OrderItem, {
     exclude: [PRODUCT_ASSOCIATION],
