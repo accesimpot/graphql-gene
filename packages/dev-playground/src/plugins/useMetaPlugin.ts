@@ -3,7 +3,7 @@ import type { Plugin } from 'graphql-yoga'
 function sanitizeMetaData<T>(meta: T) {
   try {
     return JSON.parse(JSON.stringify(meta))
-  } catch (_) {
+  } catch {
     return {}
   }
 }
