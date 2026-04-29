@@ -3,6 +3,5 @@ packages:
 ignoredBuiltDependencies:
   - es5-ext
   - esbuild
-  - nx
 onlyBuiltDependencies:
   - sqlite3
