@@ -3,13 +3,6 @@
   "name": "dev-utils",
   "main": "./dist/index.js",
   "type": "module",
-  "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "import": "./dist/index.js"
-    },
-    "./src/raw-inline-plugin": "./src/raw-inline-plugin.ts"
-  },
   "scripts": {
     "build": "tsc --project tsconfig.compiler.json"
   },

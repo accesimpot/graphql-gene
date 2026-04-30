@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
-import { rawInlinePlugin } from 'dev-utils/src/raw-inline-plugin'
+import { rawInlinePlugin } from 'dev-utils'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -22,8 +22,6 @@ export default defineConfig({
         __dirname,
         './packages/plugin-sequelize/src/index.ts'
       ),
-
-      'dev-utils': path.resolve(__dirname, './packages/dev-utils/src/index.ts'),
     },
   },
 
