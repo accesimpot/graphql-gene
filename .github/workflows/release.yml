@@ -6,7 +6,7 @@ on:
       - main
       - beta
   #
-  # FOR TESTING PURPOSES ONLY!!!!
+  # FOR TESTING PURPOSES ONLY!!!!!
   # TODO: Remove before merging
   #
   pull_request:
