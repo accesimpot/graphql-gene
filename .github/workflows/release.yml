@@ -118,11 +118,14 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' || steps.public-package-affected.outputs.count > 0 }}
         run: |
           set -euo pipefail
+          LOGDIR="${RUNNER_TEMP}/npm-oidc-debug"
+          mkdir -p "$LOGDIR"
+
           echo "## OIDC / npm trusted publishing"
           echo "### Toolchain"
           echo "node=$(node --version) npm=$(npm --version)"
 
-          echo "### GitHub context (compare repo / workflow path / branch to npm Trusted Publisher)"
+          echo "### GitHub context (Trusted Publisher must match repo + workflow path + ref/event)"
           echo "GITHUB_REPOSITORY=${GITHUB_REPOSITORY}"
           echo "GITHUB_REPOSITORY_ID=${GITHUB_REPOSITORY_ID:-}"
           echo "GITHUB_REF=${GITHUB_REF}"
@@ -158,29 +161,82 @@ jobs:
               sys.exit(1)
           pad = "=" * (-len(parts[1]) % 4)
           payload = json.loads(base64.urlsafe_b64decode(parts[1] + pad))
-          print("### OIDC JWT payload (decoded only — do not share publicly)")
+          print("### OIDC JWT payload (decoded — treat as secret)")
           print(json.dumps(payload, indent=2))
+
+          wf_ref = payload.get("job_workflow_ref") or payload.get("workflow_ref") or ""
+          ev = payload.get("event_name", "")
+          ref = payload.get("ref", "")
+          print("### Reading claims vs npm Trusted Publishers (GitHub Actions)")
+          print("- **repository**: `%s` — must match the linked GitHub repo." % payload.get("repository"))
+          print("- **job_workflow_ref** / **workflow_ref**: `%s` — filename + ref must match npm (often refs/heads/main, not refs/pull/.../merge)." % wf_ref)
+          print("- **event_name**: `%s` — Push-only publishers do not match pull_request (common vague 404 OIDC)." % ev)
+          print("- **ref**: `%s`" % ref)
+          print("- **sub**: `%s`" % payload.get("sub"))
           '
 
           echo "### npm registry reachability"
           npm ping --registry https://registry.npmjs.org/
 
-          echo "### npm publish --dry-run (OIDC; fails if handshake/registry rejects)"
+          classify_log() {
+            local f="$1"
+            if grep -qi 'cannot publish over the previously published'; then
+              echo "duplicate_version"
+            elif grep -qiE 'OIDC token exchange|404 OIDC|token exchange.*404|ENEEDAUTH|E401|E403|401 Unauthorized|403 Forbidden'; then
+              echo "oidc_or_auth"
+            elif grep -qi '^npm error'; then
+              echo "other_npm_error"
+            else
+              echo "unknown"
+            fi
+          }
+
+          echo "### npm publish --dry-run"
+          echo "Dry-run still contacts the registry for this **exact** package.json **version**."
+          echo "If npm prints **cannot publish over the previously published versions**, the registry usually **authenticated you via OIDC** and only blocked **duplicate versions** — **not** an OIDC failure."
+
           set +e
           echo "--- packages/core (graphql-gene) ---"
-          (cd packages/core && npm publish --dry-run --registry https://registry.npmjs.org/)
+          (cd packages/core && npm publish --dry-run --registry https://registry.npmjs.org/ 2>&1 | tee "$LOGDIR/core.log")
           EC1=$?
-          echo "exit_code=${EC1}"
+          C1="$(classify_log "$LOGDIR/core.log")"
+          echo "exit_code=${EC1} classify=${C1}"
+
           echo "--- packages/plugin-sequelize (@graphql-gene/plugin-sequelize) ---"
-          (cd packages/plugin-sequelize && npm publish --dry-run --registry https://registry.npmjs.org/)
+          (cd packages/plugin-sequelize && npm publish --dry-run --registry https://registry.npmjs.org/ 2>&1 | tee "$LOGDIR/sequelize.log")
           EC2=$?
-          echo "exit_code=${EC2}"
+          C2="$(classify_log "$LOGDIR/sequelize.log")"
+          echo "exit_code=${EC2} classify=${C2}"
           set -e
 
-          if [ "$EC1" -ne 0 ] || [ "$EC2" -ne 0 ]; then
-            echo "::warning::npm publish --dry-run failed — check claims above (especially job_workflow_ref / repository / ref) vs npm package Trusted Publisher; npm account Activity may show more detail."
-            exit 1
-          fi
+          echo "### Summary"
+          FAIL=0
+          interpret() {
+            local label="$1" ec="$2" class="$3"
+            case "$class" in
+              duplicate_version)
+                echo "::notice::$label — classify=duplicate_version: registry enforced **version uniqueness** → **OIDC/trusted-publish handshake likely succeeded** (expected failure while package.json version already exists on npm)."
+                ;;
+              oidc_or_auth)
+                echo "::error::$label — classify=oidc_or_auth: treat as **OIDC or npm auth** problem; align **job_workflow_ref** / **event_name** with Trusted Publisher (try **push** to **main** or **workflow_dispatch**, not **pull_request**)."
+                FAIL=1
+                ;;
+              other_npm_error)
+                echo "::warning::$label — classify=other_npm_error: inspect **npm error** lines above."
+                FAIL=1
+                ;;
+              unknown)
+                if [ "$ec" -ne 0 ]; then
+                  echo "::warning::$label — classify=unknown with exit ${ec}: inspect log."
+                  FAIL=1
+                fi
+                ;;
+            esac
+          }
+          interpret "graphql-gene" "$EC1" "$C1"
+          interpret "@graphql-gene/plugin-sequelize" "$EC2" "$C2"
+
+          exit "$FAIL"
 
       #
       # A release is made if the prefix is feat, fix, perf, chore(deps), or docs(README)
