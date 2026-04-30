@@ -5,6 +5,13 @@ on:
     branches:
       - main
       - beta
+  #
+  # FOR TESTING PURPOSES ONLY!!!!
+  # TODO: Remove before merging
+  #
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+
   workflow_dispatch:
     inputs:
       dry-run:
@@ -104,6 +111,77 @@ jobs:
       - name: Build packages 📦
         if: ${{ github.event_name == 'workflow_dispatch' || steps.public-package-affected.outputs.count > 0 }}
         run: pnpm build
+
+      # Surfaces GitHub→npm handshake details before semantic-release. JWT payload is sensitive —
+      # restrict Actions log access while debugging.
+      # @see https://docs.npmjs.com/trusted-publishers
+      - name: Debug OIDC for npm trusted publishing 🔎
+        if: ${{ github.event_name == 'workflow_dispatch' || steps.public-package-affected.outputs.count > 0 }}
+        run: |
+          set -euo pipefail
+          echo "## OIDC / npm trusted publishing"
+          echo "### Toolchain"
+          echo "node=$(node --version) npm=$(npm --version)"
+
+          echo "### GitHub context (compare repo / workflow path / branch to npm Trusted Publisher)"
+          echo "GITHUB_REPOSITORY=${GITHUB_REPOSITORY}"
+          echo "GITHUB_REPOSITORY_ID=${GITHUB_REPOSITORY_ID:-}"
+          echo "GITHUB_REF=${GITHUB_REF}"
+          echo "GITHUB_REF_NAME=${GITHUB_REF_NAME}"
+          echo "GITHUB_WORKFLOW=${GITHUB_WORKFLOW}"
+          echo "GITHUB_WORKFLOW_REF=${GITHUB_WORKFLOW_REF:-}"
+          echo "GITHUB_WORKFLOW_SHA=${GITHUB_WORKFLOW_SHA:-}"
+          echo "GITHUB_JOB=${GITHUB_JOB}"
+          echo "GITHUB_EVENT_NAME=${GITHUB_EVENT_NAME}"
+
+          echo "### Request Actions OIDC JWT (audience npm:publish)"
+          if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] || [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
+            echo "::error::Missing ACTIONS_ID_TOKEN_REQUEST_* — ensure top-level permissions.id-token: write"
+            exit 1
+          fi
+
+          OIDC_JSON="$(
+            curl --silent --show-error --fail-with-body \
+              -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm%3Apublish"
+          )"
+
+          printf '%s' "$OIDC_JSON" | python3 -c '
+          import json, sys, base64
+          data = json.load(sys.stdin)
+          token = data.get("value") or data.get("token")
+          if not token:
+              print("::error::Unexpected OIDC response keys:", sorted(data.keys()))
+              sys.exit(1)
+          parts = token.split(".")
+          if len(parts) != 3:
+              print("::error::OIDC value is not a JWT")
+              sys.exit(1)
+          pad = "=" * (-len(parts[1]) % 4)
+          payload = json.loads(base64.urlsafe_b64decode(parts[1] + pad))
+          print("### OIDC JWT payload (decoded only — do not share publicly)")
+          print(json.dumps(payload, indent=2))
+          '
+
+          echo "### npm registry reachability"
+          npm ping --registry https://registry.npmjs.org/
+
+          echo "### npm publish --dry-run (OIDC; fails if handshake/registry rejects)"
+          set +e
+          echo "--- packages/core (graphql-gene) ---"
+          (cd packages/core && npm publish --dry-run --registry https://registry.npmjs.org/)
+          EC1=$?
+          echo "exit_code=${EC1}"
+          echo "--- packages/plugin-sequelize (@graphql-gene/plugin-sequelize) ---"
+          (cd packages/plugin-sequelize && npm publish --dry-run --registry https://registry.npmjs.org/)
+          EC2=$?
+          echo "exit_code=${EC2}"
+          set -e
+
+          if [ "$EC1" -ne 0 ] || [ "$EC2" -ne 0 ]; then
+            echo "::warning::npm publish --dry-run failed — check claims above (especially job_workflow_ref / repository / ref) vs npm package Trusted Publisher; npm account Activity may show more detail."
+            exit 1
+          fi
 
       #
       # A release is made if the prefix is feat, fix, perf, chore(deps), or docs(README)
