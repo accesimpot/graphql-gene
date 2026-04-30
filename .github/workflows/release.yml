@@ -136,7 +136,7 @@ jobs:
           echo "GITHUB_JOB=${GITHUB_JOB}"
           echo "GITHUB_EVENT_NAME=${GITHUB_EVENT_NAME}"
 
-          echo "### Request Actions OIDC JWT (audience npm:publish)"
+          echo "### Request Actions OIDC JWT (audience npm:registry.npmjs.org — matches @semantic-release/npm getIDToken)"
           if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] || [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
             echo "::error::Missing ACTIONS_ID_TOKEN_REQUEST_* — ensure top-level permissions.id-token: write"
             exit 1
@@ -145,7 +145,7 @@ jobs:
           OIDC_JSON="$(
             curl --silent --show-error --fail-with-body \
               -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
-              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm%3Apublish"
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm%3Aregistry.npmjs.org"
           )"
 
           NPM_ACTIONS_JWT="$(printf '%s' "$OIDC_JSON" | jq -r '.value // .token // empty')"
@@ -173,10 +173,18 @@ jobs:
           wf_ref = payload.get("job_workflow_ref") or payload.get("workflow_ref") or ""
           ev = payload.get("event_name", "")
           ref = payload.get("ref", "")
-          print("### Reading claims vs npm Trusted Publishers (GitHub Actions)")
+          aud = payload.get("aud")
+          print("### npm OIDC exchange expects this JWT shape")
+          print("- **aud**: `%s` — must be **npm:registry.npmjs.org** for npm trusted publishing (wrong audience → exchange often 401)." % aud)
+          print("- **iss**: `%s`" % payload.get("iss"))
           print("- **repository**: `%s` — must match the linked GitHub repo." % payload.get("repository"))
+          print("- **repository_owner** / **repository_id**: `%s` / `%s`" % (
+              payload.get("repository_owner"),
+              payload.get("repository_id"),
+          ))
+          print("### Reading claims vs npm Trusted Publishers (GitHub Actions)")
           print("- **job_workflow_ref** / **workflow_ref**: `%s` — filename + ref must match npm (often refs/heads/main, not refs/pull/.../merge)." % wf_ref)
-          print("- **event_name**: `%s` — Push-only publishers do not match pull_request (common vague 404 OIDC)." % ev)
+          print("- **event_name**: `%s` — Push-only publishers do not match pull_request (OIDC exchange often 401/404)." % ev)
           print("- **ref**: `%s`" % ref)
           print("- **sub**: `%s`" % payload.get("sub"))
           '
@@ -185,19 +193,24 @@ jobs:
           npm ping --registry https://registry.npmjs.org/
 
           echo "### npm OIDC exchange (same endpoint as @semantic-release/npm exchangeIdToken)"
-          echo "POST https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/<encodeURIComponent(packageName)>"
+          echo "Pattern: POST https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/<encodeURIComponent(packageName)>"
+          echo "Note: Uses Authorization: Bearer <Actions OIDC JWT>, NOT GITHUB_TOKEN / NPM_TOKEN (those are separate mechanisms)."
+          JWT_CHARS="${#NPM_ACTIONS_JWT}"
+          echo "Actions OIDC JWT length (chars): ${JWT_CHARS}"
           for PKG_NAME in 'graphql-gene' '@graphql-gene/plugin-sequelize'; do
             ENC="$(printf '%s' "$PKG_NAME" | python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read().strip(), safe=""))')"
             URL="https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/${ENC}"
             BODY_FILE="$LOGDIR/exchange-${ENC}.body"
+            echo "--- exchange package=${PKG_NAME} ---"
+            echo "encodeURIComponent(packageName)=${ENC}"
+            echo "POST_URL=${URL}"
             HTTP="$(
               curl --silent --show-error \
                 -o "$BODY_FILE" -w '%{http_code}' \
                 -X POST "$URL" \
-                -H "Authorization: Bearer ${NPM_ACTIONS_JWT}" \
-                -H 'Accept: application/json'
+                -H "Authorization: Bearer ${NPM_ACTIONS_JWT}"
             )"
-            echo "--- exchange package=${PKG_NAME} http=${HTTP} ---"
+            echo "http_status=${HTTP}"
             if command -v jq >/dev/null 2>&1 && jq empty "$BODY_FILE" 2>/dev/null; then
               jq -c 'del(.token)' "$BODY_FILE"
               if jq -e '.token != null and (.token | type == "string") and (.token | length > 0)' "$BODY_FILE" >/dev/null 2>&1; then
@@ -223,7 +236,7 @@ jobs:
 
           echo "### npm publish --dry-run"
           echo "Dry-run still contacts the registry for this **exact** package.json **version**."
-          echo "If npm prints **cannot publish over the previously published versions**, the registry usually **authenticated you via OIDC** and only blocked **duplicate versions** — **not** an OIDC failure."
+          echo "If **manual exchange** returns 401 but dry-run shows duplicate version: dry-run does **not** prove OIDC exchange succeeded — npm may resolve versions / errors on paths that do not mirror the exchange POST. Prefer aligning **job_workflow_ref**, **event_name**, **ref**, and npm Trusted Publisher rules with the decoded JWT above."
 
           set +e
           echo "--- packages/core (graphql-gene) ---"
@@ -295,7 +308,8 @@ jobs:
       - name: Release
         if: ${{ github.event_name == 'workflow_dispatch' || steps.public-package-affected.outputs.count > 0 }}
         env:
-          # Give semantic-release the short-lived GitHub App token
+          # GitHub App installation token: semantic-release git/tags/GitHub releases only.
+          # npm trusted publishing uses ACTIONS_ID_TOKEN_* (permissions.id-token: write), not this variable.
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
