@@ -129,9 +129,11 @@ dist
 # OS
 .DS_Store
 
-# Nx
-.nx/cache
-.nx/workspace-data
+# Turborepo
+.turbo
+
+# Legacy Nx (to be removed)
+.nx
 
 # Generated schema
 packages/dev-playground/schema.gql
