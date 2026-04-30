@@ -148,6 +148,12 @@ jobs:
               "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm%3Apublish"
           )"
 
+          NPM_ACTIONS_JWT="$(printf '%s' "$OIDC_JSON" | jq -r '.value // .token // empty')"
+          if [ -z "${NPM_ACTIONS_JWT}" ] || [ "${NPM_ACTIONS_JWT}" = "null" ]; then
+            echo "::error::OIDC JSON missing .value token"
+            exit 1
+          fi
+
           printf '%s' "$OIDC_JSON" | python3 -c '
           import json, sys, base64
           data = json.load(sys.stdin)
@@ -178,13 +184,37 @@ jobs:
           echo "### npm registry reachability"
           npm ping --registry https://registry.npmjs.org/
 
+          echo "### npm OIDC exchange (same endpoint as @semantic-release/npm exchangeIdToken)"
+          echo "POST https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/<encodeURIComponent(packageName)>"
+          for PKG_NAME in 'graphql-gene' '@graphql-gene/plugin-sequelize'; do
+            ENC="$(printf '%s' "$PKG_NAME" | python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read().strip(), safe=""))')"
+            URL="https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/${ENC}"
+            BODY_FILE="$LOGDIR/exchange-${ENC}.body"
+            HTTP="$(
+              curl --silent --show-error \
+                -o "$BODY_FILE" -w '%{http_code}' \
+                -X POST "$URL" \
+                -H "Authorization: Bearer ${NPM_ACTIONS_JWT}" \
+                -H 'Accept: application/json'
+            )"
+            echo "--- exchange package=${PKG_NAME} http=${HTTP} ---"
+            if command -v jq >/dev/null 2>&1 && jq empty "$BODY_FILE" 2>/dev/null; then
+              jq -c 'del(.token)' "$BODY_FILE"
+              if jq -e '.token != null and (.token | type == "string") and (.token | length > 0)' "$BODY_FILE" >/dev/null 2>&1; then
+                echo "(registry returned a publish token — value omitted from logs)"
+              fi
+            else
+              cat "$BODY_FILE"
+            fi
+          done
+
           classify_log() {
             local f="$1"
-            if grep -qi 'cannot publish over the previously published'; then
+            if grep -qiE 'cannot publish over the previously published|cannot publish over the previously published versions' "$f"; then
               echo "duplicate_version"
-            elif grep -qiE 'OIDC token exchange|404 OIDC|token exchange.*404|ENEEDAUTH|E401|E403|401 Unauthorized|403 Forbidden'; then
+            elif grep -qiE 'OIDC token exchange|404 OIDC|token exchange.*404|ENEEDAUTH|E401|E403|401 Unauthorized|403 Forbidden' "$f"; then
               echo "oidc_or_auth"
-            elif grep -qi '^npm error'; then
+            elif grep -qiE '^npm error' "$f"; then
               echo "other_npm_error"
             else
               echo "unknown"
