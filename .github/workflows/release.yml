@@ -5,11 +5,12 @@ on:
     branches:
       - main
       - beta
-  #
-  # FOR TESTING PURPOSES ONLY!!!!
-  # TODO: Remove before merging
-  #
-  pull_request:
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Pass --dry-run to semantic-release (no version bump or publish)
+        type: boolean
+        default: false
 
 # https://docs.npmjs.com/trusted-publishers#step-2-configure-your-cicd-workflow
 permissions:
@@ -22,9 +23,6 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-
-    env:
-      CI_FORCE_RELEASE_RUN: ${{ secrets.CI_FORCE_RELEASE_RUN }}
 
     steps:
       # https://semantic-release.gitbook.io/semantic-release/recipes/ci-configurations/github-actions#pushing-package.json-changes-to-your-repository
@@ -100,7 +98,7 @@ jobs:
           fi
 
       - name: Build packages 📦
-        if: ${{ steps.public-package-affected.outputs.count > 0 || env.CI_FORCE_RELEASE_RUN == 'true' }}
+        if: ${{ github.event_name == 'workflow_dispatch' || steps.public-package-affected.outputs.count > 0 }}
         run: pnpm build
 
       #
@@ -128,11 +126,14 @@ jobs:
       #   - revert: Reverts a previous commit
       #
       - name: Release
-        if: ${{ steps.public-package-affected.outputs.count > 0 || env.CI_FORCE_RELEASE_RUN == 'true' }}
+        if: ${{ github.event_name == 'workflow_dispatch' || steps.public-package-affected.outputs.count > 0 }}
         env:
           # Give semantic-release the short-lived GitHub App token
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
-          pnpm --filter graphql-gene exec -- semantic-release --dry-run -e semantic-release-monorepo
-          pnpm --filter @graphql-gene/plugin-sequelize exec -- semantic-release --dry-run -e semantic-release-monorepo
+          if [ "${{ github.event_name }}" = 'workflow_dispatch' ] && [ "${{ github.event.inputs.dry-run }}" = 'true' ]; then
+            pnpm -r --filter='!dev-*' --workspace-concurrency=1 exec -- semantic-release --dry-run -e semantic-release-monorepo
+          else
+            pnpm -r --filter='!dev-*' --workspace-concurrency=1 exec -- semantic-release -e semantic-release-monorepo
+          fi
