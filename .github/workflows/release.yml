@@ -10,7 +10,6 @@ on:
   # TODO: Remove before merging
   #
   pull_request:
-    types: [opened, reopened, synchronize, edited]
 
   workflow_dispatch:
     inputs:
