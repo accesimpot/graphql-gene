@@ -5,6 +5,11 @@ on:
     branches:
       - main
       - beta
+  #
+  # FOR TESTING PURPOSES ONLY!!!!
+  # TODO: Remove before merging
+  #
+  pull_request:
 
 # https://docs.npmjs.com/trusted-publishers#step-2-configure-your-cicd-workflow
 permissions:
@@ -127,4 +132,7 @@ jobs:
         env:
           # Give semantic-release the short-lived GitHub App token
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: pnpm -r --filter='!dev-*' --workspace-concurrency=1 exec semantic-release -e semantic-release-monorepo
+        run: |
+          set -euo pipefail
+          pnpm --filter graphql-gene exec -- semantic-release --dry-run -e semantic-release-monorepo
+          pnpm --filter @graphql-gene/plugin-sequelize exec -- semantic-release --dry-run -e semantic-release-monorepo
