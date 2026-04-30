@@ -1,11 +1,14 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
+import { rawInlinePlugin } from 'dev-utils'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 export default defineConfig({
+  plugins: [rawInlinePlugin()],
+
   resolve: {
     alias: {
       /**
@@ -30,8 +33,7 @@ export default defineConfig({
     coverage: {
       enabled: true,
       provider: 'istanbul',
-      // Only TS sources: `**` would match `.html` used via `?raw`, and Vitest rewrites those imports
-      // in a way that drops `raw` from the query, breaking transforms.
+      // Only TS sources: `**` would match incidental asset globs like `.html?raw`.
       include: ['packages/core/src/**/*.ts', 'packages/plugin-sequelize/src/**/*.ts'],
 
       thresholds: {

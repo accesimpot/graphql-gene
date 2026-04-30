@@ -10,12 +10,14 @@ import type {
   RollupCommonJSOptions,
 } from 'vite'
 import dts from 'vite-plugin-dts'
+import { rawInlinePlugin } from './raw-inline-plugin.js'
 
 const SRC_DIR = 'src'
 const DIST_DIR = 'dist'
 
 enum PLUGIN_CATEGORIES {
   dts = 'dts',
+  raw = 'raw',
 }
 
 export function generateViteConfig(options: {
@@ -66,6 +68,7 @@ export function generateViteConfig(options: {
         outDir: absoluteDistDir,
         copyDtsFiles: true,
       }),
+    [`${PLUGIN_CATEGORIES.raw}`]: () => rawInlinePlugin(),
   }
 
   // Add plugins based on the "pluginCategories" option which is mapped to "pluginGetters".
