@@ -9,6 +9,10 @@
       "dependsOn": ["^build"],
       "outputs": ["cjs/**"]
     },
+    "build:deps": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
     "types:check": {
       "dependsOn": ["^build"]
     },
