@@ -32,7 +32,7 @@ jobs:
 
     # Avoid re-running install/build/release when semantic-release pushes the version bump (same workflow).
     # GitHub Apps push as `{slug}[bot]`; confirm with a debug step if this ever mismatches.
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.actor != 'acci-semantic-release-token[bot]') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || (github.event_name == 'push' && github.actor != 'acci-semantic-release-token[bot]') }}
 
     steps:
       # https://semantic-release.gitbook.io/semantic-release/recipes/ci-configurations/github-actions#pushing-package.json-changes-to-your-repository
