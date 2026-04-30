@@ -24,7 +24,7 @@
     "test": "vitest --run",
     "test:watch": "vitest",
     "test:inspect": "vitest --inspect-brk=0.0.0.0:8806 --no-file-parallelism",
-    "test:non-cacheable": "vitest --run --config vitest.always.config.ts",
+    "test:non-cacheable": "pnpm core build:deps && vitest --run --config vitest.always.config.ts",
     "dev-utils": "TURBO_TELEMETRY_DISABLED=1 turbo run --filter=dev-utils",
     "dev-utils:": "pnpm -F=dev-utils",
     "playground": "TURBO_TELEMETRY_DISABLED=1 turbo run --filter=dev-playground",
