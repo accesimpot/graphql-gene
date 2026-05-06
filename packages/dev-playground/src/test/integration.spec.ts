@@ -5,7 +5,7 @@ import { sequelize } from '../models/sequelize'
 import { useMetaPlugin } from '../plugins/useMetaPlugin'
 import { schema } from '../server/schema'
 import { getFixtureQuery } from './utils'
-import { Order, Product } from '../models'
+import { Order, Product, CmsPage, CmsPageBlock, HeroBlock, TextBlock } from '../models'
 
 await sequelize.authenticate()
 
@@ -278,6 +278,71 @@ describe('integration', () => {
           message: { type: 'error', text: 'Status could not be updated.' },
           order: null,
         })
+      })
+    })
+  })
+
+  describe('polymorphic page blocks (GraphQL union)', () => {
+    const demoPath = '/__union_demo_page__'
+
+    beforeAll(async () => {
+      await sequelize.sync({ alter: false })
+      await CmsPageBlock.destroy({ where: {}, truncate: true })
+      await HeroBlock.destroy({ where: {}, truncate: true })
+      await TextBlock.destroy({ where: {}, truncate: true })
+      await CmsPage.destroy({ where: {}, truncate: true })
+
+      const page = await CmsPage.create({ path: demoPath })
+      const hero = await HeroBlock.create({ title: 'Hello', subtitle: 'Union demo hero' })
+      const text = await TextBlock.create({ body: 'Plain text body via TEXT block kind.' })
+
+      await CmsPageBlock.create({
+        pageId: page.id,
+        sortOrder: 0,
+        blockKind: 'HERO',
+        heroBlockId: hero.id,
+        textBlockId: null,
+      })
+      await CmsPageBlock.create({
+        pageId: page.id,
+        sortOrder: 1,
+        blockKind: 'TEXT',
+        heroBlockId: null,
+        textBlockId: text.id,
+      })
+    })
+
+    it('resolves union members with inline fragments and __typename', async () => {
+      const result = await execute<{ cmsPageByPath: CmsPage }>({
+        document: getFixtureQuery('queries/cmsPageUnionBlocks.gql'),
+        variables: { path: demoPath },
+      })
+
+      expect(result.errors).toBeUndefined()
+      expect(result.data?.cmsPageByPath).toEqual({
+        id: expect.any(Number),
+        path: demoPath,
+        blocks: [
+          {
+            id: expect.any(Number),
+            sortOrder: 0,
+            blockKind: 'HERO',
+            content: {
+              __typename: 'HeroBlock',
+              title: 'Hello',
+              subtitle: 'Union demo hero',
+            },
+          },
+          {
+            id: expect.any(Number),
+            sortOrder: 1,
+            blockKind: 'TEXT',
+            content: {
+              __typename: 'TextBlock',
+              body: 'Plain text body via TEXT block kind.',
+            },
+          },
+        ],
       })
     })
   })

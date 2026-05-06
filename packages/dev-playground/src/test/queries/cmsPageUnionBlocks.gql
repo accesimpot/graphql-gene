@@ -1,0 +1,21 @@
+query CmsPageUnionBlocks($path: String!) {
+  cmsPageByPath(path: $path) {
+    id
+    path
+    blocks {
+      id
+      sortOrder
+      blockKind
+      content {
+        __typename
+        ... on HeroBlock {
+          title
+          subtitle
+        }
+        ... on TextBlock {
+          body
+        }
+      }
+    }
+  }
+}
