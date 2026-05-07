@@ -283,7 +283,7 @@ describe('integration', () => {
   })
 
   describe('polymorphic page blocks (GraphQL interface + @Polymorphic)', () => {
-    const demoPath = '/__union_demo_page__'
+    const demoPath = '/__polymorphic_demo_page__'
 
     beforeAll(async () => {
       await sequelize.sync({ alter: false })
@@ -293,7 +293,7 @@ describe('integration', () => {
       await Page.destroy({ where: {}, truncate: true })
 
       const page = await Page.create({ path: demoPath })
-      const hero = await HeroBlock.create({ title: 'Hello', subtitle: 'Union demo hero' })
+      const hero = await HeroBlock.create({ title: 'Hello', subtitle: 'Polymorphic demo hero' })
       const text = await TextBlock.create({ body: 'Plain text body via TEXT block kind.' })
 
       await PageBlock.create({
@@ -310,7 +310,7 @@ describe('integration', () => {
 
     it('resolves interface members via inline fragments and __typename', async () => {
       const result = await execute<{ pageByPath: Page }>({
-        document: getFixtureQuery('queries/pageUnionBlocks.gql'),
+        document: getFixtureQuery('queries/pagePolymorphicBlocks.gql'),
         variables: { path: demoPath },
       })
 
@@ -323,7 +323,7 @@ describe('integration', () => {
             id: expect.any(Number),
             __typename: 'HeroBlock',
             title: 'Hello',
-            subtitle: 'Union demo hero',
+            subtitle: 'Polymorphic demo hero',
           },
           {
             id: expect.any(Number),

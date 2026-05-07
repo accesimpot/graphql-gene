@@ -1,4 +1,4 @@
-query PageUnionBlocks($path: String!) {
+query PagePolymorphicBlocks($path: String!) {
   pageByPath(where: { path: { eq: $path } }) {
     id
     path
