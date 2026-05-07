@@ -491,6 +491,8 @@ function registerDirectives(options: {
   each: (details: { directiveDef: string; directive: GeneDirectiveConfig }) => void
 }) {
   options.configs?.forEach(directive => {
+    if (!directive.name) return
+
     // Define or extend the directive in the schema
     options.defs[directive.name] = options.defs[directive.name] || { argsDef: {} }
 

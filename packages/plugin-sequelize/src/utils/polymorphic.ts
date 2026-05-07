@@ -6,25 +6,12 @@ import {
 } from 'graphql-gene'
 import { BelongsTo, Column, DataType, ForeignKey, type ModelStatic } from 'sequelize-typescript'
 
-/**
- * Get the expected attribute name for a given associated model.
- * @example
- * getAttributeByModelName('HeroBlock') // => 'heroBlock'
- * getAttributeByModelName('TextBlock') // => 'textBlock'
- */
-export function getAttributeByModelName(modelName: string) {
-  return modelName.charAt(0).toLowerCase() + modelName.slice(1)
-}
-
-function getAttributeIdName(attributeName: string) {
-  return `${attributeName}Id`
-}
-
 export function Polymorphic<M extends ModelStatic = ModelStatic>(
   possibleTypes: () => (ModelStatic & { geneConfig?: GeneConfig<M> })[]
 ) {
   return (constructor: M & { geneConfig?: GeneConfig<M> }) => {
     const BaseModel = constructor
+    const BaseModelName = BaseModel.name as GraphqlTypeName
     const targetTypes = possibleTypes()
 
     targetTypes.forEach(TargetModel => {
@@ -41,26 +28,49 @@ export function Polymorphic<M extends ModelStatic = ModelStatic>(
       TargetModel.geneConfig.__implementedInterfaces =
         TargetModel.geneConfig.__implementedInterfaces || []
 
-      TargetModel.geneConfig.__implementedInterfaces.push(BaseModel.name as GraphqlTypeName)
+      TargetModel.geneConfig.__implementedInterfaces.push(BaseModelName)
     })
 
     BaseModel.geneConfig = defineGraphqlGeneConfig(BaseModel, {
       varType: 'interface',
       include: ['id' as InferFields<M>],
 
-      findOptions(details) {
-        console.log(details)
+      directives: [
+        {
+          name: '',
+          handler({ source, field }) {
+            const rawItems = source[field as keyof typeof source] as ModelStatic | ModelStatic[]
+            const items = Array.isArray(rawItems) ? rawItems : [rawItems]
 
-        // const includeOptions: DefaultResolverIncludeOptions = {}
-
-        // lookahead({
-        //   info,
-        //   state: includeOptions,
-        //   until: handleUntilFindOptions,
-        //   next: handleNextIncludeOptions,
-        //   nextFragment: handleNextFragmentIncludeOptions,
-        // })
-      },
+            // Overwrite original field entries
+            source[field as keyof typeof source] = items.map(resolveAssociation)
+          },
+        },
+      ],
     })
   }
+}
+
+function resolveAssociation(item: ModelStatic & { _options?: { includeNames?: string[] } }) {
+  const { includeNames = [] } = item._options || {}
+
+  for (const name of includeNames) {
+    const association = item[name as keyof typeof item]
+    if (association) return association
+  }
+  return item
+}
+
+/**
+ * Get the expected attribute name for a given associated model.
+ * @example
+ * getAttributeByModelName('HeroBlock') // => 'heroBlock'
+ * getAttributeByModelName('TextBlock') // => 'textBlock'
+ */
+export function getAttributeByModelName(modelName: string) {
+  return modelName.charAt(0).toLowerCase() + modelName.slice(1)
+}
+
+function getAttributeIdName(attributeName: string) {
+  return `${attributeName}Id`
 }
