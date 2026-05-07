@@ -8,12 +8,13 @@ import {
 import { BelongsTo, Column, DataType, ForeignKey, type ModelStatic } from 'sequelize-typescript'
 
 export function Polymorphic<M extends ModelStatic = ModelStatic>(
-  possibleTypes: () => (ModelStatic & { geneConfig?: GeneConfig<M> })[]
+  possibleTypes: () => ModelStatic[]
 ) {
   return (constructor: M & { geneConfig?: GeneConfig<M> }) => {
     const BaseModel = constructor
     const BaseModelName = BaseModel.name as GraphqlTypeName
-    const targetTypes = possibleTypes()
+    const rawTargetTypes = possibleTypes()
+    const targetTypes = rawTargetTypes as (ModelStatic & { geneConfig?: GeneConfig })[]
 
     targetTypes.forEach(TargetModel => {
       const typeName = TargetModel.name
