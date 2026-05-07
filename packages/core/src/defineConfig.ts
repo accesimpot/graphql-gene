@@ -169,6 +169,12 @@ export interface GeneConfig<
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   findOptions?: FindOptionsHandler<FindOptionsStateByModel<M, any>>
+
+  /**
+   * For `GraphQL Object` types only: interfaces that this type implements.
+   * @internal - Populated by the `@Polymorphic` decorator.
+   */
+  __implementedInterfaces?: GraphqlTypeName[]
 }
 
 export type GeneTypeConfig<

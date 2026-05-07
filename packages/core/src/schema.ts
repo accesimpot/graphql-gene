@@ -339,13 +339,8 @@ function generateTypeDefs<M, SchemaTypes extends AnyObject>(options: {
     schemaOptions: options,
   }
 
-  if (options.plugin.populateTypeDefs) {
-    const { afterTypeDefHooks: hooks } = options.plugin.populateTypeDefs(optionsForPopulateTypeDefs)
-    afterTypeDefHooks.push(...hooks)
-  } else {
-    const typeDef = options.plugin.getTypeDef(optionsForPopulateTypeDefs)
-    options.typeDefLines[options.modelKey] = typeDef
-  }
+  const { afterTypeDefHooks: hooks } = options.plugin.populateTypeDefs(optionsForPopulateTypeDefs)
+  afterTypeDefHooks.push(...hooks)
 
   registerDirectives({
     // @ts-expect-error Fix type issue raised by incompatible TSource
@@ -546,8 +541,17 @@ function stringifyFieldLines(typeKey: string, fieldLines: TypeDefLines[0]) {
     return `union ${typeKey} = ${getVarDef('', ' | ')}`
   }
 
+  const implementedInterfaces = fieldLines.implementedInterfaces?.length
+    ? fieldLines.implementedInterfaces
+    : []
+
+  const implementsClause =
+    fieldLines.varType === 'type' && implementedInterfaces.length
+      ? ` implements ${implementedInterfaces.join(' & ')}`
+      : ''
+
   return [
-    `${fieldLines.varType} ${typeKey}${printDirectives(fieldLines.directives)} {`,
+    `${fieldLines.varType} ${typeKey}${implementsClause}${printDirectives(fieldLines.directives)} {`,
     getVarDef(),
     `}`,
   ].join('\n')

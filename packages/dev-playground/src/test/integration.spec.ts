@@ -282,7 +282,7 @@ describe('integration', () => {
     })
   })
 
-  describe('polymorphic page blocks (GraphQL union)', () => {
+  describe('polymorphic page blocks (GraphQL interface + @Polymorphic)', () => {
     const demoPath = '/__union_demo_page__'
 
     beforeAll(async () => {
@@ -298,21 +298,17 @@ describe('integration', () => {
 
       await PageBlock.create({
         pageId: page.id,
-        sortOrder: 0,
-        blockKind: 'HERO',
         heroBlockId: hero.id,
         textBlockId: null,
       })
       await PageBlock.create({
         pageId: page.id,
-        sortOrder: 1,
-        blockKind: 'TEXT',
         heroBlockId: null,
         textBlockId: text.id,
       })
     })
 
-    it('resolves union members with inline fragments and __typename', async () => {
+    it('resolves interface members via inline fragments and __typename', async () => {
       const result = await execute<{ pageByPath: Page }>({
         document: getFixtureQuery('queries/pageUnionBlocks.gql'),
         variables: { path: demoPath },
@@ -325,22 +321,14 @@ describe('integration', () => {
         blocks: [
           {
             id: expect.any(Number),
-            sortOrder: 0,
-            blockKind: 'HERO',
-            content: {
-              __typename: 'HeroBlock',
-              title: 'Hello',
-              subtitle: 'Union demo hero',
-            },
+            __typename: 'HeroBlock',
+            title: 'Hello',
+            subtitle: 'Union demo hero',
           },
           {
             id: expect.any(Number),
-            sortOrder: 1,
-            blockKind: 'TEXT',
-            content: {
-              __typename: 'TextBlock',
-              body: 'Plain text body via TEXT block kind.',
-            },
+            __typename: 'TextBlock',
+            body: 'Plain text body via TEXT block kind.',
           },
         ],
       })

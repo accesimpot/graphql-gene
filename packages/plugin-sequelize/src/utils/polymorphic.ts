@@ -1,4 +1,9 @@
-import { defineGraphqlGeneConfig, type GeneConfig, type InferFields } from 'graphql-gene'
+import {
+  defineGraphqlGeneConfig,
+  type GeneConfig,
+  type GraphqlTypeName,
+  type InferFields,
+} from 'graphql-gene'
 import { BelongsTo, Column, DataType, ForeignKey, type ModelStatic } from 'sequelize-typescript'
 
 /**
@@ -16,13 +21,11 @@ function getAttributeIdName(attributeName: string) {
 }
 
 export function Polymorphic<M extends ModelStatic = ModelStatic>(
-  possibleTypes: () => ModelStatic[]
+  possibleTypes: () => (ModelStatic & { geneConfig?: GeneConfig<M> })[]
 ) {
   return (constructor: M & { geneConfig?: GeneConfig<M> }) => {
     const BaseModel = constructor
     const targetTypes = possibleTypes()
-
-    const exclude: string[] = []
 
     targetTypes.forEach(TargetModel => {
       const typeName = TargetModel.name
@@ -34,11 +37,16 @@ export function Polymorphic<M extends ModelStatic = ModelStatic>(
       ForeignKey(() => TargetModel)(BaseModel.prototype, attributeIdName)
       BelongsTo(() => TargetModel)(BaseModel.prototype, attributeName)
 
-      exclude.push(attributeIdName, attributeName)
+      TargetModel.geneConfig = TargetModel.geneConfig || {}
+      TargetModel.geneConfig.__implementedInterfaces =
+        TargetModel.geneConfig.__implementedInterfaces || []
+
+      TargetModel.geneConfig.__implementedInterfaces.push(BaseModel.name as GraphqlTypeName)
     })
 
     BaseModel.geneConfig = defineGraphqlGeneConfig(BaseModel, {
-      exclude: exclude as InferFields<M>[],
+      varType: 'interface',
+      include: ['id' as InferFields<M>],
 
       findOptions(details) {
         console.log(details)

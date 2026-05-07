@@ -4,16 +4,15 @@ query PageUnionBlocks($path: String!) {
     path
     blocks {
       id
+      __typename
 
-      content {
-        __typename
-        ... on HeroBlock {
-          title
-          subtitle
-        }
-        ... on TextBlock {
-          body
-        }
+      ... on HeroBlock {
+        title
+        subtitle
+      }
+
+      ... on TextBlock {
+        body
       }
     }
   }

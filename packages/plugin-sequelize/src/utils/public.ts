@@ -23,7 +23,7 @@ import { populateWhereOptions } from './internal'
 import { isMarkedAsAssociation } from './associationMap'
 import { getAttributeByModelName } from './polymorphic'
 
-export { Polymorphic } from './polymorphic'
+export * from './polymorphic'
 
 const QUERY_TYPE = 'Query'
 const MUTATION_TYPE = 'Mutation'
@@ -86,8 +86,6 @@ function handleNextIncludeOptions(details: NextHandlerDetails<DefaultResolverInc
 
   const include = getFieldIncludeOptions({ association: field, args, isList })
 
-  console.log('next', include)
-
   state.include = state.include || []
   state.include.push(include)
 
@@ -99,8 +97,6 @@ function handleNextFragmentIncludeOptions(
 ) {
   const { state, type } = details
   const include: DefaultResolverIncludeOptions = { association: getAttributeByModelName(type) }
-
-  console.log('fragment', include)
 
   state.include = state.include || []
   state.include.push(include)

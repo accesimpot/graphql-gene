@@ -1,13 +1,9 @@
 import type { CreationOptional, InferAttributes, InferCreationAttributes } from 'sequelize'
 import { BelongsTo, Column, DataType, ForeignKey, Model, Table } from 'sequelize-typescript'
-import { defineUnion } from 'graphql-gene'
 import { Polymorphic } from '@graphql-gene/plugin-sequelize'
 import { Page } from '../Page/Page.model'
 import { HeroBlock } from '../HeroBlock/HeroBlock.model'
 import { TextBlock } from '../TextBlock/TextBlock.model'
-
-/** GraphQL union for polymorphic hub rows (see PLAN_V2 §2.8). */
-export const PageBlockContent = defineUnion(['HeroBlock', 'TextBlock'])
 
 /**
  * The @Polymorphic decorator will dynamically inject foreign keys and associations
