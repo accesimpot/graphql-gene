@@ -26,6 +26,7 @@ import {
   isFieldIncluded,
   isObject,
   getGloballyExtendedTypes,
+  attachPolymorphicAbstractResolveTypes,
   getReturnTypeName,
   getFieldDefinition,
   setGeneConfigByType,
@@ -119,6 +120,8 @@ export function generateSchema<
     plugins: options.plugins || [],
     types: options.types,
   })
+
+  attachPolymorphicAbstractResolveTypes(executableSchema)
 
   return {
     schema: executableSchema,

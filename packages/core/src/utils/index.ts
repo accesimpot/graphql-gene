@@ -24,6 +24,7 @@ import type { AnyObject, FieldLines, GraphQLVarType, TypeDefLines, TypeOrFunctio
 import type { GeneConfig, GeneTypeConfig } from '../defineConfig'
 
 export * from './extend'
+export * from './polymorphicAbstractRegistry'
 
 type GraphQLOutputObjectType = GraphQLObjectType | GraphQLInterfaceType
 

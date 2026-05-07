@@ -1,5 +1,6 @@
 import {
   defineGraphqlGeneConfig,
+  registerPolymorphicAbstractType,
   type GeneConfig,
   type GraphqlTypeName,
   type InferFields,
@@ -30,6 +31,8 @@ export function Polymorphic<M extends ModelStatic = ModelStatic>(
 
       TargetModel.geneConfig.__implementedInterfaces.push(BaseModelName)
     })
+
+    registerPolymorphicAbstractType(BaseModelName)
 
     BaseModel.geneConfig = defineGraphqlGeneConfig(BaseModel, {
       varType: 'interface',
