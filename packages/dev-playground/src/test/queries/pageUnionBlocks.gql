@@ -1,5 +1,5 @@
-query CmsPageUnionBlocks($path: String!) {
-  cmsPageByPath(path: $path) {
+query PageUnionBlocks($path: String!) {
+  pageByPath(path: $path) {
     id
     path
     blocks {

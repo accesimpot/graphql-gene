@@ -8,21 +8,21 @@ import {
   Table,
 } from 'sequelize-typescript'
 import { defineGraphqlGeneConfig } from 'graphql-gene'
-import { CmsPageBlock } from './CmsPageBlock.model'
+import { PageBlock } from '../PageBlock/PageBlock.model'
 
 export
-@Table({ tableName: 'cms_pages' })
-class CmsPage extends Model<InferAttributes<CmsPage>, InferCreationAttributes<CmsPage>> {
+@Table
+class Page extends Model<InferAttributes<Page>, InferCreationAttributes<Page>> {
   declare id: CreationOptional<number>
 
   @AllowNull(false)
   @Column(DataType.STRING)
   declare path: string
 
-  @HasMany(() => CmsPageBlock)
-  declare blocks: CmsPageBlock[] | null
+  @HasMany(() => PageBlock)
+  declare blocks: PageBlock[] | null
 
-  static readonly geneConfig = defineGraphqlGeneConfig(CmsPage, {
+  static readonly geneConfig = defineGraphqlGeneConfig(Page, {
     include: ['id', 'path', 'blocks'],
   })
 }

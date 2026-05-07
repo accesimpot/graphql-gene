@@ -3,7 +3,7 @@ import { AllowNull, Column, DataType, Model, Table } from 'sequelize-typescript'
 import { defineGraphqlGeneConfig } from 'graphql-gene'
 
 export
-@Table({ tableName: 'cms_hero_blocks' })
+@Table
 class HeroBlock extends Model<InferAttributes<HeroBlock>, InferCreationAttributes<HeroBlock>> {
   declare id: CreationOptional<number>
 

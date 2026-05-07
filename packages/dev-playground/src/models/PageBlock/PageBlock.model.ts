@@ -10,18 +10,18 @@ import {
 } from 'sequelize-typescript'
 import { defineGraphqlGeneConfig, defineUnion, extendTypes } from 'graphql-gene'
 import type { GraphqlToTypescript } from 'graphql-gene'
-import { CmsPage } from './CmsPage.model'
-import { HeroBlock } from './HeroBlock.model'
-import { TextBlock } from './TextBlock.model'
+import { Page } from '../Page/Page.model'
+import { HeroBlock } from '../HeroBlock/HeroBlock.model'
+import { TextBlock } from '../TextBlock/TextBlock.model'
 
 /** GraphQL union for polymorphic hub rows (see PLAN_V2 §2.8). */
 export const PageBlockContent = defineUnion(['HeroBlock', 'TextBlock'])
 
 export
-@Table({ tableName: 'cms_page_blocks' })
-class CmsPageBlock extends Model<
-  InferAttributes<CmsPageBlock>,
-  InferCreationAttributes<CmsPageBlock>
+@Table
+class PageBlock extends Model<
+  InferAttributes<PageBlock>,
+  InferCreationAttributes<PageBlock>
 > {
   declare id: CreationOptional<number>
 
@@ -36,13 +36,13 @@ class CmsPageBlock extends Model<
   @Column(DataType.STRING)
   declare blockKind: 'HERO' | 'TEXT'
 
-  @ForeignKey(() => CmsPage)
+  @ForeignKey(() => Page)
   @AllowNull(false)
   @Column(DataType.INTEGER)
   declare pageId: number
 
-  @BelongsTo(() => CmsPage)
-  declare page: CmsPage | null
+  @BelongsTo(() => Page)
+  declare page: Page | null
 
   @ForeignKey(() => HeroBlock)
   @Column(DataType.INTEGER)
@@ -58,7 +58,7 @@ class CmsPageBlock extends Model<
   @BelongsTo(() => TextBlock)
   declare textBlock: TextBlock | null
 
-  static readonly geneConfig = defineGraphqlGeneConfig(CmsPageBlock, {
+  static readonly geneConfig = defineGraphqlGeneConfig(PageBlock, {
     /** Hide raw belongsTo edges; consumers use `content` union + fragments. */
     include: ['id', 'sortOrder', 'blockKind', 'pageId', 'page'],
   })
@@ -74,14 +74,14 @@ function withTextBlockTypename(row: Record<string, unknown>) {
 
 extendTypes({
   Query: {
-    cmsPageByPath: {
+    pageByPath: {
       args: { path: 'String!' },
       async resolver({ args }) {
-        return CmsPage.findOne({
+        return Page.findOne({
           where: { path: args.path },
           include: [
             {
-              model: CmsPageBlock,
+              model: PageBlock,
               as: 'blocks',
               separate: true,
               order: [['sortOrder', 'ASC']],
@@ -90,20 +90,20 @@ extendTypes({
           ],
         })
       },
-      returnType: 'CmsPage',
+      returnType: 'Page',
     },
   },
-  CmsPageBlock: {
+  PageBlock: {
     content: {
       // Plain objects carrying `__typename` match GraphQL execution; graphql-gene union types still map to Sequelize instances.
       // @ts-expect-error Resolver result typing does not yet model union members as POJOs
       async resolver(context) {
         const { source } = context
-        const hub = source as CmsPageBlock
+        const hub = source as PageBlock
         if (hub.blockKind === 'HERO') {
           const row =
             hub.heroBlock ?? (hub.heroBlockId ? await HeroBlock.findByPk(hub.heroBlockId) : null)
-          if (!row) throw new Error('CmsPageBlock: blockKind HERO but no HeroBlock row loaded')
+          if (!row) throw new Error('PageBlock: blockKind HERO but no HeroBlock row loaded')
           return withHeroBlockTypename(
             row.get({ plain: true })
           ) as unknown as GraphqlToTypescript<'PageBlockContent'>
@@ -111,12 +111,12 @@ extendTypes({
         if (hub.blockKind === 'TEXT') {
           const row =
             hub.textBlock ?? (hub.textBlockId ? await TextBlock.findByPk(hub.textBlockId) : null)
-          if (!row) throw new Error('CmsPageBlock: blockKind TEXT but no TextBlock row loaded')
+          if (!row) throw new Error('PageBlock: blockKind TEXT but no TextBlock row loaded')
           return withTextBlockTypename(
             row.get({ plain: true })
           ) as unknown as GraphqlToTypescript<'PageBlockContent'>
         }
-        throw new Error(`CmsPageBlock: unknown blockKind ${String(hub.blockKind)}`)
+        throw new Error(`PageBlock: unknown blockKind ${String(hub.blockKind)}`)
       },
       returnType: 'PageBlockContent!',
     },

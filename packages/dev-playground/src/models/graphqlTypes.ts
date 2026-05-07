@@ -1,6 +1,6 @@
 export * from './models'
 
-export { PageBlockContent } from './Cms/CmsPageBlock.model'
+export { PageBlockContent } from './PageBlock/PageBlock.model'
 
 export { ProductReviewAverage } from './Product/Product.model'
 export {
