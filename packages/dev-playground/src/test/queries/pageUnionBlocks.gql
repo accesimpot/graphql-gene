@@ -1,11 +1,10 @@
 query PageUnionBlocks($path: String!) {
-  pageByPath(path: $path) {
+  pageByPath(where: { path: { eq: $path } }) {
     id
     path
     blocks {
       id
-      sortOrder
-      blockKind
+
       content {
         __typename
         ... on HeroBlock {

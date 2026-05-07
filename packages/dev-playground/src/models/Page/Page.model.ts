@@ -1,13 +1,6 @@
 import type { CreationOptional, InferAttributes, InferCreationAttributes } from 'sequelize'
-import {
-  AllowNull,
-  Column,
-  DataType,
-  HasMany,
-  Model,
-  Table,
-} from 'sequelize-typescript'
-import { defineGraphqlGeneConfig } from 'graphql-gene'
+import { AllowNull, Column, DataType, HasMany, Model, Table } from 'sequelize-typescript'
+import { extendTypes } from 'graphql-gene'
 import { PageBlock } from '../PageBlock/PageBlock.model'
 
 export
@@ -21,8 +14,13 @@ class Page extends Model<InferAttributes<Page>, InferCreationAttributes<Page>> {
 
   @HasMany(() => PageBlock)
   declare blocks: PageBlock[] | null
-
-  static readonly geneConfig = defineGraphqlGeneConfig(Page, {
-    include: ['id', 'path', 'blocks'],
-  })
 }
+
+extendTypes({
+  Query: {
+    pageByPath: {
+      resolver: 'default',
+      returnType: 'Page',
+    },
+  },
+})
