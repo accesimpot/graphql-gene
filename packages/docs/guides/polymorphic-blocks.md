@@ -32,8 +32,8 @@ For a longer discussion of that frontend / query shape (including Vue-oriented n
 | -------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | [Setup](#setup)                                                      | Sequelize models: page, hub with `@Polymorphic`, concrete blocks |
 | [Equivalent without `@Polymorphic`](#equivalent-without-polymorphic) | Same hub written out by hand (FKs + `BelongsTo`)                 |
-| [What graphql-gene does](#what-graphql-gene-does)                    | GraphQL interface, lookahead includes, `id`-only contract        |
 | [Querying](#querying)                                                | Operation, variables, example JSON                               |
+| [What graphql-gene does](#what-graphql-gene-does)                    | GraphQL interface, selection-driven includes, `id`-only contract |
 | [Frontend and component trees](#frontend-and-component-trees)        | Typename-driven UIs                                              |
 | [Reference implementation](#reference-implementation)                | Dev-playground paths                                             |
 
@@ -141,14 +141,6 @@ export class PageBlock extends Model {
 }
 ```
 
-## What graphql-gene does
-
-`@Polymorphic` wires real Sequelize `BelongsTo` relationships (with FK columns) from the join row to each concrete block. If you rely on Gene’s `default` resolver (like in the example above) or use `getQueryInclude(info)`, Sequelize `include` is derived from the incoming GraphQL operation: only associations that match fields (and `... on` fragments for concrete block types you actually queried) contribute to nested loading, instead of blindly joining every polymorphic branch.
-
-In GraphQL, the decorator generates a `PageBlock`-shaped `interface` that includes only the `id`. That keeps the shared contract minimal: every concrete GraphQL type that implements it does not have to expose the same hub-only fields—each block type owns its own shape beyond `id`. The hub class may still declare extra `@Column`s (sort order, editor notes, etc.): they live in the database and in Sequelize, but they are _not_ exposed on that interface. Concrete block models (`HeroBlock`, `TextBlock`, …) remain full GraphQL object types with their own fields.
-
-The page keeps a normal `HasMany` to the join model; each concrete block model is a separate table and schema type.
-
 ## Querying
 
 Use `__typename` plus inline fragments so each block type requests only its fields. Example (from the dev-playground integration test):
@@ -210,6 +202,14 @@ Shape only; numeric `id`s are illustrative.
 ```
 
 > **Note:** In v2, Gene is planning a wrapper for has-many fields with `count` and `items` (filters and pagination live on `items`), as sketched in [PLAN_V2.md §2.4–§2.5](../../../PLAN_V2.md) (see the `variants { count, items(where: …) { … } }` example). `blocks` and other polymorphic lists will follow the same collection pattern once that lands.
+
+## What graphql-gene does
+
+`@Polymorphic` wires real Sequelize `BelongsTo` relationships (with FK columns) from the join row to each concrete block. If you rely on Gene’s `default` resolver (like in [Setup](#setup)) or use `getQueryInclude(info)`, Sequelize `include` is derived from the incoming GraphQL operation—aligned with fragments such as those in [Querying](#querying)—so only associations for concrete block types you actually queried contribute to nested loading, instead of blindly joining every polymorphic branch.
+
+In GraphQL, the decorator generates a `PageBlock`-shaped `interface` that includes only the `id`. That keeps the shared contract minimal: every concrete GraphQL type that implements it does not have to expose the same hub-only fields—each block type owns its own shape beyond `id`. The hub class may still declare extra `@Column`s (sort order, editor notes, etc.): they live in the database and in Sequelize, but they are _not_ exposed on that interface. Concrete block models (`HeroBlock`, `TextBlock`, …) remain full GraphQL object types with their own fields.
+
+The page keeps a normal `HasMany` to the join model; each concrete block model is a separate table and schema type.
 
 ## Frontend and component trees
 
