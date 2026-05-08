@@ -1,20 +1,47 @@
-# Polymorphic page blocks (`@Polymorphic`)
+# Polymorphic page blocks
 
 This pattern models a CMS-style page composed of heterogeneous blocks (hero, rich text, gallery, etc.): one ordered list in GraphQL where each item may be a different concrete type, selected in a single operation using `__typename` and inline fragments—the same ergonomics Relay-style clients use for colocated fragments and conditional UI.
 
+```graphql
+query PagePolymorphicBlocks($path: String!) {
+  pageByPath(where: { path: { eq: $path } }) {
+    id
+    path
+    blocks {
+      id
+      __typename
+
+      ... on HeroBlock {
+        title
+        subtitle
+      }
+
+      ... on TextBlock {
+        body
+      }
+    }
+  }
+}
+```
+
 For a longer discussion of that frontend / query shape (including Vue-oriented notes), see this companion write-up: [Relay-like view integration (gist)](https://gist.github.com/pmrotule/45bd636e2f2f1abdf2cd4a2d2dc3d7ea).
 
-## What graphql-gene does
+## Contents
 
-- You define a small hub model (e.g. `PageBlock`) that belongs to the page and holds one optional foreign key per concrete block type (the ORM layer for “exactly one concrete row per hub row”).
-- You declare the allowed concrete models with the `@Polymorphic(() => […])` decorator from `@graphql-gene/plugin-sequelize`. The decorator injects the extra columns and `BelongsTo` associations so you do not hand-wire each FK.
-- The hub is exposed in GraphQL as an abstract type (a GraphQL `interface` named like the hub model, e.g. `PageBlock`). Each concrete block model `implements` that interface. At schema build time, resolveType is wired so list items resolve to the correct concrete type (using `__typename` when present, otherwise the value’s constructor name where applicable).
+| Section                                                              | Description                                                      |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| [Setup](#setup)                                                      | Sequelize models: page, hub with `@Polymorphic`, concrete blocks |
+| [Equivalent without `@Polymorphic`](#equivalent-without-polymorphic) | Same hub written out by hand (FKs + `BelongsTo`)                 |
+| [What graphql-gene does](#what-graphql-gene-does)                    | GraphQL interface, lookahead includes, `id`-only contract        |
+| [Querying](#querying)                                                | Operation, variables, example JSON                               |
+| [Frontend and component trees](#frontend-and-component-trees)        | Typename-driven UIs                                              |
+| [Reference implementation](#reference-implementation)                | Dev-playground paths                                             |
 
-Concrete block types stay normal Gene models; the page simply `HasMany` the hub.
+## Setup
 
-## Backend setup (Sequelize + plugin)
+Below is the usual layout: a page with a `HasMany` to a join model, the join model marked `@Polymorphic`, and concrete block models. A typical app also exposes a field such as `pageByPath` via `extendTypes` (see dev-playground).
 
-**Page** — path and a `HasMany` to the hub; a typical app also registers a field such as `pageByPath` via `extendTypes` (see dev-playground).
+**Page**
 
 ```ts
 import { AllowNull, Column, DataType, HasMany, Model, Table } from 'sequelize-typescript'
@@ -77,7 +104,52 @@ export class HeroBlock extends Model {
 
 After `sequelize.sync`, the hub table will include nullable FK columns such as `heroBlockId` and `textBlockId` (names derived from the associated model names). Only one should be set per row for a given block instance.
 
-## Querying (single round trip)
+## Equivalent without Polymorphic
+
+The decorator saves you declaring each optional FK and `BelongsTo` pair by hand. For `HeroBlock` and `TextBlock`, the hub could be written conceptually like below in plain Sequelize (you would still align `geneConfig` / GraphQL with what the decorator generates).
+
+```ts
+@Table
+export class PageBlock extends Model {
+  @ForeignKey(() => Page)
+  @Column(DataType.INTEGER)
+  declare pageId: number
+
+  @BelongsTo(() => Page)
+  declare page: Page | null
+
+  @ForeignKey(() => HeroBlock)
+  @Column(DataType.INTEGER)
+  declare heroBlockId: number | null
+
+  @BelongsTo(() => HeroBlock)
+  declare heroBlock: HeroBlock | null
+
+  @ForeignKey(() => TextBlock)
+  @Column(DataType.INTEGER)
+  declare textBlockId: number | null
+
+  @BelongsTo(() => TextBlock)
+  declare textBlock: TextBlock | null
+
+  /**
+   * Example column that exists in SQL/Sequelize
+   * but is not on the GraphQL `PageBlock` interface (only `id` is).
+   */
+  @Column(DataType.INTEGER)
+  declare sortOrder: number
+}
+```
+
+## What graphql-gene does
+
+`@Polymorphic` turns the join model into the glue between the page and heterogeneous blocks: each listed concrete type becomes a `BelongsTo` (plus FK columns), so you use `include` / nested `include` as usual. graphql-lookahead follows the selection set: if the operation never asks for `TextBlock` fields, you need not include that association for those rows—fragments keep unnecessary tables off the query path.
+
+In GraphQL, the decorator generates a `PageBlock`-shaped `interface` that includes only the `id`. That keeps the shared contract minimal: every concrete GraphQL type that implements it does not have to expose the same hub-only fields—each block type owns its own shape beyond `id`. The hub class may still declare extra `@Column`s (sort order, editor notes, etc.): they live in the database and in Sequelize, but they are _not_ exposed on that interface. Concrete block models (`HeroBlock`, `TextBlock`, …) remain full GraphQL object types with their own fields.
+
+The page keeps a normal `HasMany` to the join model; each concrete block model is a separate table and schema type.
+
+## Querying
 
 Use `__typename` plus inline fragments so each block type requests only its fields. Example (from the dev-playground integration test):
 
