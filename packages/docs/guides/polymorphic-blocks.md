@@ -143,7 +143,7 @@ export class PageBlock extends Model {
 
 ## What graphql-gene does
 
-`@Polymorphic` turns the join model into the glue between the page and heterogeneous blocks: each listed concrete type becomes a `BelongsTo` (plus FK columns), so you use `include` / nested `include` as usual. graphql-lookahead follows the selection set: if the operation never asks for `TextBlock` fields, you need not include that association for those rows—fragments keep unnecessary tables off the query path.
+`@Polymorphic` wires real Sequelize `BelongsTo` relationships (with FK columns) from the join row to each concrete block. If you rely on Gene’s `default` resolver (like in the example above) or use `getQueryInclude(info)`, Sequelize `include` is derived from the incoming GraphQL operation: only associations that match fields (and `... on` fragments for concrete block types you actually queried) contribute to nested loading, instead of blindly joining every polymorphic branch.
 
 In GraphQL, the decorator generates a `PageBlock`-shaped `interface` that includes only the `id`. That keeps the shared contract minimal: every concrete GraphQL type that implements it does not have to expose the same hub-only fields—each block type owns its own shape beyond `id`. The hub class may still declare extra `@Column`s (sort order, editor notes, etc.): they live in the database and in Sequelize, but they are _not_ exposed on that interface. Concrete block models (`HeroBlock`, `TextBlock`, …) remain full GraphQL object types with their own fields.
 
