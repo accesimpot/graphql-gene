@@ -298,11 +298,13 @@ describe('integration', () => {
 
       await PageBlock.create({
         pageId: page.id,
+        // @ts-expect-error not relevant for test
         heroBlockId: hero.id,
         textBlockId: null,
       })
       await PageBlock.create({
         pageId: page.id,
+        // @ts-expect-error not relevant for test
         heroBlockId: null,
         textBlockId: text.id,
       })
