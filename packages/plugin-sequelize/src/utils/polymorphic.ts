@@ -7,6 +7,26 @@ import {
 } from 'graphql-gene'
 import { BelongsTo, Column, DataType, ForeignKey, type ModelStatic } from 'sequelize-typescript'
 
+/**
+ * Declares a polymorphic hub model: one join row points to exactly one concrete block
+ * (or other variant) via Sequelize `BelongsTo` + FK columns that this decorator injects.
+ *
+ * Usage:
+ * `@Polymorphic(() => [HeroBlock, TextBlock])` right before `@Table`.
+ *
+ * Sequelize’s default shape for a nested `HasMany`/`include` keeps one property per concrete
+ * association on each hub instance, e.g.
+ * `blocks = [{ heroBlock: HeroBlock, textBlock: null }, { heroBlock: null, textBlock: TextBlock }]`.
+ * A type-level Gene directive then rewrites the parent field so GraphQL resolvers see an array
+ * of concrete model instances (`instanceof HeroBlock` / `TextBlock`), e.g.
+ * `[hero, text]`, which matches how clients query with `... on HeroBlock` / `... on TextBlock`.
+ *
+ * GraphQL’s `resolveType` for the hub interface maps each list element to the concrete
+ * GraphQL type using `__typename` when set, otherwise `constructor.name`
+ * (see `graphql-gene` → `polymorphicConcreteTypeName` / `attachPolymorphicAbstractResolveTypes`).
+ *
+ * @param possibleTypes - Factory returning concrete Sequelize model classes this hub can join to.
+ */
 export function Polymorphic<M extends ModelStatic = ModelStatic>(
   possibleTypes: () => ModelStatic[]
 ) {
@@ -42,6 +62,12 @@ export function Polymorphic<M extends ModelStatic = ModelStatic>(
       directives: [
         {
           name: '',
+          /**
+           * Rewrites `source[field]` (e.g. `page.blocks`) from hub rows with populated
+           * `heroBlock` / `textBlock` (and nulls on the rest) into the single loaded concrete
+           * instance per row via {@link resolveAssociation}, so the value shape matches
+           * GraphQL fragments and `resolveType` (`constructor.name`).
+           */
           handler({ source, field }) {
             const rawItems = source[field as keyof typeof source] as ModelStatic | ModelStatic[]
             const items = Array.isArray(rawItems) ? rawItems : [rawItems]
@@ -55,14 +81,19 @@ export function Polymorphic<M extends ModelStatic = ModelStatic>(
   }
 }
 
+/**
+ * Picks the Sequelize nested instance that was actually included for this row
+ * (see `_options.includeNames`), or returns the hub row unchanged.
+ */
 function resolveAssociation(item: ModelStatic & { _options?: { includeNames?: string[] } }) {
   const { includeNames = [] } = item._options || {}
+  // e.g. includeNames = ['heroBlock', 'textBlock']
 
   for (const name of includeNames) {
     const association = item[name as keyof typeof item]
-    if (association) return association
+    if (association) return association // return the concrete instance
   }
-  return item
+  return item // return the hub row unchanged as a fallback
 }
 
 /**
