@@ -5,7 +5,7 @@ import { sequelize } from '../models/sequelize'
 import { useMetaPlugin } from '../plugins/useMetaPlugin'
 import { schema } from '../server/schema'
 import { getFixtureQuery } from './utils'
-import { Order, Product, Page, PageBlock, HeroBlock, TextBlock } from '../models'
+import { Order, Product, Page } from '../models'
 
 await sequelize.authenticate()
 
@@ -284,31 +284,6 @@ describe('integration', () => {
 
   describe('polymorphic page blocks (GraphQL interface + @Polymorphic)', () => {
     const demoPath = '/__polymorphic_demo_page__'
-
-    beforeAll(async () => {
-      await sequelize.sync({ alter: false })
-      await PageBlock.destroy({ where: {}, truncate: true })
-      await HeroBlock.destroy({ where: {}, truncate: true })
-      await TextBlock.destroy({ where: {}, truncate: true })
-      await Page.destroy({ where: {}, truncate: true })
-
-      const page = await Page.create({ path: demoPath })
-      const hero = await HeroBlock.create({ title: 'Hello', subtitle: 'Polymorphic demo hero' })
-      const text = await TextBlock.create({ body: 'Plain text body via TEXT block kind.' })
-
-      await PageBlock.create({
-        pageId: page.id,
-        // @ts-expect-error not relevant for test
-        heroBlockId: hero.id,
-        textBlockId: null,
-      })
-      await PageBlock.create({
-        pageId: page.id,
-        // @ts-expect-error not relevant for test
-        heroBlockId: null,
-        textBlockId: text.id,
-      })
-    })
 
     it('resolves interface members via inline fragments and __typename', async () => {
       const result = await execute<{ pageByPath: Page }>({
