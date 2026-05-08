@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "name": "@graphql-gene/docs",
+  "description": "Markdown documentation for graphql-gene (guides, migrations, APIs). Intended for rendering in GitHub or a future docs site.",
+  "license": "MIT"
+}
