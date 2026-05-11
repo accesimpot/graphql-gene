@@ -4,9 +4,9 @@ import {
   isEmptyObject,
   isObject,
   normalizeFieldConfig,
-  PAGE_ARG_DEFAULT,
-  PER_PAGE_ARG_DEFAULT,
+  LIMIT_ARG_DEFAULT,
   QUERY_ORDER_VALUES,
+  SKIP_ARG_DEFAULT,
   type ValidGraphqlType,
 } from 'graphql-gene'
 import {
@@ -218,12 +218,11 @@ export function getFieldIncludeOptions(options: {
   }
 
   if (options.isList) {
-    const argPage = typeof options.args.page === 'number' ? options.args.page : PAGE_ARG_DEFAULT
-    const argPerPage =
-      typeof options.args.perPage === 'number' ? options.args.perPage : PER_PAGE_ARG_DEFAULT
+    const skip = typeof options.args.skip === 'number' ? options.args.skip : SKIP_ARG_DEFAULT
+    const limit = typeof options.args.limit === 'number' ? options.args.limit : LIMIT_ARG_DEFAULT
 
-    includeOptions.offset = (argPage - 1) * argPerPage
-    includeOptions.limit = argPerPage
+    includeOptions.offset = skip
+    includeOptions.limit = limit
   }
 
   return includeOptions

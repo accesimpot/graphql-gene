@@ -52,9 +52,9 @@ export type TypeOrFunction<T> = T | (() => T)
  * function doSomething<T>(obj: Narrow<T>) {
  *   return obj
  * }
- * const something = doSomething({ args: { page: 'Int' } })
+ * const something = doSomething({ args: { skip: 'Int' } })
  *
- * // `something.args.page` will be of type `'Int'` instead of `string`
+ * // `something.args.skip` will be of type `'Int'` instead of `string`
  *
  * @see https://stackoverflow.com/a/75881801/1895428
  */
