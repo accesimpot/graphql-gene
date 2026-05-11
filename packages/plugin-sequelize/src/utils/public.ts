@@ -1,12 +1,12 @@
-import { GraphQLError, type GraphQLResolveInfo } from 'graphql'
+import { GraphQLError, getNamedType, type GraphQLResolveInfo } from 'graphql'
 import {
   getGloballyExtendedTypes,
   isEmptyObject,
   isObject,
   normalizeFieldConfig,
-  PAGE_ARG_DEFAULT,
-  PER_PAGE_ARG_DEFAULT,
   QUERY_ORDER_VALUES,
+  SKIP_ARG_DEFAULT,
+  LIMIT_ARG_DEFAULT,
   type ValidGraphqlType,
 } from 'graphql-gene'
 import {
@@ -20,10 +20,43 @@ import type { OrderItem } from 'sequelize'
 import type { Model } from 'sequelize-typescript'
 import type { DefaultResolverIncludeOptions, GeneSequelizeWhereOptions } from '../types'
 import { populateWhereOptions } from './internal'
+import {
+  GENE_ASSOCIATION_LIST_ITEMS_FIELD,
+  getGeneAssociationListWrapperMeta,
+} from './associationListRegistry'
+import {
+  isAssociationListWrapperOutputType,
+  scanAssociationWrapperFacets,
+} from './associationListWrapperShape'
 import { isMarkedAsAssociation } from './associationMap'
 import { getAttributeByModelName } from './polymorphic'
+import { isSafeArray } from './guards'
 
 export * from './polymorphic'
+
+/** Frames the current Sequelize include object when traversing synthetic wrapper facets so lookahead state stays distinct from ORM include shapes. */
+const GENE_ASSOCIATION_INCLUDE_FRAME_KEY = '__geneAssociationIncludeFrame'
+
+function unwrapAssociationIncludeFrame(state: unknown): DefaultResolverIncludeOptions {
+  if (
+    isObject(state) &&
+    GENE_ASSOCIATION_INCLUDE_FRAME_KEY in state &&
+    isObject((state as Record<string, unknown>)[GENE_ASSOCIATION_INCLUDE_FRAME_KEY])
+  ) {
+    return (state as Record<string, DefaultResolverIncludeOptions>)[
+      GENE_ASSOCIATION_INCLUDE_FRAME_KEY
+    ]
+  }
+  return state as DefaultResolverIncludeOptions
+}
+
+function frameAssociationInclude(
+  include: DefaultResolverIncludeOptions
+): DefaultResolverIncludeOptions {
+  return {
+    [GENE_ASSOCIATION_INCLUDE_FRAME_KEY]: include,
+  } as unknown as DefaultResolverIncludeOptions
+}
 
 const QUERY_TYPE = 'Query'
 const MUTATION_TYPE = 'Mutation'
@@ -56,24 +89,37 @@ function getFieldConfig(sourceType: string, field: string) {
 }
 
 function handleUntilFindOptions(options: UntilHandlerDetails<DefaultResolverIncludeOptions>) {
+  const rootState = unwrapAssociationIncludeFrame(options.state)
   const { sourceType, type, field } = options
   const typeConfig = getTypeConfig(type)
   const fieldConfig = getFieldConfig(sourceType, field)
+
+  if (
+    getGeneAssociationListWrapperMeta(sourceType) &&
+    field === GENE_ASSOCIATION_LIST_ITEMS_FIELD
+  ) {
+    if (!typeConfig?.findOptions && !fieldConfig?.findOptions) return false
+
+    return {
+      afterAllSelections() {
+        typeConfig?.findOptions?.(Object.assign(options, { findOptions: rootState }))
+        fieldConfig?.findOptions?.(Object.assign(options, { findOptions: rootState }))
+      },
+    }
+  }
 
   if (typeConfig?.findOptions || fieldConfig?.findOptions) {
     return {
       afterAllSelections() {
         if (typeConfig?.findOptions) {
-          options.state.include = options.state.include || []
-          const possibleState = options.state?.include?.find(opt => opt.association === field)
-          const state = possibleState || { association: field }
-          if (!possibleState) options.state.include.push(state)
+          rootState.include = rootState.include || []
+          const possibleState = rootState.include?.find(opt => opt.association === field)
+          const nestedState = possibleState || { association: field }
+          if (!possibleState) rootState.include.push(nestedState)
 
-          typeConfig?.findOptions?.(Object.assign(options, { findOptions: state }))
+          typeConfig?.findOptions?.(Object.assign(options, { findOptions: nestedState }))
         }
-        // Using `Object.assign` instead of object spread operator to prevent executing the
-        // getters if not requested (i.e. `fieldDef`, `args`).
-        fieldConfig?.findOptions?.(Object.assign(options, { findOptions: options.state }))
+        fieldConfig?.findOptions?.(Object.assign(options, { findOptions: rootState }))
       },
     }
   }
@@ -81,8 +127,48 @@ function handleUntilFindOptions(options: UntilHandlerDetails<DefaultResolverIncl
 }
 
 function handleNextIncludeOptions(details: NextHandlerDetails<DefaultResolverIncludeOptions>) {
-  const { state, sourceType, field, args, isList } = details
+  const {
+    state: rawState,
+    sourceType,
+    field,
+    args,
+    isList,
+    nextSelectionSet,
+    info,
+    fieldDef,
+  } = details
+  const state = unwrapAssociationIncludeFrame(rawState)
+
+  if (
+    getGeneAssociationListWrapperMeta(sourceType) &&
+    field === GENE_ASSOCIATION_LIST_ITEMS_FIELD
+  ) {
+    return frameAssociationInclude(state)
+  }
+
   if (!isMarkedAsAssociation(sourceType, field)) return {}
+
+  const namedReturn = getNamedType(fieldDef.type)
+
+  if (isAssociationListWrapperOutputType(fieldDef.type)) {
+    const { hasItems, hasCount } = scanAssociationWrapperFacets(
+      info,
+      namedReturn.name,
+      nextSelectionSet
+    )
+    if (!hasItems || !hasCount) return {}
+
+    const include = getFieldIncludeOptions({
+      association: field,
+      args,
+      isList: true,
+    })
+
+    state.include = state.include || []
+    state.include.push(include)
+
+    return include
+  }
 
   const include = getFieldIncludeOptions({ association: field, args, isList })
 
@@ -95,7 +181,8 @@ function handleNextIncludeOptions(details: NextHandlerDetails<DefaultResolverInc
 function handleNextFragmentIncludeOptions(
   details: NextFragmentHandlerDetails<DefaultResolverIncludeOptions>
 ) {
-  const { state, type } = details
+  const state = unwrapAssociationIncludeFrame(details.state)
+  const { type } = details
   const include: DefaultResolverIncludeOptions = { association: getAttributeByModelName(type) }
 
   state.include = state.include || []
@@ -171,6 +258,7 @@ export function getQueryIncludeOf(
 export function getFieldFindOptions(options: {
   args: { [arg: string]: unknown }
   isList: boolean
+  omitAssociation?: boolean
 }) {
   return getFieldIncludeOptions(options)
 }
@@ -179,28 +267,30 @@ export function getFieldIncludeOptions(options: {
   association?: string
   args: { [arg: string]: unknown }
   isList: boolean
+  omitAssociation?: boolean
 }) {
   const includeOptions: DefaultResolverIncludeOptions = {}
-  if (options.association) includeOptions.association = options.association
+  if (options.association && !options.omitAssociation) {
+    includeOptions.association = options.association
+  }
 
   const where: GeneSequelizeWhereOptions = {}
 
   if (!options.isList) {
-    if (options.association) return includeOptions
+    if (options.association && !options.omitAssociation) return includeOptions
 
     if (typeof options.args.id === 'string') {
       includeOptions.where = where
       includeOptions.where.id = options.args.id
     }
   }
-  // TODO: Possible improvement: Return from here if not using default resolver
 
   if (isObject(options.args.where)) {
     includeOptions.where = where
     populateWhereOptions(options.args.where, where)
   }
 
-  if (Array.isArray(options.args.order)) {
+  if (isSafeArray(options.args.order)) {
     const orderOptions: OrderItem[] = []
 
     options.args.order.forEach(fieldOrderValue => {
@@ -218,12 +308,11 @@ export function getFieldIncludeOptions(options: {
   }
 
   if (options.isList) {
-    const argPage = typeof options.args.page === 'number' ? options.args.page : PAGE_ARG_DEFAULT
-    const argPerPage =
-      typeof options.args.perPage === 'number' ? options.args.perPage : PER_PAGE_ARG_DEFAULT
+    const skip = typeof options.args.skip === 'number' ? options.args.skip : SKIP_ARG_DEFAULT
+    const limit = typeof options.args.limit === 'number' ? options.args.limit : LIMIT_ARG_DEFAULT
 
-    includeOptions.offset = (argPage - 1) * argPerPage
-    includeOptions.limit = argPerPage
+    includeOptions.offset = skip
+    includeOptions.limit = limit
   }
 
   return includeOptions

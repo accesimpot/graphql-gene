@@ -4,10 +4,12 @@ query orderWithPublished {
     status
 
     items {
-      product {
-        id
-        name
-        isPublished
+      items {
+        product {
+          id
+          name
+          isPublished
+        }
       }
     }
   }

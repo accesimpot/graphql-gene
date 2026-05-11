@@ -121,6 +121,14 @@ export function generateSchema<
     types: options.types,
   })
 
+  ;(options.plugins || []).forEach(plugin => {
+    plugin.attachSchemaResolvers?.({
+      schema: executableSchema,
+      types: options.types,
+      typeDefLines,
+    })
+  })
+
   attachPolymorphicAbstractResolveTypes(executableSchema)
 
   return {

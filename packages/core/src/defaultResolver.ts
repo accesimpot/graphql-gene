@@ -1,9 +1,9 @@
 import {
   AND_OR_OPERATORS,
   BASIC_GRAPHQL_TYPE_VALUES,
-  PAGE_ARG_DEFAULT,
-  PER_PAGE_ARG_DEFAULT,
+  LIMIT_ARG_DEFAULT,
   QUERY_ORDER_VALUES,
+  SKIP_ARG_DEFAULT,
 } from './constants'
 import type { FieldLines, TypeDefLines } from './types'
 import { createTypeDefLines, getDefaultFieldLinesObject, getReturnTypeName } from './utils'
@@ -29,8 +29,8 @@ export function populateArgsDefForDefaultResolver(options: {
   const argsDef = {
     ...(options.isList
       ? {
-          page: 'Int',
-          perPage: 'Int',
+          skip: 'Int',
+          limit: 'Int',
         }
       : { id: 'String' }),
     locale: 'String',
@@ -42,9 +42,8 @@ export function populateArgsDefForDefaultResolver(options: {
       options.fieldLineConfig.argsDef[argKey] || new Set<string>([])
 
     let def = argDef
-    // Set default values
-    if (argKey === 'page') def += ` = ${PAGE_ARG_DEFAULT}`
-    if (argKey === 'perPage') def += ` = ${PER_PAGE_ARG_DEFAULT}`
+    if (argKey === 'skip') def += ` = ${SKIP_ARG_DEFAULT}`
+    if (argKey === 'limit') def += ` = ${LIMIT_ARG_DEFAULT}`
 
     options.fieldLineConfig.argsDef[argKey].add(def)
   })
@@ -159,13 +158,15 @@ export function generateDefaultQueryFilterTypeDefs(options: {
 
   Object.entries(options.typeDefLines[options.fieldType].lines).forEach(
     ([returnFieldKey, returnFieldConfig]) => {
+      const returnFieldType = { ...getDefaultFieldLinesObject(), ...returnFieldConfig }
+
+      if (!returnFieldType.typeDef?.trim()) return
+
       // Where Options Input
       options.typeDefLines[whereOptionsInputName].lines[returnFieldKey] = {
         ...getDefaultFieldLinesObject(),
         ...options.typeDefLines[whereOptionsInputName].lines[returnFieldKey],
       }
-
-      const returnFieldType = { ...getDefaultFieldLinesObject(), ...returnFieldConfig }
 
       const validInputType = findValidInputType(returnFieldType.typeDef)
       let whereTypeDef = ''

@@ -4,24 +4,28 @@ query orderById($id: String!) {
     status
 
     items {
-      price
-      quantity
-      product {
-        id
-        name
-        color
+      items {
+        price
+        quantity
+        product {
+          id
+          name
+          color
 
-        group {
-          categories
-        }
+          group {
+            categories
+          }
 
-        variants {
-          size
-        }
+          variants {
+            items {
+              size
+            }
+          }
 
-        reviewAverage {
-          rating
-          total
+          reviewAverage {
+            rating
+            total
+          }
         }
       }
     }

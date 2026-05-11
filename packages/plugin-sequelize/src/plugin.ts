@@ -1,6 +1,7 @@
 import type { GenePlugin, PluginSettings, PrototypeOrNot, TypeDefLines } from 'graphql-gene'
 import type { InferAttributes } from 'sequelize'
 import { Model } from 'sequelize-typescript'
+import { attachAssociationListWrapperResolvers } from './associationListResolvers'
 import { defaultResolver } from './defaultResolver'
 import { populateTypeDefs } from './populateTypeDefs'
 import type { GeneModel } from './constants'
@@ -35,6 +36,10 @@ export const plugin = (): GenePlugin<typeof GeneModel> => {
     },
     populateTypeDefs,
     defaultResolver,
+
+    attachSchemaResolvers({ schema, types }) {
+      attachAssociationListWrapperResolvers(schema, types)
+    },
   }
 }
 
