@@ -16,6 +16,10 @@ import {
   SEQUELIZE_TYPE_TO_GRAPHQL,
 } from './constants'
 import { markFieldAsAssociation } from './utils/associationMap'
+import {
+  getGeneAssociationListWrapperTypeName,
+  registerGeneAssociationListWrapper,
+} from './utils/associationListRegistry'
 
 const BELONGS_TO_MANY = 'BelongsToMany'
 
@@ -117,9 +121,18 @@ function generateAssociationFields(
     const associationModelName = association.target.name
     let returnType = associationModelName
     let isList = false
+    let associationWrapperTypeName: string | undefined
 
     if (association.isMultiAssociation) {
-      returnType = `[${returnType}!]`
+      associationWrapperTypeName = getGeneAssociationListWrapperTypeName(options.typeName, attributeKey)
+
+      registerGeneAssociationListWrapper(associationWrapperTypeName, {
+        parentGraphqlType: options.typeName,
+        associationField: attributeKey,
+        targetGraphqlType: associationModelName,
+      })
+
+      returnType = `${associationWrapperTypeName}!`
       isList = true
     }
 
@@ -128,15 +141,33 @@ function generateAssociationFields(
 
     markFieldAsAssociation(options.typeName, attributeKey)
 
-    if (isList) {
+    if (isList && associationWrapperTypeName) {
       populateArgsDefForDefaultResolver({
         fieldLineConfig: lines[attributeKey],
         graphqlType: options.typeName,
         fieldKey: attributeKey,
-        isList,
+        isList: true,
       })
 
-      // Each association field is filterable (default resolver arguments)
+      options.typeDefLines[associationWrapperTypeName] = {
+        ...getDefaultTypeDefLinesObject(),
+        ...options.typeDefLines[associationWrapperTypeName],
+        lines: {
+          ...(options.typeDefLines[associationWrapperTypeName]?.lines || {}),
+          count: {
+            ...getDefaultFieldLinesObject(),
+            ...options.typeDefLines[associationWrapperTypeName]?.lines?.count,
+            typeDef: 'Int!',
+          },
+          items: {
+            ...getDefaultFieldLinesObject(),
+            ...options.typeDefLines[associationWrapperTypeName]?.lines?.items,
+            typeDef: `[${associationModelName}!]!`,
+          },
+        },
+      }
+
+      // Filter inputs / order enums for this association (shared by parent field args)
       afterTypeDefHooks.push(() => {
         generateDefaultQueryFilterTypeDefs({
           typeDefLines: options.typeDefLines,

@@ -1,11 +1,20 @@
 import {
   defineGraphqlGeneConfig,
+  isRegisteredPolymorphicAbstractGraphqlType,
   registerPolymorphicAbstractType,
   type GeneConfig,
   type GraphqlTypeName,
   type InferFields,
 } from 'graphql-gene'
-import { BelongsTo, Column, DataType, ForeignKey, type ModelStatic } from 'sequelize-typescript'
+import {
+  BelongsTo,
+  Column,
+  DataType,
+  ForeignKey,
+  Model,
+  type ModelStatic,
+} from 'sequelize-typescript'
+import { isModel, isSafeArray } from './guards'
 
 /**
  * Declares a polymorphic hub model: one join row points to exactly one concrete block
@@ -70,7 +79,7 @@ export function Polymorphic<M extends ModelStatic = ModelStatic>(
            */
           handler({ source, field }) {
             const rawItems = source[field as keyof typeof source] as ModelStatic | ModelStatic[]
-            const items = Array.isArray(rawItems) ? rawItems : [rawItems]
+            const items = isSafeArray(rawItems) ? rawItems : [rawItems]
 
             // Overwrite original field entries
             source[field as keyof typeof source] = items.map(resolveAssociation)
@@ -85,15 +94,41 @@ export function Polymorphic<M extends ModelStatic = ModelStatic>(
  * Picks the Sequelize nested instance that was actually included for this row
  * (see `_options.includeNames`), or returns the hub row unchanged.
  */
-function resolveAssociation(item: ModelStatic & { _options?: { includeNames?: string[] } }) {
-  const { includeNames = [] } = item._options || {}
-  // e.g. includeNames = ['heroBlock', 'textBlock']
+function resolveAssociation(item: unknown): Model | unknown {
+  if (!isModel(item)) return item
+
+  const constructor = item.constructor
+  const graphqlTypeName = constructor.name
+  if (
+    typeof graphqlTypeName !== 'string' ||
+    !isRegisteredPolymorphicAbstractGraphqlType(graphqlTypeName)
+  ) {
+    return item
+  }
+  let includeNames: string[] = []
+
+  try {
+    type ItemWithIncludeNames = { _options: { includeNames: string[] } }
+
+    // e.g. includeNames = ['heroBlock', 'textBlock']
+    includeNames = (item as unknown as ItemWithIncludeNames)._options.includeNames
+  } catch (error) {
+    throw new Error(
+      `Error resolving association: Missing _options.includeNames on ${item.constructor.name}`,
+      { cause: error }
+    )
+  }
 
   for (const name of includeNames) {
     const association = item[name as keyof typeof item]
-    if (association) return association // return the concrete instance
+    if (association) return association
   }
-  return item // return the hub row unchanged as a fallback
+  return item
+}
+
+/** Normalize Sequelize polymorphic hub rows to concrete loaded variants where applicable. */
+export function resolvePolymorphicHubLoadedRows(rows: unknown[]): (Model | unknown)[] {
+  return rows.map(row => resolveAssociation(row))
 }
 
 /**
