@@ -4,9 +4,9 @@ import {
   isEmptyObject,
   isObject,
   normalizeFieldConfig,
+  LIMIT_ARG_DEFAULT,
   QUERY_ORDER_VALUES,
   SKIP_ARG_DEFAULT,
-  LIMIT_ARG_DEFAULT,
   type ValidGraphqlType,
 } from 'graphql-gene'
 import {
