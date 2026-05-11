@@ -23,20 +23,6 @@
     "//#vitest:run": {
       "dependsOn": ["dev-utils#build"],
       "outputs": []
-    },
-    "//#vitest:watch": {
-      "dependsOn": ["dev-utils#build"],
-      "cache": false,
-      "persistent": true
-    },
-    "//#vitest:inspect": {
-      "dependsOn": ["dev-utils#build"],
-      "cache": false,
-      "persistent": true
-    },
-    "//#vitest:always": {
-      "dependsOn": ["dev-utils#build", "graphql-gene#build:deps"],
-      "outputs": []
     }
   }
 }
