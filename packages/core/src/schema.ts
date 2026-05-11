@@ -121,7 +121,7 @@ export function generateSchema<
     types: options.types,
   })
 
-  ;(options.plugins || []).forEach(plugin => {
+  options.plugins?.forEach(plugin => {
     plugin.attachSchemaResolvers?.({
       schema: executableSchema,
       types: options.types,
