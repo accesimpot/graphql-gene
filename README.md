@@ -286,8 +286,8 @@ query productsByColor($color: String) {
 | Argument | Description |
 | :--- | :---------- |
 | `id` | `String` - Entry id (only available for fields returning a single entry). |
-| `page` | `Int` - Page number for query pagination. Default: `1`. |
-| `perPage` | `Int` - Amount of results per page. Default: `10`. |
+| `skip` | `Int` - Offset for query pagination. Default: `0`. |
+| `limit` | `Int` - Maximum number of results per request. Default: `10`. |
 | `where` | `Record<Attribute, Record<Operator, T>>` - Where options generated based on the fields of the return type (i.e. `where: { name: { eq: "Foo" } }`). |
 | `order` | `[foo_ASC]` - Array of enum values representing the order in which the results should be sorted. The enum values are defined based on the attribute name + `_ASC` or `_DESC` (i.e. `order: [name_ASC, foo_DESC]`). |
 

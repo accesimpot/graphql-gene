@@ -12,8 +12,9 @@ export enum BASIC_GRAPHQL_TYPES {
 export const BASIC_GRAPHQL_TYPE_VALUES: `${BASIC_GRAPHQL_TYPES}`[] =
   Object.values(BASIC_GRAPHQL_TYPES)
 
-export const PAGE_ARG_DEFAULT = 1
-export const PER_PAGE_ARG_DEFAULT = 10
+/** Offset pagination for list queries and association list parents. */
+export const SKIP_ARG_DEFAULT = 0
+export const LIMIT_ARG_DEFAULT = 10
 
 export enum QUERY_ORDER_ENUM {
   ASC = 'ASC',
