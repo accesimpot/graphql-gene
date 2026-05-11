@@ -1,11 +1,11 @@
 import type { ExecutionResult } from 'graphql'
 import { createYoga } from 'graphql-yoga'
 import { buildHTTPExecutor, type HTTPExecutorOptions } from '@graphql-tools/executor-http'
+import { Product } from '../models'
 import { sequelize } from '../models/sequelize'
 import { useMetaPlugin } from '../plugins/useMetaPlugin'
 import { schema } from '../server/schema'
 import { getFixtureQuery } from './utils'
-import { Product } from '../models'
 
 function graphqlVariantItems(product: unknown) {
   return (
@@ -317,7 +317,7 @@ describe('integration', () => {
     })
   })
 
-  describe('association list wrapper (count + items facets)', () => {
+  describe('association list wrapper (multiple lists per GraphQL type)', () => {
     it('keeps filtered count aligned with filtered rows and honors skip/limit on items', async () => {
       const result = await execute({
         document: getFixtureQuery('queries/orderAssociationListWrapper.gql'),
@@ -332,12 +332,18 @@ describe('integration', () => {
           items: { id: number; quantity: number }[]
         }
         limitedRows: { count: number; items: { id: number }[] }
+        notesFacet: { count: number; items: { id: number; body: string }[] }
       }
 
       expect(orderRow.filtered.items.every(row => row.quantity === 3)).toBe(true)
       expect(orderRow.filtered.count).toBe(orderRow.filtered.items.length)
       expect(orderRow.limitedRows.items.length).toBeLessThanOrEqual(2)
       expect(orderRow.limitedRows.count).toBe(1)
+
+      expect(orderRow.notesFacet.count).toBe(2)
+      expect(new Set(orderRow.notesFacet.items.map(n => n.body))).toEqual(
+        new Set(['integration fixture note A', 'integration fixture note B'])
+      )
     })
   })
 

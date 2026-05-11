@@ -14,5 +14,12 @@ query orderAssociationListWrapper($id: String!) {
         id
       }
     }
+    notesFacet: notes(limit: 10, skip: 0) {
+      count
+      items {
+        id
+        body
+      }
+    }
   }
 }
