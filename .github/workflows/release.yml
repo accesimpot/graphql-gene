@@ -14,13 +14,50 @@ permissions:
   pull-requests: write # Required by @semantic-release/github to comment on released pull requests
 
 jobs:
+  should-proceed:
+    name: Proceed with the release?
+    runs-on: ubuntu-latest
+
+    outputs:
+      rebasing-beta: ${{ steps.rebasing-beta.outputs.rebasing }}
+
+    steps:
+      - name: Checkout branch 🛎
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Is rebasing beta?
+        id: rebasing-beta
+        run: |
+          github_ref="${{ github.ref }}"
+
+          if [[ $github_ref != 'refs/heads/beta' ]]; then
+            echo "rebasing=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          changes=$(git diff HEAD..origin/main --name-only)
+          diff_exit=$?
+
+          if [[ $diff_exit != 0 ]]; then
+            echo "rebasing=error" >> $GITHUB_OUTPUT
+            exit "$diff_exit"
+          elif [[ $changes ]]; then
+            echo "rebasing=false" >> $GITHUB_OUTPUT
+          else
+            echo "rebasing=true" >> $GITHUB_OUTPUT
+          fi
+
   release:
     name: Release
+    needs: [should-proceed]
     runs-on: ubuntu-latest
 
     # Avoid re-running install/build/release when semantic-release pushes the version bump (same workflow).
     # GitHub Apps push as `{slug}[bot]` — adjust actor filter if that slug changes.
-    if: ${{ github.actor != 'acci-semantic-release-token[bot]' }}
+    if: ${{ github.actor != 'acci-semantic-release-token[bot]' && needs.should-proceed.outputs.rebasing-beta == 'false' }}
 
     steps:
       # https://semantic-release.gitbook.io/semantic-release/recipes/ci-configurations/github-actions#pushing-package.json-changes-to-your-repository
