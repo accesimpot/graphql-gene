@@ -145,6 +145,11 @@ jobs:
       # { type: 'chore', scope: 'deps', release: 'patch' },
       # { type: 'docs', scope: 'README', release: 'patch' },
       #
+      # Major bumps: add `!` after the type (e.g. `feat!: ...`, `refactor!: ...`) and/or a `BREAKING CHANGE:` footer
+      # in the commit body (works for types other than `feat`). For prereleases of a new major,
+      # merge to `beta` first so npm gets `x.y.z-beta.n` on the `beta` dist-tag before shipping
+      # stable on `main`.
+      #
       # See https://github.com/conventional-changelog/conventional-changelog/tree/master/packages/conventional-changelog-angular#type
       #
       # Available types:
