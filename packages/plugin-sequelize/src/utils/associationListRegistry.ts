@@ -16,7 +16,10 @@ export type GeneAssociationListWrapperMeta = {
  */
 const wrapperMetas = new Map<string, GeneAssociationListWrapperMeta>()
 
-export function getGeneAssociationListWrapperTypeName(parentGraphqlType: string, associationField: string) {
+export function getGeneAssociationListWrapperTypeName(
+  parentGraphqlType: string,
+  associationField: string
+) {
   const cap = (s: string) => (s.length ? `${s[0].toUpperCase()}${s.slice(1)}` : s)
   return `${parentGraphqlType}${cap(associationField)}GeneAssociationListResult`
 }
@@ -29,7 +32,10 @@ function metaKeysEqual(a: GeneAssociationListWrapperMeta, b: GeneAssociationList
   )
 }
 
-export function registerGeneAssociationListWrapper(typeName: string, meta: GeneAssociationListWrapperMeta) {
+export function registerGeneAssociationListWrapper(
+  typeName: string,
+  meta: GeneAssociationListWrapperMeta
+) {
   const existing = wrapperMetas.get(typeName)
   if (existing && !metaKeysEqual(existing, meta)) {
     throw new Error(

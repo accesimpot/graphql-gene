@@ -124,7 +124,10 @@ function generateAssociationFields(
     let associationWrapperTypeName: string | undefined
 
     if (association.isMultiAssociation) {
-      associationWrapperTypeName = getGeneAssociationListWrapperTypeName(options.typeName, attributeKey)
+      associationWrapperTypeName = getGeneAssociationListWrapperTypeName(
+        options.typeName,
+        attributeKey
+      )
 
       registerGeneAssociationListWrapper(associationWrapperTypeName, {
         parentGraphqlType: options.typeName,
