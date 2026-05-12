@@ -253,8 +253,8 @@ export type ArgsTypeToGraphQL<ArgsType> = {
 }
 
 export type GeneDefaultResolverArgs<M> = {
-  page: number
-  perPage: number
+  skip: number
+  limit: number
   locale?: string
   id?: string
   where: {
