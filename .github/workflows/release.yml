@@ -60,13 +60,11 @@ jobs:
     if: ${{ github.actor != 'acci-semantic-release-token[bot]' && needs.should-proceed.outputs.rebasing-beta == 'false' }}
 
     steps:
+      # Token before checkout so `actions/checkout` persists the App installation token (ruleset
+      # bypass). With only `persist-credentials: false`, pushes can fall back to the job’s
+      # default `GITHUB_TOKEN`, which cannot bypass “PR-only” rulesets — semantic-release then
+      # fails with `push declined due to repository rule violations`.
       # https://semantic-release.gitbook.io/semantic-release/recipes/ci-configurations/github-actions#pushing-package.json-changes-to-your-repository
-      - name: Checkout branch 🛎
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false # Required per semantic-release docs for GitHub Actions
-          fetch-depth: 0 # Required for nrwl/nx-set-shas
-
       - name: Get GitHub App token 🔐
         id: app-token
         uses: actions/create-github-app-token@v3
@@ -75,6 +73,12 @@ jobs:
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: graphql-gene
+
+      - name: Checkout branch 🛎
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0 # Required for nrwl/nx-set-shas
 
       # NRWL action name refers to Nx “affected”, but the step only resolves robust base/head
       # SHAs for git and tools like Turborepo (`TURBO_SCM_BASE` / `--affected`). Nx does not
@@ -144,6 +148,11 @@ jobs:
       # { type: 'perf', release: 'patch' },
       # { type: 'chore', scope: 'deps', release: 'patch' },
       # { type: 'docs', scope: 'README', release: 'patch' },
+      #
+      # Major bumps: add `!` after the type (e.g. `feat!: ...`, `refactor!: ...`) and/or a `BREAKING CHANGE:` footer
+      # in the commit body (works for types other than `feat`). For prereleases of a new major,
+      # merge to `beta` first so npm gets `x.y.z-beta.n` on the `beta` dist-tag before shipping
+      # stable on `main`.
       #
       # See https://github.com/conventional-changelog/conventional-changelog/tree/master/packages/conventional-changelog-angular#type
       #
