@@ -397,4 +397,19 @@ describe('integration', () => {
       ).toBe(true)
     })
   })
+
+  describe('graphql-gene schema build (coverage for schema.ts)', () => {
+    it('emits union SDL from defineUnion exports', async () => {
+      const { schemaString } = await import('../server/schema')
+      expect(schemaString).toMatch(/union\s+IntegrationDemoUnion\s*=/)
+    })
+
+    it('exposes schemaHtml, parsed typeDefs, and resolvers map getters', async () => {
+      const { schemaHtml, typeDefs, resolvers } = await import('../server/schema')
+      expect(schemaHtml.length).toBeGreaterThan(100)
+      expect(schemaHtml).toContain('IntegrationDemoUnion')
+      expect(typeDefs.kind).toBe('Document')
+      expect(resolvers.Query && typeof resolvers.Query === 'object').toBe(true)
+    })
+  })
 })
