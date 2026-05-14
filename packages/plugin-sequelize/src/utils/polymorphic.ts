@@ -84,6 +84,19 @@ export function Polymorphic<M extends ModelStatic = ModelStatic>(
 /**
  * Picks the Sequelize nested instance that was actually included for this row
  * (see `_options.includeNames`), or returns the hub row unchanged.
+ *
+ * ⚠️ NEEDS TO CHANGE FOR V2 ⚠️
+ *
+ * It is incorrect to iterate only over the associations included in the graphql operation since
+ * it should still be valid to requests the block ids only without any specific fragment. We get
+ * an error in this case:
+ *
+ * > Abstract type "PageBlock" was resolved to a non-object type "PageBlock"
+ *
+ * We're planning to change the polymorphic pattern in Sequelize to use a junction table:
+ * @see https://sequelize.org/docs/v6/advanced-association-concepts/polymorphic-associations/#configuring-a-many-to-many-polymorphic-association
+ *
+ * This would solve this issue and solve the association filtering as well (also not working right now).
  */
 function resolveAssociation(item: ModelStatic & { _options?: { includeNames?: string[] } }) {
   const { includeNames = [] } = item._options || {}

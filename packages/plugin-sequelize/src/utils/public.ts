@@ -3,6 +3,7 @@ import {
   getGloballyExtendedTypes,
   isEmptyObject,
   isObject,
+  isRegisteredPolymorphicAbstractType,
   normalizeFieldConfig,
   LIMIT_ARG_DEFAULT,
   QUERY_ORDER_VALUES,
@@ -95,7 +96,9 @@ function handleNextIncludeOptions(details: NextHandlerDetails<DefaultResolverInc
 function handleNextFragmentIncludeOptions(
   details: NextFragmentHandlerDetails<DefaultResolverIncludeOptions>
 ) {
-  const { state, type } = details
+  const { state, type, sourceType } = details
+  if (!isRegisteredPolymorphicAbstractType(sourceType)) return {}
+
   const include: DefaultResolverIncludeOptions = { association: getAttributeByModelName(type) }
 
   state.include = state.include || []

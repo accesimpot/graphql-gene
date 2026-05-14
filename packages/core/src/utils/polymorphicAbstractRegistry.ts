@@ -18,6 +18,14 @@ export function registerPolymorphicAbstractType(graphqlTypeName: string): void {
 }
 
 /**
+ * True when `graphqlTypeName` was registered via {@link registerPolymorphicAbstractType}
+ * (for example by the Sequelize `@Polymorphic` hub decorator).
+ */
+export function isRegisteredPolymorphicAbstractType(graphqlTypeName: string): boolean {
+  return registeredPolymorphicAbstractTypeNames().has(graphqlTypeName)
+}
+
+/**
  * For values produced from Sequelize models or plain objects, prefer GraphQL `__typename`;
  * otherwise fall back to `constructor.name`.
  */
