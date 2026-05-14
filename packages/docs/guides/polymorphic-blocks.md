@@ -8,16 +8,19 @@ query PagePolymorphicBlocks($path: String!) {
     id
     path
     blocks {
-      id
-      __typename
+      count
+      items {
+        id
+        __typename
 
-      ... on HeroBlock {
-        title
-        subtitle
-      }
+        ... on HeroBlock {
+          title
+          subtitle
+        }
 
-      ... on TextBlock {
-        body
+        ... on TextBlock {
+          body
+        }
       }
     }
   }
@@ -151,16 +154,19 @@ query PagePolymorphicBlocks($path: String!) {
     id
     path
     blocks {
-      id
-      __typename
+      count
+      items {
+        id
+        __typename
 
-      ... on HeroBlock {
-        title
-        subtitle
-      }
+        ... on HeroBlock {
+          title
+          subtitle
+        }
 
-      ... on TextBlock {
-        body
+        ... on TextBlock {
+          body
+        }
       }
     }
   }
@@ -183,25 +189,28 @@ Shape only; numeric `id`s are illustrative.
     "pageByPath": {
       "id": 1,
       "path": "/__polymorphic_demo_page__",
-      "blocks": [
-        {
-          "id": 101,
-          "__typename": "HeroBlock",
-          "title": "Hello",
-          "subtitle": "Polymorphic demo hero"
-        },
-        {
-          "id": 102,
-          "__typename": "TextBlock",
-          "body": "Plain text body via TEXT block kind."
-        }
-      ]
+      "blocks": {
+        "count": 2,
+        "items": [
+          {
+            "id": 101,
+            "__typename": "HeroBlock",
+            "title": "Hello",
+            "subtitle": "Polymorphic demo hero"
+          },
+          {
+            "id": 102,
+            "__typename": "TextBlock",
+            "body": "Plain text body via TEXT block kind."
+          }
+        ]
+      }
     }
   }
 }
 ```
 
-> **Note:** In v2, Gene is planning a wrapper for has-many fields with `count` and `items` (filters and pagination live on `items`), as sketched in [PLAN_V2.md §2.4–§2.5](../../../PLAN_V2.md) (see the `variants { count, items(where: …) { … } }` example). `blocks` and other polymorphic lists will follow the same collection pattern once that lands.
+> **Note:** Has-many fields such as `blocks` use Gene’s association-list wrapper (`count` plus `items` for filters and pagination on `items`). See [PLAN_V2.md §2.4–§2.5](../../../PLAN_V2.md) for the broader collection pattern.
 
 ## What graphql-gene does
 
