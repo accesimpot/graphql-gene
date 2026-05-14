@@ -6,4 +6,5 @@ Prose-first documentation for graphql-gene. These files are readable in the GitH
 
 | Guide | Description |
 | ----- | ----------- |
+| [Directives](./guides/directives.md) | Type/field middleware, `GeneDirectiveConfig`, empty `name` vs printed `schemaString` |
 | [Polymorphic page blocks](./guides/polymorphic-blocks.md) | `@Polymorphic` hub model, GraphQL interface + fragments, example query and response |

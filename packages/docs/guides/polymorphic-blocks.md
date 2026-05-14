@@ -8,19 +8,16 @@ query PagePolymorphicBlocks($path: String!) {
     id
     path
     blocks {
-      count
-      items {
-        id
-        __typename
+      id
+      __typename
 
-        ... on HeroBlock {
-          title
-          subtitle
-        }
+      ... on HeroBlock {
+        title
+        subtitle
+      }
 
-        ... on TextBlock {
-          body
-        }
+      ... on TextBlock {
+        body
       }
     }
   }
@@ -154,19 +151,16 @@ query PagePolymorphicBlocks($path: String!) {
     id
     path
     blocks {
-      count
-      items {
-        id
-        __typename
+      id
+      __typename
 
-        ... on HeroBlock {
-          title
-          subtitle
-        }
+      ... on HeroBlock {
+        title
+        subtitle
+      }
 
-        ... on TextBlock {
-          body
-        }
+      ... on TextBlock {
+        body
       }
     }
   }
