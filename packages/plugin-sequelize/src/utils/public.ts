@@ -3,18 +3,28 @@ import {
   getGloballyExtendedTypes,
   isEmptyObject,
   isObject,
+  isRegisteredPolymorphicAbstractType,
   normalizeFieldConfig,
   LIMIT_ARG_DEFAULT,
   QUERY_ORDER_VALUES,
   SKIP_ARG_DEFAULT,
   type ValidGraphqlType,
 } from 'graphql-gene'
-import { lookahead, lookDeeper, type UntilHandlerDetails } from 'graphql-lookahead'
+import {
+  lookahead,
+  lookDeeper,
+  type UntilHandlerDetails,
+  type NextHandlerDetails,
+  type NextFragmentHandlerDetails,
+} from 'graphql-lookahead'
 import type { OrderItem } from 'sequelize'
 import type { Model } from 'sequelize-typescript'
 import type { DefaultResolverIncludeOptions, GeneSequelizeWhereOptions } from '../types'
 import { populateWhereOptions } from './internal'
 import { isMarkedAsAssociation } from './associationMap'
+import { getAttributeByModelName } from './polymorphic'
+
+export * from './polymorphic'
 
 const QUERY_TYPE = 'Query'
 const MUTATION_TYPE = 'Mutation'
@@ -46,7 +56,7 @@ function getFieldConfig(sourceType: string, field: string) {
   if (field in fieldConfigs) return normalizeFieldConfig(fieldConfigs[field])
 }
 
-function untilFindOptions(options: UntilHandlerDetails<DefaultResolverIncludeOptions>) {
+function handleUntilFindOptions(options: UntilHandlerDetails<DefaultResolverIncludeOptions>) {
   const { sourceType, type, field } = options
   const typeConfig = getTypeConfig(type)
   const fieldConfig = getFieldConfig(sourceType, field)
@@ -71,24 +81,41 @@ function untilFindOptions(options: UntilHandlerDetails<DefaultResolverIncludeOpt
   return false
 }
 
+function handleNextIncludeOptions(details: NextHandlerDetails<DefaultResolverIncludeOptions>) {
+  const { state, sourceType, field, args, isList } = details
+  if (!isMarkedAsAssociation(sourceType, field)) return {}
+
+  const include = getFieldIncludeOptions({ association: field, args, isList })
+
+  state.include = state.include || []
+  state.include.push(include)
+
+  return include
+}
+
+function handleNextFragmentIncludeOptions(
+  details: NextFragmentHandlerDetails<DefaultResolverIncludeOptions>
+) {
+  const { state, type, sourceType } = details
+  if (!isRegisteredPolymorphicAbstractType(sourceType)) return {}
+
+  const include: DefaultResolverIncludeOptions = { association: getAttributeByModelName(type) }
+
+  state.include = state.include || []
+  state.include.push(include)
+
+  return include
+}
+
 export function getQueryInclude(info: GraphQLResolveInfo) {
   const includeOptions: DefaultResolverIncludeOptions = {}
 
   lookahead({
     info,
     state: includeOptions,
-    until: untilFindOptions,
-
-    next({ state, sourceType, field, args, isList }) {
-      if (!isMarkedAsAssociation(sourceType, field)) return {}
-
-      const include = getFieldIncludeOptions({ association: field, args, isList })
-
-      state.include = state.include || []
-      state.include.push(include)
-
-      return include
-    },
+    until: handleUntilFindOptions,
+    next: handleNextIncludeOptions,
+    nextFragment: handleNextFragmentIncludeOptions,
   })
 
   return isEmptyObject(includeOptions)
@@ -117,19 +144,11 @@ export function getQueryIncludeOf(
       info,
       state: includeOptions,
       type,
-      until: untilFindOptions,
+      until: handleUntilFindOptions,
       selectionSet: nextSelectionSet,
 
-      next({ state, sourceType, field, args, isList }) {
-        if (!isMarkedAsAssociation(sourceType, field)) return {}
-
-        const include = getFieldIncludeOptions({ association: field, args, isList })
-
-        state.include = state.include || []
-        state.include.push(include)
-
-        return include
-      },
+      next: handleNextIncludeOptions,
+      nextFragment: handleNextFragmentIncludeOptions,
     })
     return true
   }

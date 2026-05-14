@@ -88,6 +88,12 @@ export const populateTypeDefs: PopulateTypeDefs = options => {
     typeName: options.typeName,
   })
 
+  const modelGeneConfigVarType = options.model.geneConfig?.varType
+  if (modelGeneConfigVarType) mainTypeDef.varType = modelGeneConfigVarType
+
+  const implementedInterfaces = options.model.geneConfig?.__implementedInterfaces || []
+  if (implementedInterfaces?.length) mainTypeDef.implementedInterfaces = [...implementedInterfaces]
+
   return { afterTypeDefHooks }
 }
 

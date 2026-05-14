@@ -28,6 +28,8 @@ export type TypeDefLines = Record<
   {
     varType: GraphQLVarType
     directives: Set<string>
+    /** For `GraphQL Object` types only: interfaces that this type implements. */
+    implementedInterfaces?: GraphQLTypeName[]
     lines: FieldLines
   }
 >

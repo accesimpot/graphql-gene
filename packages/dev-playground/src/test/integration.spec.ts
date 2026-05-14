@@ -5,7 +5,7 @@ import { sequelize } from '../models/sequelize'
 import { useMetaPlugin } from '../plugins/useMetaPlugin'
 import { schema } from '../server/schema'
 import { getFixtureQuery } from './utils'
-import { Order, Product } from '../models'
+import { Order, Product, Page } from '../models'
 
 await sequelize.authenticate()
 
@@ -278,6 +278,36 @@ describe('integration', () => {
           message: { type: 'error', text: 'Status could not be updated.' },
           order: null,
         })
+      })
+    })
+  })
+
+  describe('polymorphic page blocks (GraphQL interface + @Polymorphic)', () => {
+    const demoPath = '/__polymorphic_demo_page__'
+
+    it('resolves interface members via inline fragments and __typename', async () => {
+      const result = await execute<{ pageByPath: Page }>({
+        document: getFixtureQuery('queries/pagePolymorphicBlocks.gql'),
+        variables: { path: demoPath },
+      })
+
+      expect(result.errors).toBeUndefined()
+      expect(result.data?.pageByPath).toEqual({
+        id: expect.any(Number),
+        path: demoPath,
+        blocks: [
+          {
+            id: expect.any(Number),
+            __typename: 'HeroBlock',
+            title: 'Hello',
+            subtitle: 'Polymorphic demo hero',
+          },
+          {
+            id: expect.any(Number),
+            __typename: 'TextBlock',
+            body: 'Plain text body via TEXT block kind.',
+          },
+        ],
       })
     })
   })
