@@ -1,3 +1,4 @@
+import type { UntilHandlerDetails } from 'graphql-lookahead'
 import type { GenePluginSettings } from 'graphql-gene/plugin-settings'
 import type { GraphqlTypes } from './graphql'
 import type { NeverToUnknown, PossiblyUndefinedToPartial, ValueOf } from './typeUtils'
@@ -106,3 +107,20 @@ type HasPluginMatchingOrNever<M> = {
 }[keyof GenePluginSettings<M>]
 
 export type HasPluginMatching<M> = HasPluginMatchingOrNever<M> extends never ? false : true
+
+export type FindOptionsStateByModel<M, TFallback = never> = {
+  [k in keyof GenePluginSettings<M>]: GenePluginSettings<M>[k]['isMatching'] extends true
+    ? GenePluginSettings<M>[k]['findOptionsState']
+    : TFallback
+}[keyof GenePluginSettings<M>]
+
+export type FindOptionsHandler<TState> = (
+  details: UntilHandlerDetails<TState> & { findOptions: UntilHandlerDetails<TState>['state'] }
+) => void
+
+export type FindOptionsHandlerByType<
+  TTypeName,
+  TFallback = never,
+> = TTypeName extends keyof GraphqlTypes
+  ? FindOptionsHandler<FindOptionsStateByModel<GraphqlTypes[TTypeName], TFallback>>
+  : TFallback

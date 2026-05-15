@@ -15,6 +15,7 @@ import {
   JSON_SCALAR,
   SEQUELIZE_TYPE_TO_GRAPHQL,
 } from './constants'
+import { markFieldAsAssociation } from './utils/associationMap'
 
 const BELONGS_TO_MANY = 'BelongsToMany'
 
@@ -26,8 +27,10 @@ function hasScalarInSchema(schema: GraphQLSchema | undefined, scalar: string) {
 }
 
 export const populateTypeDefs: PopulateTypeDefs = options => {
-  options.typeDefLines[options.typeName] =
-    options.typeDefLines[options.typeName] || getDefaultTypeDefLinesObject()
+  options.typeDefLines[options.typeName] = {
+    ...getDefaultTypeDefLinesObject(),
+    ...options.typeDefLines[options.typeName],
+  }
 
   const mainTypeDef = options.typeDefLines[options.typeName]
   const attributes = options.model.getAttributes()
@@ -70,8 +73,10 @@ export const populateTypeDefs: PopulateTypeDefs = options => {
 
       if (attributeValue.allowNull === false) graphqlType += '!'
 
-      mainTypeDef.lines[attributeKey] =
-        mainTypeDef.lines[attributeKey] || getDefaultFieldLinesObject()
+      mainTypeDef.lines[attributeKey] = {
+        ...getDefaultFieldLinesObject(),
+        ...mainTypeDef.lines[attributeKey],
+      }
       mainTypeDef.lines[attributeKey].typeDef = graphqlType
     }
   })
@@ -82,6 +87,12 @@ export const populateTypeDefs: PopulateTypeDefs = options => {
     isFieldIncluded: options.isFieldIncluded,
     typeName: options.typeName,
   })
+
+  const modelGeneConfigVarType = options.model.geneConfig?.varType
+  if (modelGeneConfigVarType) mainTypeDef.varType = modelGeneConfigVarType
+
+  const implementedInterfaces = options.model.geneConfig?.__implementedInterfaces || []
+  if (implementedInterfaces?.length) mainTypeDef.implementedInterfaces = [...implementedInterfaces]
 
   return { afterTypeDefHooks }
 }
@@ -112,8 +123,10 @@ function generateAssociationFields(
       isList = true
     }
 
-    lines[attributeKey] = lines[attributeKey] || getDefaultFieldLinesObject()
+    lines[attributeKey] = { ...getDefaultFieldLinesObject(), ...lines[attributeKey] }
     lines[attributeKey].typeDef = returnType
+
+    markFieldAsAssociation(options.typeName, attributeKey)
 
     if (isList) {
       populateArgsDefForDefaultResolver({

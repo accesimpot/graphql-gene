@@ -2,9 +2,6 @@
   "extends": "../../tsconfig.json",
 
   "compilerOptions": {
-    "paths": {
-      "graphql-gene": ["../core/src/index.ts"]
-    },
     "noEmit": true,
 
     /**

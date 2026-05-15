@@ -1,0 +1,12 @@
+---
+description: Conventional PR titles for graphql-gene
+alwaysApply: true
+---
+
+Do not add new scopes to `.github/workflows/pull-request-title.yml` to make a title pass. If no allowed scope fits the change, use a scope-free title instead, for example:
+
+- `refactor: rename list pagination args to skip and limit`
+- `feat: add association list wrapper`
+- `fix: correct offset handling`
+- `ci: adjust workflow condition`
+- `docs: update plugin README`

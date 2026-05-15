@@ -1,5 +1,5 @@
 import type { YogaInitialContext } from 'graphql-yoga'
-import type { GeneTypesToTypescript } from '../../../core/src'
+import type { GeneTypesToTypescript } from 'graphql-gene'
 import * as graphqlTypes from '../models/graphqlTypes'
 import type { FastifyContext } from '../server/types'
 

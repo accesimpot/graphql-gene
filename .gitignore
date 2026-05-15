@@ -84,8 +84,8 @@ web_modules/
 .parcel-cache
 
 # build output
-.nuxt
 dist
+/packages/*/cjs
 
 # Gatsby files
 .cache/
@@ -115,8 +115,9 @@ dist
 # TernJS port file
 .tern-port
 
-# Stores VSCode versions used for testing VSCode extensions
+# VSCode
 .vscode-test
+.vscode
 
 # yarn v2
 .yarn/cache
@@ -128,9 +129,11 @@ dist
 # OS
 .DS_Store
 
-# Nx
-.nx/cache
-.nx/workspace-data
+# Turborepo
+.turbo
+
+# Legacy Nx (to be removed)
+.nx
 
 # Generated schema
 packages/dev-playground/schema.gql

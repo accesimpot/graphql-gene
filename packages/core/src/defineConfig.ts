@@ -1,22 +1,27 @@
 import type { GraphQLFieldResolver } from 'graphql'
 import type { GeneContext } from 'graphql-gene/context'
 import type {
+  FindOptionsHandler,
+  FindOptionsHandlerByType,
+  FindOptionsStateByModel,
   GraphQLFieldName,
   GraphqlReturnTypes,
   GraphqlToTypescript,
   GraphqlTypeName,
-  GraphqlTypes,
   GraphQLVarType,
   InferFields,
   Narrow,
   OperatorInputs,
+  Prop,
+  PrototypeOrNot,
   SomeRequired,
+  TypeOrFunction,
   ValidGraphqlType,
 } from './types'
 import type { GENE_RESOLVER_TEMPLATES, QUERY_ORDER_ENUM } from './constants'
 
 type ArgsDefinition<V = string> = Record<string, V> | `${GENE_RESOLVER_TEMPLATES}` | undefined
-type StrictArgsDefinition = ArgsDefinition<GraphqlReturnTypes<ValidGraphqlType>>
+export type StrictArgsDefinition = ArgsDefinition<GraphqlReturnTypes<ValidGraphqlType>>
 
 export type GeneConfigTypes<
   TSource = Record<string, unknown> | undefined,
@@ -38,40 +43,70 @@ export type GeneObjectTypeConfig<
   | GeneTypeConfig<TSource, TContext, TArgDefs, TReturnType>
 >
 
-/** Query and Mutation types extended from different models. */
+type FallbackIfInvalid<T, TFallback> = T extends never ? TFallback : T
+type AccurateTypeSource<
+  TTypeName,
+  TFallbackSource = Record<string, unknown> | undefined,
+> = TTypeName extends 'Query' | 'Mutation'
+  ? undefined
+  : TTypeName extends string
+    ? FallbackIfInvalid<NonNullable<GraphqlToTypescript<TTypeName>>, TFallbackSource>
+    : TFallbackSource
+
 export type ExtendedTypes<
   TSource = Record<string, unknown> | undefined,
   TContext = GeneContext,
   TArgDefs extends ArgsDefinition = undefined,
   TReturnType extends string | unknown = unknown,
 > = {
-  [k in 'Query' | 'Mutation']?: Record<
+  [typeName in GraphqlTypeName]?: Record<
     GraphQLFieldName,
     FieldConfig<
-      TSource,
+      AccurateTypeSource<typeName, TSource>,
       TContext,
       undefined extends TArgDefs ? ArgsDefinition : TArgDefs,
       TReturnType extends unknown ? GraphqlReturnTypes<ValidGraphqlType> : TReturnType
     >
   >
-} & {
-  [typeName in GraphqlTypeName]?: Record<
-    GraphQLFieldName,
-    Omit<
-      GeneTypeConfig<
-        TSource,
-        TContext,
-        undefined extends TArgDefs ? ArgsDefinition : TArgDefs,
-        GraphqlTypes[typeName]
-      >,
-      'returnType'
-    >
-  >
 }
+
+export type NarrowExtendedTypes<TTypes extends Record<string, Record<string, object>>> = {
+  [TypeName in keyof TTypes]?: {
+    [FieldName in keyof TTypes[TypeName]]: ExtendedTypeField<TTypes[TypeName][FieldName], TypeName>
+  }
+}
+
+type ValidReturnTypeOption<T> =
+  Narrow<T> extends GraphqlReturnTypes<ValidGraphqlType> ? Narrow<T> : never
+
+export type ExtendedTypeField<T, TypeName> = {
+  [K in keyof T]: K extends 'resolver'
+    ? GeneResolverOption<
+        AccurateTypeSource<TypeName>,
+        GeneContext,
+        Prop<T, 'args'> extends ArgsDefinition ? Prop<T, 'args'> : never,
+        ValidReturnTypeOption<Prop<T, 'returnType'>>
+      >
+    : K extends 'returnType'
+      ? ValidReturnTypeOption<T[K]>
+      : K extends 'args'
+        ? T[K] extends StrictArgsDefinition
+          ? Narrow<T[K]>
+          : never
+        : K extends 'findOptions'
+          ? FindOptionsHandlerByType<TypeName, T[K]>
+          : Narrow<T[K]>
+}
+
+export type StrictExtendedTypes<
+  TSource = Record<string, unknown> | undefined,
+  TContext = GeneContext,
+  TArgDefs extends ArgsDefinition = undefined,
+> = ExtendedTypes<TSource, TContext, TArgDefs, GraphqlReturnTypes<ValidGraphqlType>>
 
 export interface GeneConfig<
   M = unknown,
-  TSource = Record<string, unknown> | undefined,
+  TSource = M | Record<string, unknown> | undefined,
   TContext = GeneContext,
   TArgDefs extends ArgsDefinition = undefined,
   TReturnType extends string | unknown = unknown,
@@ -89,7 +124,13 @@ export interface GeneConfig<
   varType?: TVarType
 
   /** Directives to apply at the type level (also possible at the field level). */
-  directives?: GeneDirectiveConfig[]
+  directives?: TypeOrFunction<
+    GeneDirectiveConfig<
+      | Record<string, string | number | boolean | string[] | number[] | boolean[] | null>
+      | undefined,
+      TSource extends M ? PrototypeOrNot<M> : TSource
+    >[]
+  >
 
   /**
    * The values of "aliases" would be nested GeneConfig properties that overwrites the ones se
@@ -125,6 +166,15 @@ export interface GeneConfig<
    * @deprecated You should import and call `extendTypes` instead.
    */
   types?: ExtendedTypes<TSource, TContext, TArgDefs, TReturnType>
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  findOptions?: FindOptionsHandler<FindOptionsStateByModel<M, any>>
+
+  /**
+   * For `GraphQL Object` types only: interfaces that this type implements.
+   * @internal - Populated by the `@Polymorphic` decorator.
+   */
+  __implementedInterfaces?: GraphqlTypeName[]
 }
 
 export type GeneTypeConfig<
@@ -133,27 +183,17 @@ export type GeneTypeConfig<
   TArgDefs extends ArgsDefinition = undefined,
   TReturnType extends string | unknown = unknown,
 > = {
-  directives?: GeneDirectiveConfig[]
+  directives?: TypeOrFunction<
+    GeneDirectiveConfig<
+      | Record<string, string | number | boolean | string[] | number[] | boolean[] | null>
+      | undefined,
+      TSource
+    >[]
+  >
   args?: TArgDefs extends undefined ? undefined : TArgDefs
+  resolver?: GeneResolverOption<TSource, TContext, TArgDefs, TReturnType>
   returnType: TReturnType extends unknown ? GraphqlReturnTypes<ValidGraphqlType> : TReturnType
-  resolver?:
-    | GeneResolver<
-        TSource,
-        TContext,
-        TArgDefs extends `${GENE_RESOLVER_TEMPLATES.default}`
-          ? GeneDefaultResolverArgs<
-              TReturnType extends string ? NonNullable<GraphqlToTypescript<TReturnType>> : unknown
-            >
-          : TArgDefs extends undefined
-            ? Record<string, unknown> | undefined
-            : {
-                [k in keyof TArgDefs]: TArgDefs[k] extends string
-                  ? GraphqlToTypescript<TArgDefs[k]>
-                  : unknown
-              },
-        TReturnType extends string ? GraphqlToTypescript<TReturnType> : unknown
-      >
-    | `${GENE_RESOLVER_TEMPLATES}`
+  findOptions?: FindOptionsHandler<object>
 }
 
 export type FieldConfig<
@@ -164,6 +204,20 @@ export type FieldConfig<
 > =
   | GraphqlReturnTypes<ValidGraphqlType>
   | SomeRequired<GeneTypeConfig<TSource, TContext, TArgDefs, TReturnType>, 'resolver'>
+
+type GeneResolverOption<
+  TSource = Record<string, unknown> | undefined,
+  TContext = GeneContext,
+  TArgDefs extends ArgsDefinition = undefined,
+  TReturnType extends string | unknown = unknown,
+> =
+  | GeneResolver<
+      TSource,
+      TContext,
+      FieldConfigArgsOption<TArgDefs, TReturnType>,
+      TReturnType extends string ? GraphqlToTypescript<TReturnType> : unknown
+    >
+  | `${GENE_RESOLVER_TEMPLATES}`
 
 export type GeneResolver<
   TSource = Record<string, unknown> | undefined,
@@ -176,6 +230,21 @@ export type GeneResolver<
   context: Parameters<GraphQLFieldResolver<TSource, TContext, TArgs>>[2]
   info: Parameters<GraphQLFieldResolver<TSource, TContext, TArgs>>[3]
 }) => TResult | Promise<TResult>
+
+export type FieldConfigArgsOption<
+  TArgDefs extends ArgsDefinition,
+  TReturnType extends string | unknown,
+> = TArgDefs extends `${GENE_RESOLVER_TEMPLATES.default}`
+  ? GeneDefaultResolverArgs<
+      TReturnType extends string ? NonNullable<GraphqlToTypescript<TReturnType>> : unknown
+    >
+  : TArgDefs extends undefined
+    ? Record<string, unknown> | undefined
+    : {
+        [k in keyof Narrow<TArgDefs>]: Narrow<TArgDefs>[k] extends string
+          ? GraphqlToTypescript<Narrow<TArgDefs>[k]>
+          : unknown
+      }
 
 export type ArgsTypeToGraphQL<ArgsType> = {
   [k in keyof Required<ArgsType>]: Required<ArgsType>[k] extends number
@@ -190,8 +259,8 @@ export type ArgsTypeToGraphQL<ArgsType> = {
 }
 
 export type GeneDefaultResolverArgs<M> = {
-  page: number
-  perPage: number
+  skip: number
+  limit: number
   locale?: string
   id?: string
   where: {
@@ -207,10 +276,14 @@ export type GeneDirective<
   TSource = Record<string, unknown> | undefined,
   TContext = GeneContext,
   TArgs = Record<string, unknown> | undefined,
-> = (args: TDirectiveArgs) => GeneDirectiveConfig<TDirectiveArgs, TSource, TContext, TArgs>
+> = TDirectiveArgs extends undefined
+  ? (args?: TDirectiveArgs) => GeneDirectiveConfig<TDirectiveArgs, TSource, TContext, TArgs>
+  : (args: TDirectiveArgs) => GeneDirectiveConfig<TDirectiveArgs, TSource, TContext, TArgs>
 
 export type GeneDirectiveConfig<
-  TDirectiveArgs = Record<string, string | number | boolean | null> | undefined,
+  TDirectiveArgs =
+    | Record<string, string | number | boolean | string[] | number[] | boolean[] | null>
+    | undefined,
   TSource = Record<string, unknown> | undefined,
   TContext = GeneContext,
   TArgs = Record<string, unknown> | undefined,
@@ -236,6 +309,8 @@ export type GeneDirectiveHandler<
   args: Parameters<GraphQLFieldResolver<TSource, TContext, TArgs, TResult>>[1]
   context: Parameters<GraphQLFieldResolver<TSource, TContext, TArgs, TResult>>[2]
   info: Parameters<GraphQLFieldResolver<TSource, TContext, TArgs, TResult>>[3]
+  field: string
+  filter: <TValue>(callback: (value: TValue) => unknown) => void
   resolve: () => Promise<TResult> | TResult
 }) => Promise<void> | void
 
@@ -252,7 +327,7 @@ export class GeneModel {
  */
 export function defineGraphqlGeneConfig<
   M = unknown,
-  TSource = Record<string, unknown> | undefined,
+  TSource = M | Record<string, unknown> | undefined,
   TContext = GeneContext,
   TArgDefs extends ArgsDefinition = undefined,
   TReturnType extends string | unknown = unknown,
@@ -262,28 +337,31 @@ export function defineGraphqlGeneConfig<
 }
 
 export function defineDirective<
-  TDirectiveArgs,
+  TDirectiveArgs = undefined,
   TSource = Record<string, unknown> | undefined,
   TContext = GeneContext,
   TArgs = Record<string, unknown> | undefined,
->(
-  directive: GeneDirective<TDirectiveArgs, TSource, TContext, TArgs>
-): GeneDirective<TDirectiveArgs, TSource, TContext, TArgs> {
-  return directive
+>(directive: GeneDirective<TDirectiveArgs, TSource, TContext, TArgs>) {
+  return directive as GeneDirective<
+    TDirectiveArgs,
+    Record<string, unknown> | undefined,
+    TContext,
+    TArgs
+  >
 }
 
+/**
+ * @deprecated Field config passed to `extendTypes` don't need to be wrapped with `defineField`
+ * anymore in order to be accurate (they are now even better typed without it).
+ */
 export function defineField<
   TSource extends Record<string, unknown> | undefined,
   TArgDefs extends StrictArgsDefinition,
   TReturnType extends GraphqlReturnTypes<ValidGraphqlType>,
   TContext = GeneContext,
 >(config: Narrow<FieldConfig<TSource, TContext, TArgDefs, TReturnType>, 'args' | 'returnType'>) {
-  /**
-   * We need to infer `TArgDefs` to use accurate types inside the resolver function, but we want
-   * "defineField" to return a generic `Record<string, unknown>` as ArgDefs to allow adding the
-   * field config to `defineGraphqlGeneConfig` (where `args` doesn't need accurate typing).
-   */
-  return config as FieldConfig<TSource, TContext, ArgsDefinition, TReturnType>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return config as FieldConfig<any, TContext, any, TReturnType>
 }
 
 export function defineType<

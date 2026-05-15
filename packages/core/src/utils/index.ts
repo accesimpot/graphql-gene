@@ -20,10 +20,11 @@ import {
   type GraphQLOutputType,
 } from 'graphql'
 import type { GeneContext } from 'graphql-gene/context'
-import type { AnyObject, FieldLines, GraphQLVarType, TypeDefLines } from '../types'
+import type { AnyObject, FieldLines, GraphQLVarType, TypeDefLines, TypeOrFunction } from '../types'
 import type { GeneConfig, GeneTypeConfig } from '../defineConfig'
 
 export * from './extend'
+export * from './polymorphicAbstractRegistry'
 
 type GraphQLOutputObjectType = GraphQLObjectType | GraphQLInterfaceType
 
@@ -133,13 +134,18 @@ export function findAccurateTypeDef(type: GraphQLOutputType) {
   if (typeDefinition && 'name' in typeDefinition) return typeDefinition
 }
 
-export function getGraphqlType(variable: string | number | boolean) {
+export function getGraphqlType(
+  variable: string | number | boolean | string[] | number[] | boolean[]
+) {
+  const isArray = Array.isArray(variable)
+  const varType = isArray ? typeof variable[0] : typeof variable
+
   const typeMap: Record<string, 'String' | 'Int' | 'Boolean'> = {
     string: 'String',
     number: 'Int',
     boolean: 'Boolean',
   }
-  return typeMap[typeof variable]
+  return isArray ? `[${typeMap[varType]}!]` : typeMap[varType]
 }
 
 /**
@@ -181,7 +187,7 @@ export function printSchemaWithDirectives(schema: GraphQLSchema) {
   return schemaString.replace(/\n$/, '')
 }
 
-/** is using default Gene resolver if none was provided */
+/** is using default Gene resolver if `resolver` or `args` option is set to "default" */
 export function isUsingDefaultResolver(fieldConfig: AnyObject): boolean {
   return (['resolver', 'args'] as const).some(
     prop => prop in fieldConfig && fieldConfig[prop] === 'default'
@@ -276,6 +282,10 @@ export function getGeneConfigFromOptions<M>(options: {
   )
 }
 
+export function parseGetterConfig<T>(config: TypeOrFunction<T>): T {
+  return config instanceof Function ? config() : config
+}
+
 export function isFieldIncluded<M>(
   geneConfig: GeneConfig<M> | undefined,
   fieldKey: string
@@ -309,6 +319,6 @@ export function createTypeDefLines(
   varType: GraphQLVarType,
   varName: string
 ) {
-  typeDefLines[varName] = typeDefLines[varName] || getDefaultTypeDefLinesObject()
+  typeDefLines[varName] = { ...getDefaultTypeDefLinesObject(), ...typeDefLines[varName] }
   typeDefLines[varName].varType = varType
 }

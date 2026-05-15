@@ -1,2 +1,7 @@
 packages:
-  - 'packages/*'
+  - packages/*
+ignoredBuiltDependencies:
+  - es5-ext
+  - esbuild
+onlyBuiltDependencies:
+  - sqlite3

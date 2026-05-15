@@ -6,13 +6,17 @@ import type { GraphQLVarType, ResolversOrScalars } from './graphql'
 import type { GraphqlToTypescript } from './graphqlToTypescript'
 
 export type PluginSettings<
-  T extends { isMatching: boolean; fieldName: TField extends string ? string : never },
+  T extends {
+    isMatching: boolean
+    fieldName: TField extends string ? string : never
+    findOptionsState: object
+  },
   TField extends string | number | symbol = string,
 > = T
 
 export type GraphQLTypeName = string
 export type GraphQLFieldName = string
-export type ArgsDef = Record<string, Set<string | null>>
+export type ArgsDef = Record<string, Set<string | string[] | null>>
 
 export type FieldLines = Record<
   GraphQLFieldName,
@@ -24,6 +28,8 @@ export type TypeDefLines = Record<
   {
     varType: GraphQLVarType
     directives: Set<string>
+    /** For `GraphQL Object` types only: interfaces that this type implements. */
+    implementedInterfaces?: GraphQLTypeName[]
     lines: FieldLines
   }
 >

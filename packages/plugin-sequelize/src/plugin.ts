@@ -4,6 +4,7 @@ import { Model } from 'sequelize-typescript'
 import { defaultResolver } from './defaultResolver'
 import { populateTypeDefs } from './populateTypeDefs'
 import type { GeneModel } from './constants'
+import type { DefaultResolverIncludeOptions } from './types'
 
 declare module 'graphql-gene/plugin-settings' {
   export interface GenePluginSettings<M> {
@@ -14,6 +15,7 @@ declare module 'graphql-gene/plugin-settings' {
           ? keyof InferAttributes<PrototypeOrNot<M>>
           : 'id'
         : 'id'
+      findOptionsState: DefaultResolverIncludeOptions
     }>
   }
 }

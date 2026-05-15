@@ -7,5 +7,8 @@ export default defineConfig({
   test: {
     ...baseConfig.test,
     include: ['**/*.spec.always.ts'],
+    coverage: {
+      enabled: false,
+    },
   },
 })

@@ -1,22 +1,30 @@
 import { GraphQLError, type GraphQLResolveInfo } from 'graphql'
-import { isEmptyObject, isObject, QUERY_ORDER_VALUES, type ValidGraphqlType } from 'graphql-gene'
-import { lookahead, lookDeeper } from 'graphql-lookahead'
-import type { IncludeOptions, OrderItem } from 'sequelize'
+import {
+  getGloballyExtendedTypes,
+  isEmptyObject,
+  isObject,
+  isRegisteredPolymorphicAbstractType,
+  normalizeFieldConfig,
+  LIMIT_ARG_DEFAULT,
+  QUERY_ORDER_VALUES,
+  SKIP_ARG_DEFAULT,
+  type ValidGraphqlType,
+} from 'graphql-gene'
+import {
+  lookahead,
+  lookDeeper,
+  type UntilHandlerDetails,
+  type NextHandlerDetails,
+  type NextFragmentHandlerDetails,
+} from 'graphql-lookahead'
+import type { OrderItem } from 'sequelize'
 import type { Model } from 'sequelize-typescript'
-import type { GeneSequelizeWhereOptions } from '../types'
+import type { DefaultResolverIncludeOptions, GeneSequelizeWhereOptions } from '../types'
 import { populateWhereOptions } from './internal'
+import { isMarkedAsAssociation } from './associationMap'
+import { getAttributeByModelName } from './polymorphic'
 
-type DefaultResolverIncludeOptions = Pick<
-  IncludeOptions,
-  'where' | 'order' | 'association' | 'limit'
-> & {
-  include?: DefaultResolverIncludeOptions[]
-  /**
-   * "offset" is missing in IncludeOptions
-   * @see https://github.com/sequelize/sequelize/issues/12969
-   */
-  offset?: number
-}
+export * from './polymorphic'
 
 const QUERY_TYPE = 'Query'
 const MUTATION_TYPE = 'Mutation'
@@ -31,21 +39,83 @@ export function isSequelizeFieldConfig<T>(
   )
 }
 
+function getTypeConfig(type: string) {
+  const extendedTypes = getGloballyExtendedTypes()
+  if (!(type in extendedTypes.geneConfig)) return
+
+  return extendedTypes.geneConfig[type as keyof typeof extendedTypes.geneConfig]
+}
+
+function getFieldConfig(sourceType: string, field: string) {
+  const extendedTypes = getGloballyExtendedTypes()
+  if (!(sourceType in extendedTypes.config)) return
+
+  const fieldConfigs = extendedTypes.config[sourceType as keyof typeof extendedTypes.config]
+  if (!fieldConfigs) return
+
+  if (field in fieldConfigs) return normalizeFieldConfig(fieldConfigs[field])
+}
+
+function handleUntilFindOptions(options: UntilHandlerDetails<DefaultResolverIncludeOptions>) {
+  const { sourceType, type, field } = options
+  const typeConfig = getTypeConfig(type)
+  const fieldConfig = getFieldConfig(sourceType, field)
+
+  if (typeConfig?.findOptions || fieldConfig?.findOptions) {
+    return {
+      afterAllSelections() {
+        if (typeConfig?.findOptions) {
+          options.state.include = options.state.include || []
+          const possibleState = options.state?.include?.find(opt => opt.association === field)
+          const state = possibleState || { association: field }
+          if (!possibleState) options.state.include.push(state)
+
+          typeConfig?.findOptions?.(Object.assign(options, { findOptions: state }))
+        }
+        // Using `Object.assign` instead of object spread operator to prevent executing the
+        // getters if not requested (i.e. `fieldDef`, `args`).
+        fieldConfig?.findOptions?.(Object.assign(options, { findOptions: options.state }))
+      },
+    }
+  }
+  return false
+}
+
+function handleNextIncludeOptions(details: NextHandlerDetails<DefaultResolverIncludeOptions>) {
+  const { state, sourceType, field, args, isList } = details
+  if (!isMarkedAsAssociation(sourceType, field)) return {}
+
+  const include = getFieldIncludeOptions({ association: field, args, isList })
+
+  state.include = state.include || []
+  state.include.push(include)
+
+  return include
+}
+
+function handleNextFragmentIncludeOptions(
+  details: NextFragmentHandlerDetails<DefaultResolverIncludeOptions>
+) {
+  const { state, type, sourceType } = details
+  if (!isRegisteredPolymorphicAbstractType(sourceType)) return {}
+
+  const include: DefaultResolverIncludeOptions = { association: getAttributeByModelName(type) }
+
+  state.include = state.include || []
+  state.include.push(include)
+
+  return include
+}
+
 export function getQueryInclude(info: GraphQLResolveInfo) {
   const includeOptions: DefaultResolverIncludeOptions = {}
 
   lookahead({
     info,
     state: includeOptions,
-
-    next({ state, field, args, isList }) {
-      const include = getFieldIncludeOptions({ association: field, args, isList })
-
-      state.include = state.include || []
-      state.include.push(include)
-
-      return include
-    },
+    until: handleUntilFindOptions,
+    next: handleNextIncludeOptions,
+    nextFragment: handleNextFragmentIncludeOptions,
   })
 
   return isEmptyObject(includeOptions)
@@ -55,29 +125,30 @@ export function getQueryInclude(info: GraphQLResolveInfo) {
 
 export function getQueryIncludeOf(
   info: GraphQLResolveInfo,
-  targetType: ValidGraphqlType,
+  target:
+    | ValidGraphqlType
+    | ((details: UntilHandlerDetails<DefaultResolverIncludeOptions>) => boolean),
   options: { depth?: number; lookFromOperationRoot?: boolean } = {}
 ) {
   const includeOptions: DefaultResolverIncludeOptions = {}
+  const isMatchingTarget: Exclude<typeof target, string> =
+    typeof target === 'string' ? ({ type }) => type === target : target
 
-  const until: Parameters<typeof lookahead>[0]['until'] = ({ type, nextSelectionSet }) => {
-    if (type !== targetType) return false
+  const until = (details: UntilHandlerDetails<DefaultResolverIncludeOptions>) => {
+    if (!isMatchingTarget(details)) return false
+
+    const { type, nextSelectionSet } = details
     if (!nextSelectionSet) return false
 
     lookDeeper({
       info,
       state: includeOptions,
       type,
+      until: handleUntilFindOptions,
       selectionSet: nextSelectionSet,
 
-      next({ state, field, args, isList }) {
-        const include = getFieldIncludeOptions({ association: field, args, isList })
-
-        state.include = state.include || []
-        state.include.push(include)
-
-        return include
-      },
+      next: handleNextIncludeOptions,
+      nextFragment: handleNextFragmentIncludeOptions,
     })
     return true
   }
@@ -149,11 +220,12 @@ export function getFieldIncludeOptions(options: {
     includeOptions.order = orderOptions
   }
 
-  // Both "page" and "perPage" arguments have default values so they should always be numbers
-  // if they are valid.
-  if (typeof options.args.page === 'number' && typeof options.args.perPage === 'number') {
-    includeOptions.offset = (options.args.page - 1) * options.args.perPage
-    includeOptions.limit = options.args.perPage
+  if (options.isList) {
+    const skip = typeof options.args.skip === 'number' ? options.args.skip : SKIP_ARG_DEFAULT
+    const limit = typeof options.args.limit === 'number' ? options.args.limit : LIMIT_ARG_DEFAULT
+
+    includeOptions.offset = skip
+    includeOptions.limit = limit
   }
 
   return includeOptions

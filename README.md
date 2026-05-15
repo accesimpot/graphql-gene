@@ -9,11 +9,11 @@ Use `graphql-gene` to generate automatically an executable schema out of your OR
 
 <br>
 
-❤️ Provided by [Accès Impôt](https://www.acces-impot.com)'s engineering team
+❤️ Provided by [Elio Tax](https://www.elio-tax.com?utm_source=github&utm_medium=referral&utm_campaign=graphql-gene-readme)'s engineering team
 
-| <a href="https://www.acces-impot.com" target="_blank"><img width="338" alt="Accès Impôt" src="https://github.com/user-attachments/assets/79aa6364-51d1-4482-b31e-680568d647f0"></a> |
+| <a href="https://www.elio-tax.com?utm_source=github&utm_medium=referral&utm_campaign=graphql-gene-readme" target="_blank"><img width="265" alt="Elio Tax" src="https://github.com/user-attachments/assets/b3ae1fcb-2242-4e68-a36e-671fe39c1174"></a> |
 | :---: |
-| 🇨🇦 _Online tax declaration service_ 🇨🇦 |
+| 🇨🇦 _Online tax filing service_ 🇨🇦 |
 
 <br>
 
@@ -286,9 +286,8 @@ query productsByColor($color: String) {
 | Argument | Description |
 | :--- | :---------- |
 | `id` | `String` - Entry id (only available for fields returning a single entry). |
-| `page` | `Int` - Page number for query pagination. Default: `1`. |
-| `perPage` | `Int` - Amount of results per page. Default: `10`. |
-| `where` | `Record<Attribute, Record<Operator, T>>` - Where options generated based on the fields of the return type (i.e. `where: { name: { eq: "Foo" } }`). |
+| `skip` | `Int` - Offset for query pagination. Default: `0`. |
+| `limit` | `Int` - Maximum number of results per request. Default: `10`. |
 | `where` | `Record<Attribute, Record<Operator, T>>` - Where options generated based on the fields of the return type (i.e. `where: { name: { eq: "Foo" } }`). |
 | `order` | `[foo_ASC]` - Array of enum values representing the order in which the results should be sorted. The enum values are defined based on the attribute name + `_ASC` or `_DESC` (i.e. `order: [name_ASC, foo_DESC]`). |
 
@@ -312,8 +311,8 @@ query productsByColor($color: String) {
 
 | Operator | Description |
 | :--- | :---------- |
-| `lt` | `String` - The value is like... (i.e. `{ like: "%foo%" }`) |
-| `lte` | `String` - The value is not like... (i.e. `{ notLike: "%foo%" }`) |
+| `like` | `String` - The value is like... (i.e. `{ like: "%foo%" }`) |
+| `notLike` | `String` - The value is not like... (i.e. `{ notLike: "%foo%" }`) |
 
 #### Date and number operators
 
@@ -335,7 +334,7 @@ Nevertheless, you might need to exclude some fields like `password`, define quer
 
 ```ts
 import { Model } from 'sequelize'
-import { defineGraphqlGeneConfig, defineField, extendTypes } from 'graphql-gene'
+import { defineGraphqlGeneConfig, extendTypes } from 'graphql-gene'
 
 export class User extends Model {
   // ...
@@ -347,9 +346,9 @@ export class User extends Model {
 
 extendTypes({
   Query: {
-    foo: defineField({
+    foo: {
       // ...
-    }),
+    },
   },
 })
 ```
@@ -374,12 +373,14 @@ extendTypes({
 ```ts
 import type { InferAttributes, InferCreationAttributes } from 'sequelize'
 import { Model, Table, Column, Unique, AllowNull, DataType } from 'sequelize-typescript'
-import { defineEnum, defineField, defineType, extendTypes } from 'graphql-gene'
+import { defineEnum, defineType, extendTypes } from 'graphql-gene'
 import { isEmail } from '../someUtils.ts'
 
 export
 @Table
 class Prospect extends Model<InferAttributes<Prospect>, InferCreationAttributes<Prospect>> {
+  declare id: CreationOptional<number>
+
   @Unique
   @AllowNull(false)
   @Column(DataType.STRING)
@@ -391,7 +392,7 @@ class Prospect extends Model<InferAttributes<Prospect>, InferCreationAttributes<
 
 extendTypes({
   Mutation: {
-    registerProspect: defineField({
+    registerProspect: {
       args: { email: 'String!', locale: 'String' },
       returnType: 'MessageOutput!',
 
@@ -410,7 +411,7 @@ extendTypes({
         Prospect.create({ email, language: locale })
         return { type: 'success' as const }
       },
-    }),
+    },
   },
 })
 
@@ -432,7 +433,9 @@ Directives are simply wrappers around resolvers following a middleware pattern. 
 
 ```ts
 type GeneDirectiveConfig<
-  TDirectiveArgs = Record<string, string | number | boolean | null> | undefined,
+  TDirectiveArgs =
+    | Record<string, string | number | boolean | string[] | number[] | boolean[] | null>
+    | undefined,
   TSource = Record<string, unknown> | undefined,
   TContext = GeneContext,
   TArgs = Record<string, unknown> | undefined,
@@ -461,7 +464,6 @@ type GeneDirectiveHandler<TSource, TContext, TArgs, TResult = unknown> = (option
 import { GraphQLError } from 'graphql'
 import { defineDirective } from 'graphql-gene'
 import { getQueryIncludeOf } from '@graphql-gene/plugin-sequelize'
-import type { WhereAttributeHash } from 'sequelize'
 import { User } from './User.model'
 import { getJwtTokenPayload } from './someUtils'
 
@@ -486,7 +488,7 @@ function throwUnauthorized(): never {
  */
 export const userAuthDirective = defineDirective<{
   // Convert ADMIN_ROLES enum to a union type
-  role: `${ADMIN_ROLES}` | null
+  roles: `${ADMIN_ROLES}`[]
 }>(args => ({
   name: 'userAuth', // only used to add `@userAuth` to the schema in graphql language
   args,
@@ -494,6 +496,15 @@ export const userAuthDirective = defineDirective<{
   async handler({ context, info }) {
     // If it was previously set to `null`
     if (context.authenticatedUser === null) return throwUnauthorized()
+
+    const isAuthorized = (user: User | null) =>
+      !args.roles.length || args.roles.some(role => user?.adminRole === role)
+
+    if (context.authenticatedUser) {
+      if (!isAuthorized(context.authenticatedUser)) throwUnauthorized()
+
+      return // Proceed if user is fetched and authorized
+    }
 
     // i.e. `context.request` coming from Fastify
     const authHeader = context.request.headers.get('authorization')
@@ -512,13 +523,10 @@ export const userAuthDirective = defineDirective<{
     const { id, email } = getJwtTokenPayload(token) || {}
     if (!id && !email) return throwUnauthorized()
 
-    const where: WhereAttributeHash = { id, email }
-    if (args.role) where.adminRole = args.role
-
-    const user = await User.findOne({ where, ...includeOptions })
+    const user = await User.findOne({ where: { id, email }, ...includeOptions })
     context.authenticatedUser = user
 
-    if (!user) throwUnauthorized()
+    if (!user || !isAuthorized(user)) throwUnauthorized()
   },
 }))
 ```
@@ -530,12 +538,13 @@ The `args` option allow you to use it in different contexts:
 #### *src/models/User/User.model.ts*
 
 ```ts
-import { defineField, extendTypes } from 'graphql-gene'
+import { defineGraphqlGeneConfig, extendTypes } from 'graphql-gene'
 import { userAuthDirective } from '.userAuthDirective.ts'
 
 export
 @Table
 class User extends Model<InferAttributes<User>, InferCreationAttributes<User>> {
+  declare id: CreationOptional<number>
 
   // ...
 
@@ -547,9 +556,9 @@ class User extends Model<InferAttributes<User>, InferCreationAttributes<User>> {
       // different scope than a public `User`.
       AuthenticatedUser: {
         include: ['id', 'email', 'username', 'role', 'address', 'orders'],
-        // `role: null` means no specific admin `role` needed
-        // it just needs to be authenticated.
-        directives: [userAuthDirective({ role: null })],
+        // `roles: []` means no specific admin `role` needed
+        // The user just needs to be authenticated.
+        directives: [userAuthDirective({ roles: [] })],
       },
     },
   })
@@ -557,11 +566,11 @@ class User extends Model<InferAttributes<User>, InferCreationAttributes<User>> {
 
 extendTypes({
   Query: {
-    me: defineField({
+    me: {
       returnType: 'AuthenticatedUser',
       // `context.authenticatedUser` is defined in `userAuthDirective`
       resolver: ({ context }) => context.authenticatedUser,
-    }),
+    },
   },
 })
 ```
@@ -588,7 +597,7 @@ Another example for `superAdmin` role:
 ```ts
 static readonly geneConfig = defineGraphqlGeneConfig(AdminAccount, {
   // i.e. Only allow super admin users to access the `AdminAccount` data
-  directives: [userAuthDirective({ role: 'superAdmin' })],
+  directives: [userAuthDirective({ roles: ['superAdmin'] })],
 })
 ```
 
@@ -625,6 +634,9 @@ type Query {
   ```bash
   # Install dependencies
   pnpm install
+  #
+  # or if you're having issues on Apple M Chips:
+  # arch -arm64 pnpm install -f
 
   # Develop
   pnpm dev

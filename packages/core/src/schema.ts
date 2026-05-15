@@ -26,8 +26,11 @@ import {
   isFieldIncluded,
   isObject,
   getGloballyExtendedTypes,
+  attachPolymorphicAbstractResolveTypes,
   getReturnTypeName,
   getFieldDefinition,
+  setGeneConfigByType,
+  parseGetterConfig,
 } from './utils'
 import { addResolversToSchema } from './resolvers'
 import SCHEMA_TEMPLATE_HTML from './schema.html?raw'
@@ -61,11 +64,14 @@ export function generateSchema<
     : []
 
   const initialSchema = parseSchemaOption(options.schema, providedScalars)
-  const geneTypeDefs = generateGeneTypeDefs({ ...options, schema: initialSchema })
+  const { typeDefsString, typeDefLines } = generateGeneTypeDefs({
+    ...options,
+    schema: initialSchema,
+  })
 
   const schema = initialSchema
-    ? extendSchema(initialSchema, parse(geneTypeDefs))
-    : buildSchema(geneTypeDefs)
+    ? extendSchema(initialSchema, parse(typeDefsString))
+    : buildSchema(typeDefsString)
 
   const queryType = schema.getType('Query')
   const mutationType = schema.getType('Mutation')
@@ -109,10 +115,13 @@ export function generateSchema<
   })
 
   executableSchema = addResolversToSchema({
+    typeDefLines,
     schema: executableSchema,
     plugins: options.plugins || [],
     types: options.types,
   })
+
+  attachPolymorphicAbstractResolveTypes(executableSchema)
 
   return {
     schema: executableSchema,
@@ -195,7 +204,7 @@ function generateGeneTypeDefs<SchemaTypes extends AnyObject, DataTypes extends A
   })
   const globallyExtendedTypes = getGloballyExtendedTypes()
 
-  Object.entries(globallyExtendedTypes).forEach(([graphqlType, fieldConfigs]) => {
+  Object.entries(globallyExtendedTypes.config).forEach(([graphqlType, fieldConfigs]) => {
     generateTypeDefLines({
       directiveDefs,
       typeDefLines,
@@ -239,11 +248,13 @@ function generateGeneTypeDefs<SchemaTypes extends AnyObject, DataTypes extends A
     const rawArgsDefEntries = Object.entries(directiveConfig.argsDef)
     const argsDefEntries = rawArgsDefEntries.filter(([, types]) => [...types].some(t => t !== null))
 
-    const printTypes = (types: Set<string | null>) =>
-      [
-        [...types].filter(t => t !== null).map(t => getGraphqlType(t)),
-        types.has(null) ? '' : '!',
+    const printTypes = (types: Set<string | string[] | null>) => {
+      const typeDefs = [...types]
+      return [
+        typeDefs.filter(t => t !== null),
+        types.has(null) || typeDefs.some(type => /^\[/.test(String(type))) ? '' : '!',
       ].join('')
+    }
 
     if (argsDefEntries.length) {
       directiveDef += '(\n'
@@ -255,7 +266,7 @@ function generateGeneTypeDefs<SchemaTypes extends AnyObject, DataTypes extends A
     typeDefsString = `${directiveDef}\n\n${typeDefsString}`
   })
 
-  return typeDefsString
+  return { typeDefsString, typeDefLines }
 }
 
 function forEachModel<M, SchemaTypes extends AnyObject>(options: {
@@ -321,6 +332,8 @@ function generateTypeDefs<M, SchemaTypes extends AnyObject>(options: {
   const geneConfig = getGeneConfigFromOptions(options)
   const afterTypeDefHooks: (() => void)[] = []
 
+  setGeneConfigByType(options.modelKey, geneConfig)
+
   const optionsForPopulateTypeDefs = {
     typeDefLines: options.typeDefLines,
     model: options.model,
@@ -329,16 +342,12 @@ function generateTypeDefs<M, SchemaTypes extends AnyObject>(options: {
     schemaOptions: options,
   }
 
-  if (options.plugin.populateTypeDefs) {
-    const { afterTypeDefHooks: hooks } = options.plugin.populateTypeDefs(optionsForPopulateTypeDefs)
-    afterTypeDefHooks.push(...hooks)
-  } else {
-    const typeDef = options.plugin.getTypeDef(optionsForPopulateTypeDefs)
-    options.typeDefLines[options.modelKey] = typeDef
-  }
+  const { afterTypeDefHooks: hooks } = options.plugin.populateTypeDefs(optionsForPopulateTypeDefs)
+  afterTypeDefHooks.push(...hooks)
 
   registerDirectives({
-    configs: geneConfig?.directives,
+    // @ts-expect-error Fix type issue raised by incompatible TSource
+    configs: parseGetterConfig(geneConfig?.directives),
     defs: options.directiveDefs,
     each: ({ directiveDef }) => {
       options.typeDefLines[options.modelKey].directives.add(directiveDef)
@@ -373,8 +382,10 @@ function generateTypeDefLines(options: {
 }) {
   let objFieldConfigs = options.fieldConfigs
 
-  options.typeDefLines[options.graphqlType] =
-    options.typeDefLines[options.graphqlType] || getDefaultTypeDefLinesObject()
+  options.typeDefLines[options.graphqlType] = {
+    ...getDefaultTypeDefLinesObject(),
+    ...options.typeDefLines[options.graphqlType],
+  }
 
   if (
     isObject(objFieldConfigs) &&
@@ -413,18 +424,23 @@ function generateTypeDefLines(options: {
 
     const normalizedFieldConfig = normalizeFieldConfig(fieldConfig)
 
-    options.typeDefLines[options.graphqlType].lines[fieldKey] =
-      options.typeDefLines[options.graphqlType].lines[fieldKey] || getDefaultFieldLinesObject()
+    options.typeDefLines[options.graphqlType].lines[fieldKey] = {
+      ...getDefaultFieldLinesObject(),
+      ...options.typeDefLines[options.graphqlType].lines[fieldKey],
+    }
 
     const fieldLineConfig = options.typeDefLines[options.graphqlType].lines[fieldKey]
-    fieldLineConfig.typeDef = normalizedFieldConfig.returnType
+
+    if (normalizedFieldConfig.returnType) {
+      fieldLineConfig.typeDef = normalizedFieldConfig.returnType
+    }
 
     if (isUsingDefaultResolver(normalizedFieldConfig)) {
       populateArgsDefForDefaultResolver({
         fieldLineConfig,
         graphqlType: options.graphqlType,
         fieldKey,
-        isList: isListType(parseType(normalizedFieldConfig.returnType)),
+        isList: isListType(parseType(fieldLineConfig.typeDef)),
       })
     } else if (normalizedFieldConfig.args) {
       Object.entries(normalizedFieldConfig.args).forEach(([argKey, argDef]) => {
@@ -436,7 +452,7 @@ function generateTypeDefLines(options: {
     }
     if (normalizedFieldConfig.directives) {
       registerDirectives({
-        configs: normalizedFieldConfig.directives,
+        configs: parseGetterConfig(normalizedFieldConfig.directives),
         defs: options.directiveDefs,
         each: ({ directiveDef }) => {
           options.typeDefLines[options.graphqlType].lines[fieldKey].directives.add(directiveDef)
@@ -478,17 +494,23 @@ function registerDirectives(options: {
   each: (details: { directiveDef: string; directive: GeneDirectiveConfig }) => void
 }) {
   options.configs?.forEach(directive => {
+    if (!directive.name) return
+
     // Define or extend the directive in the schema
     options.defs[directive.name] = options.defs[directive.name] || { argsDef: {} }
 
     if (directive.args) {
       Object.entries(directive.args).forEach(([key, value]) => {
+        if (Array.isArray(value) && !value.length) return
+
         options.defs[directive.name].argsDef = options.defs[directive.name].argsDef || {}
 
         options.defs[directive.name].argsDef[key] =
           options.defs[directive.name].argsDef[key] || new Set([])
 
-        options.defs[directive.name].argsDef[key].add(value === null ? null : getGraphqlType(value))
+        options.defs[directive.name].argsDef[key].add(
+          value === null ? null : Array.isArray(value) && !value.length ? [] : getGraphqlType(value)
+        )
       })
     }
 
@@ -524,8 +546,17 @@ function stringifyFieldLines(typeKey: string, fieldLines: TypeDefLines[0]) {
     return `union ${typeKey} = ${getVarDef('', ' | ')}`
   }
 
+  const implementedInterfaces = fieldLines.implementedInterfaces?.length
+    ? fieldLines.implementedInterfaces
+    : []
+
+  const implementsClause =
+    fieldLines.varType === 'type' && implementedInterfaces.length
+      ? ` implements ${implementedInterfaces.join(' & ')}`
+      : ''
+
   return [
-    `${fieldLines.varType} ${typeKey}${printDirectives(fieldLines.directives)} {`,
+    `${fieldLines.varType} ${typeKey}${implementsClause}${printDirectives(fieldLines.directives)} {`,
     getVarDef(),
     `}`,
   ].join('\n')
@@ -536,13 +567,24 @@ function stringifyDirectiveConfig(directive: GeneDirectiveConfig) {
 
   if (directive.args) {
     // Null is not valid in GraphQL Language so we remove it from the possible argument types
-    const entries = Object.entries(directive.args).filter(([, v]) => v !== null)
+    const entries = Object.entries(directive.args).filter(([, value]) => {
+      return Array.isArray(value) ? !!value.length : value !== null
+    })
 
     // Add the parentheses only if the directive has possible argument types
     if (entries.length) {
       directiveDef += '('
-      directiveDef += Object.entries(directive.args)
-        .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
+      directiveDef += entries
+        .map(([argKey, value]) => {
+          const formatted = Array.isArray(value)
+            ? `[${value
+                .filter(v => v !== null)
+                .map(v => JSON.stringify(v))
+                .join(', ')}]`
+            : JSON.stringify(value)
+
+          return `${argKey}: ${formatted}`
+        })
         .join(', ')
       directiveDef += ')'
     }

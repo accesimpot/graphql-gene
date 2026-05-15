@@ -1,4 +1,6 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type AnyFunction = (...args: any) => any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyObject = Record<string, any>
 
 export type NestedObject = { [k: string]: NestedObject }
@@ -8,9 +10,11 @@ export type Mutable<Immutable> = {
   -readonly [K in keyof Immutable]: Immutable[K]
 }
 
-export function getMutable<T extends string>(immutable: T[]) {
+export function getMutable<T extends string>(immutable: T[] | readonly T[]) {
   return immutable as Mutable<T[]>
 }
+
+export type Prop<T, K> = K extends keyof T ? T[K] : never
 
 export type ValueOf<T> = T[keyof T]
 
@@ -36,15 +40,21 @@ export type Kebab<T extends string, A extends string = ''> = TrimHyphen<Hypheniz
 export type NeverToUnknown<T> = T extends never ? unknown : T
 
 /**
+ * A type that represents either a value of type T or a function that returns T.
+ * Useful for avoiding circular dependencies by allowing lazy evaluation.
+ */
+export type TypeOrFunction<T> = T | (() => T)
+
+/**
  * Allow you to infer the values of an object inside another object without using `as const`.
  *
  * @example
  * function doSomething<T>(obj: Narrow<T>) {
  *   return obj
  * }
- * const something = doSomething({ args: { page: 'Int' } })
+ * const something = doSomething({ args: { skip: 'Int' } })
  *
- * // `something.args.page` will be of type `'Int'` instead of `string`
+ * // `something.args.skip` will be of type `'Int'` instead of `string`
  *
  * @see https://stackoverflow.com/a/75881801/1895428
  */
