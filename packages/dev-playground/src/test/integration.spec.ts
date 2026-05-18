@@ -5,7 +5,51 @@ import { sequelize } from '../models/sequelize'
 import { useMetaPlugin } from '../plugins/useMetaPlugin'
 import { schema } from '../server/schema'
 import { getFixtureQuery } from './utils'
-import { Order, Product, Page } from '../models'
+import { Product } from '../models'
+
+/** GraphQL association-list wrapper `{ count, items }` (differs from Sequelize array fields) */
+type GqlAssociationList<T> = {
+  count: number
+  items: T[]
+}
+
+type GqlProductNested = {
+  id?: number
+  name?: string
+  color?: string | null
+  isPublished?: boolean | null
+  variants?: GqlAssociationList<{
+    size?: string
+    inventory?: { stock?: number } | null
+  }>
+  group?: { categories?: string[] }
+}
+
+type GqlOrderItemRow = {
+  id?: number
+  price?: number
+  quantity?: number
+  product?: GqlProductNested
+}
+
+/** GraphQL `order { … }` payloads where list associations use wrappers */
+type OrderQueryPayload = {
+  order?: {
+    items?: GqlAssociationList<GqlOrderItemRow>
+  }
+}
+
+type PageBlockUnion =
+  | { __typename: 'HeroBlock'; id: number; title: string; subtitle: string }
+  | { __typename: 'TextBlock'; id: number; body: string }
+
+type PageQueryPayload = {
+  pageByPath?: {
+    id: number
+    path: string
+    blocks: GqlAssociationList<PageBlockUnion>
+  }
+}
 
 await sequelize.authenticate()
 
@@ -75,10 +119,10 @@ describe('integration', () => {
     const targetedOrderId = 117
 
     describe('when the directive throws an error', () => {
-      let result: ExecutionResult<{ order: Order }>
+      let result: ExecutionResult<OrderQueryPayload>
 
       beforeAll(async () => {
-        result = await execute<{ order: Order }>({
+        result = await execute<OrderQueryPayload>({
           document: getFixtureQuery('queries/orderWithInventory.gql'),
           variables: { id: String(targetedOrderId) },
         })
@@ -87,11 +131,10 @@ describe('integration', () => {
       it('returns null for each field returning the type with the directive', () => {
         expect(result.data?.order?.items?.items?.length).toBeTruthy()
         expect(
-          result.data?.order?.items?.items?.every(_item => {
-            const item = _item as unknown as { product?: Product }
+          result.data?.order?.items?.items?.every((_item: GqlOrderItemRow) => {
             return (
-              item.product?.variants?.items?.length &&
-              item.product?.variants?.items?.every(variant => {
+              _item.product?.variants?.items?.length &&
+              _item.product?.variants?.items?.every(variant => {
                 return variant.inventory === null
               })
             )
@@ -101,10 +144,10 @@ describe('integration', () => {
     })
 
     describe('when the directive does not throw an error', () => {
-      let result: ExecutionResult<{ order: Order }>
+      let result: ExecutionResult<OrderQueryPayload>
 
       beforeAll(async () => {
-        result = await execute<{ order: Order }>(
+        result = await execute<OrderQueryPayload>(
           {
             document: getFixtureQuery('queries/orderWithInventory.gql'),
             variables: { id: String(targetedOrderId) },
@@ -116,11 +159,10 @@ describe('integration', () => {
       it('returns the real value of each field returning the type with the directive', () => {
         expect(result.data?.order?.items?.items?.length).toBeTruthy()
         expect(
-          result.data?.order?.items?.items?.every(_item => {
-            const item = _item as unknown as { product?: Product }
+          result.data?.order?.items?.items?.every((_item: GqlOrderItemRow) => {
             return (
-              item.product?.variants?.items?.length &&
-              item.product?.variants?.items?.every(variant => {
+              _item.product?.variants?.items?.length &&
+              _item.product?.variants?.items?.every(variant => {
                 return typeof variant.inventory?.stock === 'number'
               })
             )
@@ -132,10 +174,10 @@ describe('integration', () => {
 
   describe('when sending query including field with authorization directive', () => {
     describe('when the directive throws an error', () => {
-      let result: ExecutionResult<{ order: Order }>
+      let result: ExecutionResult<OrderQueryPayload>
 
       beforeAll(async () => {
-        result = await execute<{ order: Order }>({
+        result = await execute<OrderQueryPayload>({
           document: getFixtureQuery('queries/orderWithPublished.gql'),
         })
       })
@@ -144,17 +186,17 @@ describe('integration', () => {
         expect(result.data?.order?.items?.items?.length).toBeTruthy()
         expect(
           result.data?.order?.items?.items?.every(
-            item => (item as unknown as { product?: Product }).product?.isPublished === null
+            (item: GqlOrderItemRow) => item.product?.isPublished === null
           )
         ).toBe(true)
       })
     })
 
     describe('when the directive does not throw an error', () => {
-      let result: ExecutionResult<{ order: Order }>
+      let result: ExecutionResult<OrderQueryPayload>
 
       beforeAll(async () => {
-        result = await execute<{ order: Order }>(
+        result = await execute<OrderQueryPayload>(
           { document: getFixtureQuery('queries/orderWithPublished.gql') },
           { headers: { authorization: '5Jx4SHbtvaxFmAHMxIlCvf9V66YdCy' } }
         )
@@ -164,8 +206,7 @@ describe('integration', () => {
         expect(result.data?.order?.items?.items?.length).toBeTruthy()
         expect(
           result.data?.order?.items?.items?.every(
-            item =>
-              typeof (item as unknown as { product?: Product }).product?.isPublished === 'boolean'
+            (item: GqlOrderItemRow) => typeof item.product?.isPublished === 'boolean'
           )
         ).toBe(true)
       })
@@ -184,14 +225,16 @@ describe('integration', () => {
       XXL: 5,
     }
 
-    const sortApparelSizes = (sizes: string[]) =>
-      [...sizes].sort((a, b) => (apparelSizeRank[a] ?? 99) - (apparelSizeRank[b] ?? 99))
+    const sortApparelSizes = (sizes: (string | undefined)[]) =>
+      [...sizes]
+        .filter((s): s is string => typeof s === 'string')
+        .sort((a, b) => (apparelSizeRank[a] ?? 99) - (apparelSizeRank[b] ?? 99))
 
     describe('when filtering is set to active by test header', () => {
-      let result: ExecutionResult<{ order: Order }>
+      let result: ExecutionResult<OrderQueryPayload>
 
       beforeAll(async () => {
-        result = await execute<{ order: Order }>(
+        result = await execute<OrderQueryPayload>(
           {
             document: getFixtureQuery('queries/orderById.gql'),
             variables: { id: String(targetedOrderId) },
@@ -201,10 +244,11 @@ describe('integration', () => {
       })
 
       it('filters out the XXL variants', () => {
-        const apparelOrderItem = result.data?.order?.items?.items?.find(_item => {
-          const item = _item as unknown as { product?: Product }
-          return (item.product?.group?.categories as unknown as string[]).includes('apparel')
-        }) as unknown as { product?: Product }
+        const apparelOrderItem = result.data?.order?.items?.items?.find(
+          (_item: GqlOrderItemRow) => {
+            return (_item.product?.group?.categories as string[] | undefined)?.includes('apparel')
+          }
+        )
         const apparelProduct = apparelOrderItem?.product
 
         expect(result.data?.order?.items?.items?.length).toBeTruthy()
@@ -216,10 +260,10 @@ describe('integration', () => {
     })
 
     describe('when filtering is set to inactive by test header', () => {
-      let result: ExecutionResult<{ order: Order }>
+      let result: ExecutionResult<OrderQueryPayload>
 
       beforeAll(async () => {
-        result = await execute<{ order: Order }>(
+        result = await execute<OrderQueryPayload>(
           {
             document: getFixtureQuery('queries/orderById.gql'),
             variables: { id: String(targetedOrderId) },
@@ -229,10 +273,11 @@ describe('integration', () => {
       })
 
       it('does not filter out the XXL variants', () => {
-        const apparelOrderItem = result.data?.order?.items?.items?.find(_item => {
-          const item = _item as unknown as { product?: Product }
-          return (item.product?.group?.categories as unknown as string[]).includes('apparel')
-        }) as unknown as { product?: Product }
+        const apparelOrderItem = result.data?.order?.items?.items?.find(
+          (_item: GqlOrderItemRow) => {
+            return (_item.product?.group?.categories as string[] | undefined)?.includes('apparel')
+          }
+        )
         const apparelProduct = apparelOrderItem?.product
 
         expect(result.data?.order?.items?.items?.length).toBeTruthy()
@@ -265,11 +310,11 @@ describe('integration', () => {
     })
 
     describe('when all items are published', () => {
-      let result: ExecutionResult<{ order: Order }>
+      let result: ExecutionResult<OrderQueryPayload>
 
       beforeAll(async () => {
         await Product.update({ isPublished: true }, productFindOptions)
-        result = await execute<{ order: Order }>({
+        result = await execute<OrderQueryPayload>({
           document: getFixtureQuery('queries/orderById.gql'),
           variables: { id: String(targetedOrderId) },
         })
@@ -278,19 +323,17 @@ describe('integration', () => {
       it('returns all items', () => {
         expect(result.data?.order?.items?.items?.length).toBeTruthy()
         expect(
-          result.data?.order?.items?.items?.map(
-            item => (item as unknown as { product?: Product }).product?.id
-          )
+          result.data?.order?.items?.items?.map((item: GqlOrderItemRow) => item.product?.id)
         ).toEqual([firstProductId, secondProductId, thirdProductId])
       })
     })
 
     describe('when all items are published except one', () => {
-      let result: ExecutionResult<{ order: Order }>
+      let result: ExecutionResult<OrderQueryPayload>
 
       beforeAll(async () => {
         await Product.update({ isPublished: false }, productFindOptions)
-        result = await execute<{ order: Order }>({
+        result = await execute<OrderQueryPayload>({
           document: getFixtureQuery('queries/orderById.gql'),
           variables: { id: String(targetedOrderId) },
         })
@@ -299,9 +342,7 @@ describe('integration', () => {
       it('returns all items except the one unpublished', () => {
         expect(result.data?.order?.items?.items?.length).toBeTruthy()
         expect(
-          result.data?.order?.items?.items?.map(
-            item => (item as unknown as { product?: Product }).product?.id
-          )
+          result.data?.order?.items?.items?.map((item: GqlOrderItemRow) => item.product?.id)
         ).toEqual([firstProductId, thirdProductId])
       })
     })
@@ -356,7 +397,7 @@ describe('integration', () => {
     const demoPath = '/__polymorphic_demo_page__'
 
     it('resolves interface members via inline fragments and __typename', async () => {
-      const result = await execute<{ pageByPath: Page }>({
+      const result = await execute<PageQueryPayload>({
         document: getFixtureQuery('queries/pagePolymorphicBlocks.gql'),
         variables: { path: demoPath },
       })
@@ -386,10 +427,10 @@ describe('integration', () => {
   })
 
   describe('when sending query including field with function-based directive', () => {
-    let result: ExecutionResult<{ order: Order }>
+    let result: ExecutionResult<OrderQueryPayload>
 
     beforeAll(async () => {
-      result = await execute<{ order: Order }>({
+      result = await execute<OrderQueryPayload>({
         document: getFixtureQuery('queries/orderById.gql'),
         variables: { id: '397' },
       })
@@ -399,9 +440,8 @@ describe('integration', () => {
       expect(result.data?.order?.items?.items?.length).toBeTruthy()
       expect(
         result.data?.order?.items?.items?.every(
-          item =>
-            typeof (item as unknown as { product?: Product }).product?.color === 'string' ||
-            (item as unknown as { product?: Product }).product?.color === null
+          (item: GqlOrderItemRow) =>
+            typeof item.product?.color === 'string' || item.product?.color === null
         )
       ).toBe(true)
     })
