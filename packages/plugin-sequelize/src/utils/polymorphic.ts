@@ -1,3 +1,5 @@
+import 'reflect-metadata'
+
 import {
   defineGraphqlGeneConfig,
   registerPolymorphicAbstractType,
@@ -5,9 +7,24 @@ import {
   type GraphqlTypeName,
   type InferFields,
 } from 'graphql-gene'
-import { BelongsTo, HasMany, type ModelStatic } from 'sequelize-typescript'
+import {
+  BelongsTo,
+  Column,
+  DataType,
+  HasMany,
+  type ModelStatic,
+} from 'sequelize-typescript'
 
 type ModelStaticWithGene = ModelStatic & { geneConfig?: GeneConfig }
+
+/** sequelize-typescript column metadata key (see `attribute-service.ts`). */
+const SEQUELIZE_ATTRIBUTES_METADATA_KEY = 'sequelize:attributes'
+
+/** Default junction columns when the second `@Polymorphic` argument is omitted. */
+export const DEFAULT_POLYMORPHIC_JUNCTION: PolymorphicJunctionOptions = {
+  foreignKey: 'targetId',
+  discriminatorKey: 'targetType',
+}
 
 /** Column naming for Sequelize’s polymorphic junction (`BelongsTo` + inverse scoped `HasMany`). */
 export type PolymorphicJunctionOptions = {
@@ -15,6 +32,38 @@ export type PolymorphicJunctionOptions = {
   foreignKey: string
   /** Stored value equals `TargetModel.name` for each row (`HeroBlock`, `TextBlock`, …). */
   discriminatorKey: string
+}
+
+function hasHubColumn(modelCtor: ModelStatic, attributeKey: string): boolean {
+  const proto = modelCtor.prototype
+  if (typeof Reflect.getMetadata === 'function') {
+    const meta = Reflect.getMetadata(
+      SEQUELIZE_ATTRIBUTES_METADATA_KEY,
+      proto
+    ) as Record<string, unknown> | undefined
+    if (meta && attributeKey in meta) return true
+  }
+
+  const raw = (modelCtor as unknown as { rawAttributes?: Record<string, unknown> }).rawAttributes
+  if (raw && attributeKey in raw) return true
+
+  return false
+}
+
+/** Registers `@Column` metadata for junction FK + discriminator when the model does not define them (e.g. no `declare` / `@Column`). */
+function ensurePolymorphicJunctionColumns(
+  modelCtor: ModelStatic,
+  junction: PolymorphicJunctionOptions
+): void {
+  const proto = modelCtor.prototype
+
+  if (!hasHubColumn(modelCtor, junction.foreignKey)) {
+    Column({ type: DataType.INTEGER, allowNull: true })(proto, junction.foreignKey)
+  }
+
+  if (!hasHubColumn(modelCtor, junction.discriminatorKey)) {
+    Column({ type: DataType.STRING, allowNull: true })(proto, junction.discriminatorKey)
+  }
 }
 
 /** Reads a column from a Sequelize `Model` instance (`get(key)` when available, else property access). */
@@ -35,24 +84,20 @@ function getModelAttributeValue(record: unknown, key: string): unknown {
  * back to this hub**, while the hub declares plain `BelongsTo` accessors without `scope` (see Sequelize polymorphic /
  * association-scopes docs).
  *
- * Usage (`@Polymorphic` immediately before `@Table`, after declaring junction columns):
+ * Usage (`@Polymorphic` immediately before `@Table`):
  *
  * ```ts
- * @Column(DataType.INTEGER)
- * declare blockId!: number | null;
- *
- * @Column(DataType.STRING)
- * declare blockType!: string | null;
- *
- * @Polymorphic(() => [HeroBlock, TextBlock], { foreignKey: 'blockId', discriminatorKey: 'blockType' })
+ * @Polymorphic(() => [HeroBlock, TextBlock])
  * @Table
  * export class PageBlock extends Model {}
  * ```
  *
- * The FK and discriminator columns must exist on this hub model (`foreignKey` / `discriminatorKey`).
+ * By default the junction uses columns **`targetId`** (FK to the concrete row) and **`targetType`**
+ * (discriminator string = concrete `Model.name`). Pass a second argument to override names, or declare/`@Column`
+ * those attributes yourself—existing columns are left as-is.
+ * Missing columns are registered with `@Column` automatically when absent from the class.
  *
- * This matches Sequelize’s polymorphic junction pattern (“many‑to‑many polymorphic” pivot row), see:
- * [`sequelize.org` polymorphic junction](https://sequelize.org/docs/v6/advanced-association-concepts/polymorphic-associations/#configuring-a-many-to-many-polymorphic-association).
+ * See [Sequelize polymorphic junction](https://sequelize.org/docs/v6/advanced-association-concepts/polymorphic-associations/#configuring-a-many-to-many-polymorphic-association).
  *
  * **Why junction instead of nullable FK-per-type columns**
  *
@@ -66,14 +111,23 @@ function getModelAttributeValue(record: unknown, key: string): unknown {
  * `resolveType` on the hub interface prefers `__typename` on emitted values (`polymorphicConcreteTypeName`).
  *
  * @param possibleTypes — Factory returning concrete Sequelize models this pivot can attach to.
+ * @param junction — Optional FK + discriminator attribute names (`DEFAULT_POLYMORPHIC_JUNCTION` when omitted).
  */
 export function Polymorphic<M extends ModelStatic = ModelStatic>(
   possibleTypes: () => ModelStatic[],
-  junction: PolymorphicJunctionOptions
+  junction?: PolymorphicJunctionOptions
 ) {
   return (constructor: M & { geneConfig?: GeneConfig<M> }) => {
+    const resolvedJunction: PolymorphicJunctionOptions = {
+      ...DEFAULT_POLYMORPHIC_JUNCTION,
+      ...junction,
+    }
+
     const BaseModel = constructor
     const BaseModelName = BaseModel.name as GraphqlTypeName
+
+    ensurePolymorphicJunctionColumns(BaseModel, resolvedJunction)
+
     const rawTargetTypes = possibleTypes()
     const targetTypes = rawTargetTypes as ModelStatic[]
     const associationNames = targetTypes.map(t => getAttributeByModelName(t.name))
@@ -85,9 +139,9 @@ export function Polymorphic<M extends ModelStatic = ModelStatic>(
       const inverseKey = buildInversePolymorphicHasManyKey(BaseModel.name, typeName)
 
       HasMany(() => BaseModel as ModelStatic, {
-        foreignKey: junction.foreignKey,
+        foreignKey: resolvedJunction.foreignKey,
         constraints: false,
-        scope: { [junction.discriminatorKey]: typeName },
+        scope: { [resolvedJunction.discriminatorKey]: typeName },
       })(TargetModel.prototype, inverseKey)
 
       if (!TargetModel.geneConfig) {
@@ -97,7 +151,7 @@ export function Polymorphic<M extends ModelStatic = ModelStatic>(
       ensureAssociationExcludedFromGeneConfig(TargetModel, inverseKey)
 
       BelongsTo(() => TargetModel, {
-        foreignKey: junction.foreignKey,
+        foreignKey: resolvedJunction.foreignKey,
         constraints: false,
       })(BaseModel.prototype, attributeName)
 
@@ -115,8 +169,8 @@ export function Polymorphic<M extends ModelStatic = ModelStatic>(
       include: ['id' as InferFields<M>],
 
       __polymorphicJunction: {
-        foreignKey: junction.foreignKey,
-        discriminatorKey: junction.discriminatorKey,
+        foreignKey: resolvedJunction.foreignKey,
+        discriminatorKey: resolvedJunction.discriminatorKey,
       },
       __polymorphicAssociations: associationNames,
 

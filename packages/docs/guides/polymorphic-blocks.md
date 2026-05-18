@@ -28,14 +28,14 @@ For a longer discussion of that frontend / query shape (including Vue-oriented n
 
 ## Contents
 
-| Section                                                              | Description                                                      |
-| -------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| [Setup](#setup)                                                      | Sequelize models: page, hub with `@Polymorphic`, concrete blocks |
+| Section                                                              | Description                                                                      |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| [Setup](#setup)                                                      | Sequelize models: page, hub with `@Polymorphic`, concrete blocks                 |
 | [Equivalent without `@Polymorphic`](#equivalent-without-polymorphic) | Sequelize junction FK + discriminator, inverse scoped `HasMany`, hub `BelongsTo` |
-| [Querying](#querying)                                                | Operation, variables, example JSON                               |
-| [What graphql-gene does](#what-graphql-gene-does)                    | GraphQL interface, selection-driven includes, `id`-only contract |
-| [Frontend and component trees](#frontend-and-component-trees)        | Typename-driven UIs                                              |
-| [Reference implementation](#reference-implementation)                | Dev-playground paths                                             |
+| [Querying](#querying)                                                | Operation, variables, example JSON                                               |
+| [What graphql-gene does](#what-graphql-gene-does)                    | GraphQL interface, selection-driven includes, `id`-only contract                 |
+| [Frontend and component trees](#frontend-and-component-trees)        | Typename-driven UIs                                                              |
+| [Reference implementation](#reference-implementation)                | Dev-playground paths                                                             |
 
 ## Setup
 
@@ -68,7 +68,7 @@ extendTypes({
 })
 ```
 
-**Hub** ([Sequelize polymorphic junction](https://sequelize.org/docs/v6/advanced-association-concepts/polymorphic-associations/#configuring-a-many-to-many-polymorphic-association)) — declare **`blockId` + `blockType`** on the pivot (`blockType` equals each concrete Sequelize `modelName`, e.g. `HeroBlock`). `@Polymorphic` wires scoped inverse `HasMany` relations on concrete models so Sequelize merges the discriminator, adds hub `BelongsTo` accessors (`heroBlock`, `textBlock`, …), hides the inverse accessors from Gene’s GraphQL types, and registers the hub `interface` + rewriting directive.
+**Hub** ([Sequelize polymorphic junction](https://sequelize.org/docs/v6/advanced-association-concepts/polymorphic-associations/#configuring-a-many-to-many-polymorphic-association)) — **`@Polymorphic(() => […])`** adds junction columns by default (`targetId` + `targetType`, overridable) and wires scoped inverse `HasMany` relations on concrete models, hub `BelongsTo` accessors (`heroBlock`, `textBlock`, …), Gene excludes on inverse accessors, the hub `interface`, and the rewriting directive.
 
 ```ts
 import { BelongsTo, Column, DataType, ForeignKey, Model, Table } from 'sequelize-typescript'
@@ -77,17 +77,12 @@ import { Page } from '../Page/Page.model'
 import { HeroBlock } from '../HeroBlock/HeroBlock.model'
 import { TextBlock } from '../TextBlock/TextBlock.model'
 
-@Polymorphic(() => [HeroBlock, TextBlock], {
-  foreignKey: 'blockId',
-  discriminatorKey: 'blockType',
-})
+@Polymorphic(() => [HeroBlock, TextBlock])
 @Table
 export class PageBlock extends Model {
-  @Column(DataType.INTEGER)
-  declare blockId: number | null
-
-  @Column(DataType.STRING)
-  declare blockType: string | null
+  declare id: number
+  declare targetId: number | null
+  declare targetType: string | null
 
   @ForeignKey(() => Page)
   @Column(DataType.INTEGER)
@@ -98,7 +93,7 @@ export class PageBlock extends Model {
 }
 ```
 
-After `sequelize.sync`, expect the pivot table to carry **`blockId`** and **`blockType`** (two columns total for all concrete kinds), alongside any non-polymorphic columns such as **`pageId`**. One pivot row ⇒ one semantic block ⇒ one authoritative `(blockType, blockId)`.
+After `sequelize.sync`, the pivot table carries **`targetId`** and **`targetType`** (unless you passed custom names or declared those columns yourself), plus **`pageId`**. `targetType` stores each concrete Sequelize model name (e.g. `HeroBlock`). One pivot row ⇒ one block ⇒ one `(targetType, targetId)` pair.
 
 **Concrete blocks** — ordinary models with `geneConfig` as needed (only an excerpt shown).
 
@@ -115,7 +110,7 @@ export class HeroBlock extends Model {
 
 ## Equivalent without Polymorphic
 
-Plain Sequelize follows the polymorphic junction pattern: **`HeroBlock.hasMany(PageBlock)`** with **`foreignKey: 'blockId'`**, **`constraints: false`**, **`scope: { blockType: 'HeroBlock' }`**, mirrored for **`TextBlock`**. The pivot declares **`BelongsTo(HeroBlock)`** / **`BelongsTo(TextBlock)`** without `scope`.
+Plain Sequelize follows the polymorphic junction pattern: **`HeroBlock.hasMany(PageBlock)`** with **`foreignKey: 'targetId'`** (or your chosen FK), **`constraints: false`**, **`scope: { targetType: 'HeroBlock' }`** (or your discriminator key), mirrored for **`TextBlock`**. The pivot declares **`BelongsTo(HeroBlock)`** / **`BelongsTo(TextBlock)`** without `scope`.
 
 `@Polymorphic` creates those scoped inverse accessors under **`_geneInversePolymorphic…`** names and adds them to each concrete model’s **`geneConfig.exclude`** so they never become GraphQL fields. It still registers **`PageBlock`** as an `interface`, wires concrete implementations, attaches the rewriter (`id` + `__typename` without fragment-shaped includes when appropriate), and matches inline fragments → nested includes.
 
@@ -187,9 +182,9 @@ Shape only; numeric `id`s are illustrative.
 
 `@Polymorphic` mirrors Sequelize’s polymorphic junction recipe: scoped inverse **`HasMany`** relations live on concrete models (**`constraints: false`**, **`foreignKey` + discriminator scope**) while the hub exposes plain **`BelongsTo`** accessors (`heroBlock`, `textBlock`, …) keyed by the same FK. Sequelize therefore merges discriminators onto **`PageBlocks`** when expanding nested includes underneath **`Page.blocks`**, keeping **`limit` / `skip`** aligned with pivot rows—not with each nullable FK column alternative.
 
-Gene’s rewriting directive runs before nested resolvers hydrate: prefer Sequelize instances whose **`constructor.name`** matches **`blockType`**, otherwise synthesize **`{ id: blockId, __typename: blockType }`** so callers can retrieve **`__typename`** (and FK-backed **id** fields) without emitting includes for unrelated concrete branches.
+Gene’s rewriting directive runs before nested resolvers hydrate: prefer Sequelize instances whose **`constructor.name`** matches **`targetType`**, otherwise synthesize **`{ id: targetId, __typename: targetType }`** so callers can retrieve **`__typename`** (and FK-backed **id** fields) without includes for unrelated concrete branches.
 
-GraphQL still exposes a **`PageBlock`-named `interface` constrained to **`id`**; discriminator / FK columns and editorial pivot metadata stay Sequelize-only unless you opt them back into **`geneConfig.include`**.
+GraphQL still exposes a **`PageBlock`-named `interface` constrained to **`id`**; discriminator / FK columns and editorial pivot metadata stay Sequelize-only unless you opt them back into **`geneConfig.include`\*\*.
 
 The page retains a canonical **`HasMany` → pivot** association; **`PageBlock`** joins concrete tables polymorphically underneath.
 

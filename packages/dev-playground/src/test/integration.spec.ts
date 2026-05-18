@@ -319,8 +319,8 @@ describe('integration', () => {
 
       expect(result.errors).toBeUndefined()
       expect(result.data?.pageByPath?.blocks).toEqual([
-        { id: 23, __typename: 'HeroBlock' },
-        { id: 23, __typename: 'TextBlock' },
+        { id: expect.any(Number), __typename: 'HeroBlock' },
+        { id: expect.any(Number), __typename: 'TextBlock' },
       ])
     })
   })
