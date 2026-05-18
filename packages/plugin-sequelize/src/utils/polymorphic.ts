@@ -109,6 +109,11 @@ function resolveAssociation(item: ModelStatic & { _options?: { includeNames?: st
   return item // return the hub row unchanged as a fallback
 }
 
+/** Maps preloaded / queried polymorphic hub rows to concrete Sequelize instances when applicable. */
+export function resolvePolymorphicHubLoadedRows(rows: ReadonlyArray<unknown>) {
+  return rows.map(item => resolveAssociation(item as Parameters<typeof resolveAssociation>[0]))
+}
+
 /**
  * Get the expected attribute name for a given associated model.
  * @example
