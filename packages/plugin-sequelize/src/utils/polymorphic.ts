@@ -240,6 +240,14 @@ function resolvePolymorphicHubRow(hubInstance: PolymorphicHubInstance): unknown 
   return hubInstance
 }
 
+/**
+ * Maps preloaded polymorphic hub rows for consumers that hold a bare array (association list
+ * `items` facet, etc.). Uses the same logic as the hub model’s type-level directive.
+ */
+export function resolvePolymorphicHubLoadedRows(rows: ReadonlyArray<unknown>): unknown[] {
+  return rows.map(row => resolvePolymorphicHubRow(row as PolymorphicHubInstance))
+}
+
 /** Whether `value` is an object whose `constructor.name` matches the concrete Sequelize model name. */
 function isConcreteModelInstance(value: unknown, concreteModelName: string): boolean {
   if (!value || typeof value !== 'object') return false
