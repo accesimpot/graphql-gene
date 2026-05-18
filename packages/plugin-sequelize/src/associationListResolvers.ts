@@ -8,9 +8,13 @@ import {
 } from 'graphql'
 import type { Association, ModelStatic } from 'sequelize'
 import { Model } from 'sequelize-typescript'
-import type { AnyObject } from 'graphql-gene'
-import { isRegisteredPolymorphicAbstractType } from 'graphql-gene'
+import {
+  getGloballyExtendedTypes,
+  isRegisteredPolymorphicAbstractType,
+  type AnyObject,
+} from 'graphql-gene'
 import { getFieldIncludeOptions, getQueryInclude } from './utils/public'
+import { applySqliteNestedHasManySeparate } from './utils/includePostProcess'
 import { resolvePolymorphicHubLoadedRows } from './utils/polymorphic'
 import { getGeneAssociationListWrapperMeta } from './utils/associationListRegistry'
 import {
@@ -23,6 +27,27 @@ import {
   type ModelInstanceWithClass,
 } from './utils/guards'
 import { isMarkedAsAssociation } from './utils/associationMap'
+import type { DefaultResolverIncludeOptions } from './types'
+
+function applyGeneConfigRootFindOptions(
+  ModelClass: ModelStatic<Model>,
+  findOptionsRoot: DefaultResolverIncludeOptions
+) {
+  const geneCfg =
+    getGloballyExtendedTypes().geneConfig[
+      ModelClass.name as keyof ReturnType<typeof getGloballyExtendedTypes>['geneConfig']
+    ]
+  const hook =
+    geneCfg && typeof geneCfg === 'object' && 'findOptions' in geneCfg
+      ? (geneCfg as { findOptions?: (d: unknown) => void }).findOptions
+      : undefined
+  if (typeof hook !== 'function') return
+
+  hook({
+    findOptions: findOptionsRoot,
+    state: findOptionsRoot,
+  })
+}
 
 export type GeneAssociationListWeakPayload = {
   parent: Model
@@ -116,13 +141,18 @@ async function ensureAssociationItemsFacetLoaded(
   })
 
   const nestedInclude = getQueryInclude(info)
+  const mergedFind: DefaultResolverIncludeOptions = { ...(nestedInclude || {}) }
+  applyGeneConfigRootFindOptions(TargetModel, mergedFind)
+  if (mergedFind.include?.length) {
+    applySqliteNestedHasManySeparate(TargetModel, mergedFind.include)
+  }
 
   const rows = await TargetModel.findAll({
     where: { ...fkWhere, ...columnOpts.where },
     order: columnOpts.order,
     offset: columnOpts.offset,
     limit: columnOpts.limit,
-    ...(nestedInclude || {}),
+    ...mergedFind,
   })
 
   const targetGraphqlType = payload.targetGraphqlType ?? TargetModel.name
