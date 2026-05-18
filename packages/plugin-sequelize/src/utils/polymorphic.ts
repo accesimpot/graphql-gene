@@ -1,19 +1,12 @@
-import 'reflect-metadata'
-
 import {
   defineGraphqlGeneConfig,
+  isObject,
   registerPolymorphicAbstractType,
   type GeneConfig,
   type GraphqlTypeName,
   type InferFields,
 } from 'graphql-gene'
-import {
-  BelongsTo,
-  Column,
-  DataType,
-  HasMany,
-  type ModelStatic,
-} from 'sequelize-typescript'
+import { BelongsTo, Column, DataType, HasMany, type ModelStatic } from 'sequelize-typescript'
 
 type ModelStaticWithGene = ModelStatic & { geneConfig?: GeneConfig }
 
@@ -34,13 +27,16 @@ export type PolymorphicJunctionOptions = {
   discriminatorKey: string
 }
 
+/**
+ * Sequelize-typescript stores `@Column` definitions in Reflect metadata (`sequelize:attributes`) when `reflect-metadata`
+ * is loaded (standard for sequelize-typescript apps). Otherwise we rely on Sequelize `Model.rawAttributes` after init.
+ */
 function hasHubColumn(modelCtor: ModelStatic, attributeKey: string): boolean {
   const proto = modelCtor.prototype
   if (typeof Reflect.getMetadata === 'function') {
-    const meta = Reflect.getMetadata(
-      SEQUELIZE_ATTRIBUTES_METADATA_KEY,
-      proto
-    ) as Record<string, unknown> | undefined
+    const meta = Reflect.getMetadata(SEQUELIZE_ATTRIBUTES_METADATA_KEY, proto) as
+      | Record<string, unknown>
+      | undefined
     if (meta && attributeKey in meta) return true
   }
 
@@ -68,12 +64,13 @@ function ensurePolymorphicJunctionColumns(
 
 /** Reads a column from a Sequelize `Model` instance (`get(key)` when available, else property access). */
 function getModelAttributeValue(record: unknown, key: string): unknown {
-  if (record !== null && typeof record === 'object' && 'get' in record) {
-    const getter = (record as { get: (k: string) => unknown }).get
+  if (!isObject(record)) return undefined
+
+  if ('get' in record) {
+    const getter = record.get
     if (typeof getter === 'function') return getter.call(record, key)
   }
-
-  return (record as Record<string, unknown>)[key]
+  return record[key as keyof typeof record]
 }
 
 /**
@@ -156,8 +153,7 @@ export function Polymorphic<M extends ModelStatic = ModelStatic>(
       })(BaseModel.prototype, attributeName)
 
       const concreteGeneConfig = TargetModel.geneConfig
-      concreteGeneConfig.__implementedInterfaces =
-        concreteGeneConfig.__implementedInterfaces || []
+      concreteGeneConfig.__implementedInterfaces = concreteGeneConfig.__implementedInterfaces || []
 
       concreteGeneConfig.__implementedInterfaces.push(BaseModelName)
     })
@@ -265,7 +261,10 @@ function buildInversePolymorphicHasManyKey(hubModelName: string, concreteModelNa
 }
 
 /** Ensures the inverse-association property is omitted from generated GraphQL on the concrete model. */
-function ensureAssociationExcludedFromGeneConfig(TargetModel: ModelStaticWithGene, graphqlFieldKey: string) {
+function ensureAssociationExcludedFromGeneConfig(
+  TargetModel: ModelStaticWithGene,
+  graphqlFieldKey: string
+) {
   const cfg = TargetModel.geneConfig
   if (!cfg) return
 
