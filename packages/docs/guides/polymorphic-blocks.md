@@ -31,7 +31,7 @@ For a longer discussion of that frontend / query shape (including Vue-oriented n
 | Section                                                              | Description                                                      |
 | -------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | [Setup](#setup)                                                      | Sequelize models: page, hub with `@Polymorphic`, concrete blocks |
-| [Equivalent without `@Polymorphic`](#equivalent-without-polymorphic) | Same hub written out by hand (FKs + `BelongsTo`)                 |
+| [Equivalent without `@Polymorphic`](#equivalent-without-polymorphic) | Sequelize junction FK + discriminator, inverse scoped `HasMany`, hub `BelongsTo` |
 | [Querying](#querying)                                                | Operation, variables, example JSON                               |
 | [What graphql-gene does](#what-graphql-gene-does)                    | GraphQL interface, selection-driven includes, `id`-only contract |
 | [Frontend and component trees](#frontend-and-component-trees)        | Typename-driven UIs                                              |
@@ -68,7 +68,7 @@ extendTypes({
 })
 ```
 
-**Hub** — list the concrete block models once; the decorator adds the polymorphic wiring.
+**Hub** ([Sequelize polymorphic junction](https://sequelize.org/docs/v6/advanced-association-concepts/polymorphic-associations/#configuring-a-many-to-many-polymorphic-association)) — declare **`blockId` + `blockType`** on the pivot (`blockType` equals each concrete Sequelize `modelName`, e.g. `HeroBlock`). `@Polymorphic` wires scoped inverse `HasMany` relations on concrete models so Sequelize merges the discriminator, adds hub `BelongsTo` accessors (`heroBlock`, `textBlock`, …), hides the inverse accessors from Gene’s GraphQL types, and registers the hub `interface` + rewriting directive.
 
 ```ts
 import { BelongsTo, Column, DataType, ForeignKey, Model, Table } from 'sequelize-typescript'
@@ -77,9 +77,18 @@ import { Page } from '../Page/Page.model'
 import { HeroBlock } from '../HeroBlock/HeroBlock.model'
 import { TextBlock } from '../TextBlock/TextBlock.model'
 
-@Polymorphic(() => [HeroBlock, TextBlock])
+@Polymorphic(() => [HeroBlock, TextBlock], {
+  foreignKey: 'blockId',
+  discriminatorKey: 'blockType',
+})
 @Table
 export class PageBlock extends Model {
+  @Column(DataType.INTEGER)
+  declare blockId: number | null
+
+  @Column(DataType.STRING)
+  declare blockType: string | null
+
   @ForeignKey(() => Page)
   @Column(DataType.INTEGER)
   declare pageId: number
@@ -88,6 +97,8 @@ export class PageBlock extends Model {
   declare page: Page | null
 }
 ```
+
+After `sequelize.sync`, expect the pivot table to carry **`blockId`** and **`blockType`** (two columns total for all concrete kinds), alongside any non-polymorphic columns such as **`pageId`**. One pivot row ⇒ one semantic block ⇒ one authoritative `(blockType, blockId)`.
 
 **Concrete blocks** — ordinary models with `geneConfig` as needed (only an excerpt shown).
 
@@ -102,44 +113,13 @@ export class HeroBlock extends Model {
 }
 ```
 
-After `sequelize.sync`, the hub table will include nullable FK columns such as `heroBlockId` and `textBlockId` (names derived from the associated model names). Only one should be set per row for a given block instance.
-
 ## Equivalent without Polymorphic
 
-The decorator saves you declaring each optional FK and `BelongsTo` pair by hand. For `HeroBlock` and `TextBlock`, the hub could be written conceptually like below in plain Sequelize (you would still align `geneConfig` / GraphQL with what the decorator generates).
+Plain Sequelize follows the polymorphic junction pattern: **`HeroBlock.hasMany(PageBlock)`** with **`foreignKey: 'blockId'`**, **`constraints: false`**, **`scope: { blockType: 'HeroBlock' }`**, mirrored for **`TextBlock`**. The pivot declares **`BelongsTo(HeroBlock)`** / **`BelongsTo(TextBlock)`** without `scope`.
 
-```ts
-@Table
-export class PageBlock extends Model {
-  @ForeignKey(() => Page)
-  @Column(DataType.INTEGER)
-  declare pageId: number
+`@Polymorphic` creates those scoped inverse accessors under **`_geneInversePolymorphic…`** names and adds them to each concrete model’s **`geneConfig.exclude`** so they never become GraphQL fields. It still registers **`PageBlock`** as an `interface`, wires concrete implementations, attaches the rewriter (`id` + `__typename` without fragment-shaped includes when appropriate), and matches inline fragments → nested includes.
 
-  @BelongsTo(() => Page)
-  declare page: Page | null
-
-  @ForeignKey(() => HeroBlock)
-  @Column(DataType.INTEGER)
-  declare heroBlockId: number | null
-
-  @BelongsTo(() => HeroBlock)
-  declare heroBlock: HeroBlock | null
-
-  @ForeignKey(() => TextBlock)
-  @Column(DataType.INTEGER)
-  declare textBlockId: number | null
-
-  @BelongsTo(() => TextBlock)
-  declare textBlock: TextBlock | null
-
-  /**
-   * Example column that exists in SQL/Sequelize
-   * but is not on the GraphQL `PageBlock` interface (only `id` is).
-   */
-  @Column(DataType.INTEGER)
-  declare sortOrder: number
-}
-```
+Trace **`packages/plugin-sequelize` → `Polymorphic`** when duplicating decorators manually.
 
 ## Querying
 
@@ -205,11 +185,13 @@ Shape only; numeric `id`s are illustrative.
 
 ## What graphql-gene does
 
-`@Polymorphic` wires real Sequelize `BelongsTo` relationships (with FK columns) from the join row to each concrete block. If you rely on Gene’s `default` resolver (like in [Setup](#setup)) or use `getQueryInclude(info)`, Sequelize `include` is derived from the incoming GraphQL operation—aligned with fragments such as those in [Querying](#querying)—so only associations for concrete block types you actually queried contribute to nested loading, instead of blindly joining every polymorphic branch.
+`@Polymorphic` mirrors Sequelize’s polymorphic junction recipe: scoped inverse **`HasMany`** relations live on concrete models (**`constraints: false`**, **`foreignKey` + discriminator scope**) while the hub exposes plain **`BelongsTo`** accessors (`heroBlock`, `textBlock`, …) keyed by the same FK. Sequelize therefore merges discriminators onto **`PageBlocks`** when expanding nested includes underneath **`Page.blocks`**, keeping **`limit` / `skip`** aligned with pivot rows—not with each nullable FK column alternative.
 
-In GraphQL, the decorator generates a `PageBlock`-shaped `interface` that includes only the `id`. That keeps the shared contract minimal: every concrete GraphQL type that implements it does not have to expose the same hub-only fields—each block type owns its own shape beyond `id`. The hub class may still declare extra `@Column`s (sort order, editor notes, etc.): they live in the database and in Sequelize, but they are _not_ exposed on that interface. Concrete block models (`HeroBlock`, `TextBlock`, …) remain full GraphQL object types with their own fields.
+Gene’s rewriting directive runs before nested resolvers hydrate: prefer Sequelize instances whose **`constructor.name`** matches **`blockType`**, otherwise synthesize **`{ id: blockId, __typename: blockType }`** so callers can retrieve **`__typename`** (and FK-backed **id** fields) without emitting includes for unrelated concrete branches.
 
-The page keeps a normal `HasMany` to the join model; each concrete block model is a separate table and schema type.
+GraphQL still exposes a **`PageBlock`-named `interface` constrained to **`id`**; discriminator / FK columns and editorial pivot metadata stay Sequelize-only unless you opt them back into **`geneConfig.include`**.
+
+The page retains a canonical **`HasMany` → pivot** association; **`PageBlock`** joins concrete tables polymorphically underneath.
 
 ## Frontend and component trees
 
@@ -217,4 +199,4 @@ Because each list element is typed in GraphQL by concrete `__typename`, UIs can 
 
 ## Reference implementation
 
-See `packages/dev-playground` models (`Page`, `PageBlock`, `HeroBlock`, `TextBlock`) and the `polymorphic page blocks` integration test together with `src/test/queries/pagePolymorphicBlocks.gql`.
+See `packages/dev-playground` models (`Page`, `PageBlock`, `HeroBlock`, `TextBlock`) and the `polymorphic page blocks` integration tests together with `src/test/queries/pagePolymorphicBlocks.gql` and `pagePolymorphicBlocksTypenamesOnly.gql`.

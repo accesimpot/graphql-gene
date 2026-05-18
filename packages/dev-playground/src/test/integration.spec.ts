@@ -310,6 +310,19 @@ describe('integration', () => {
         ],
       })
     })
+
+    it('resolves junction rows with id and __typename without concrete-table inline fragments', async () => {
+      const result = await execute<{ pageByPath: Page }>({
+        document: getFixtureQuery('queries/pagePolymorphicBlocksTypenamesOnly.gql'),
+        variables: { path: demoPath },
+      })
+
+      expect(result.errors).toBeUndefined()
+      expect(result.data?.pageByPath?.blocks).toEqual([
+        { id: 23, __typename: 'HeroBlock' },
+        { id: 23, __typename: 'TextBlock' },
+      ])
+    })
   })
 
   describe('when sending query including field with function-based directive', async () => {

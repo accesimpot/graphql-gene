@@ -5,52 +5,106 @@ import {
   type GraphqlTypeName,
   type InferFields,
 } from 'graphql-gene'
-import { BelongsTo, Column, DataType, ForeignKey, type ModelStatic } from 'sequelize-typescript'
+import { BelongsTo, HasMany, type ModelStatic } from 'sequelize-typescript'
+
+type ModelStaticWithGene = ModelStatic & { geneConfig?: GeneConfig }
+
+/** Column naming for Sequelize’s polymorphic junction (`BelongsTo` + inverse scoped `HasMany`). */
+export type PolymorphicJunctionOptions = {
+  /** Attribute storing the FK to the concrete row (same column on every polymorphic association). */
+  foreignKey: string
+  /** Stored value equals `TargetModel.name` for each row (`HeroBlock`, `TextBlock`, …). */
+  discriminatorKey: string
+}
+
+function readModelAttribute(record: unknown, key: string): unknown {
+  if (record !== null && typeof record === 'object' && 'get' in record) {
+    const getter = (record as { get: (k: string) => unknown }).get
+    if (typeof getter === 'function') return getter.call(record, key)
+  }
+
+  return (record as Record<string, unknown>)[key]
+}
 
 /**
- * Declares a polymorphic hub model: one join row points to exactly one concrete block
- * (or other variant) via Sequelize `BelongsTo` + FK columns that this decorator injects.
+ * Declares a polymorphic **hub / junction** row: exactly one concrete model is referenced via one shared FK +
+ * discriminator on the pivot.
  *
- * Usage:
- * `@Polymorphic(() => [HeroBlock, TextBlock])` right before `@Table`.
+ * Sequelize expects the discriminator to be enforced by an **inverse, scoped `HasMany` from each concrete model
+ * back to this hub**, while the hub declares plain `BelongsTo` accessors without `scope` (see Sequelize polymorphic /
+ * association-scopes docs).
  *
- * Sequelize’s default shape for a nested `HasMany`/`include` keeps one property per concrete
- * association on each hub instance, e.g.
- * `blocks = [{ heroBlock: HeroBlock, textBlock: null }, { heroBlock: null, textBlock: TextBlock }]`.
- * A type-level Gene directive then rewrites the parent field so GraphQL resolvers see an array
- * of concrete model instances (`instanceof HeroBlock` / `TextBlock`), e.g.
- * `[hero, text]`, which matches how clients query with `... on HeroBlock` / `... on TextBlock`.
+ * Usage (`@Polymorphic` immediately before `@Table`, after declaring junction columns):
  *
- * GraphQL’s `resolveType` for the hub interface maps each list element to the concrete
- * GraphQL type using `__typename` when set, otherwise `constructor.name`
- * (see `graphql-gene` → `polymorphicConcreteTypeName` / `attachPolymorphicAbstractResolveTypes`).
+ * ```ts
+ * @Column(DataType.INTEGER)
+ * declare blockId!: number | null;
  *
- * @param possibleTypes - Factory returning concrete Sequelize model classes this hub can join to.
+ * @Column(DataType.STRING)
+ * declare blockType!: string | null;
+ *
+ * @Polymorphic(() => [HeroBlock, TextBlock], { foreignKey: 'blockId', discriminatorKey: 'blockType' })
+ * @Table
+ * export class PageBlock extends Model {}
+ * ```
+ *
+ * The FK and discriminator columns must exist on this hub model (`foreignKey` / `discriminatorKey`).
+ *
+ * This matches Sequelize’s polymorphic junction pattern (“many‑to‑many polymorphic” pivot row), see:
+ * [`sequelize.org` polymorphic junction](https://sequelize.org/docs/v6/advanced-association-concepts/polymorphic-associations/#configuring-a-many-to-many-polymorphic-association).
+ *
+ * **Why junction instead of nullable FK-per-type columns**
+ *
+ * - `limit`, `skip`, and list-level filters apply to pivot rows (`Page.blocks`) as one list, not separately per association.
+ * - Operations that select only `{ id __typename }` can be satisfied from the discriminator + FK on the junction row
+ *   so clients never need phantom includes for concrete tables.
+ *
+ * GraphQL lookahead still maps inline fragments like `... on HeroBlock` to the matching nested Sequelize include
+ * (`association: 'heroBlock'`, casing derived from `{Model.name}` via {@link getAttributeByModelName}).
+ *
+ * `resolveType` on the hub interface prefers `__typename` on emitted values (`polymorphicConcreteTypeName`).
+ *
+ * @param possibleTypes — Factory returning concrete Sequelize models this pivot can attach to.
  */
 export function Polymorphic<M extends ModelStatic = ModelStatic>(
-  possibleTypes: () => ModelStatic[]
+  possibleTypes: () => ModelStatic[],
+  junction: PolymorphicJunctionOptions
 ) {
   return (constructor: M & { geneConfig?: GeneConfig<M> }) => {
     const BaseModel = constructor
     const BaseModelName = BaseModel.name as GraphqlTypeName
     const rawTargetTypes = possibleTypes()
-    const targetTypes = rawTargetTypes as (ModelStatic & { geneConfig?: GeneConfig })[]
+    const targetTypes = rawTargetTypes as ModelStatic[]
+    const associationNames = targetTypes.map(t => getAttributeByModelName(t.name))
 
-    targetTypes.forEach(TargetModel => {
-      const typeName = TargetModel.name
+    targetTypes.forEach(_TargetModel => {
+      const TargetModel = _TargetModel as ModelStaticWithGene
+      const typeName = TargetModel.name as string
       const attributeName = getAttributeByModelName(typeName)
-      const attributeIdName = getAttributeIdName(attributeName)
+      const inverseKey = polymorphicInverseHasManyKey(BaseModel.name, typeName)
 
-      // Define the association
-      Column(DataType.INTEGER)(BaseModel.prototype, attributeIdName)
-      ForeignKey(() => TargetModel)(BaseModel.prototype, attributeIdName)
-      BelongsTo(() => TargetModel)(BaseModel.prototype, attributeName)
+      HasMany(() => BaseModel as ModelStatic, {
+        foreignKey: junction.foreignKey,
+        constraints: false,
+        scope: { [junction.discriminatorKey]: typeName },
+      })(TargetModel.prototype, inverseKey)
 
-      TargetModel.geneConfig = TargetModel.geneConfig || {}
-      TargetModel.geneConfig.__implementedInterfaces =
-        TargetModel.geneConfig.__implementedInterfaces || []
+      if (!TargetModel.geneConfig) {
+        TargetModel.geneConfig = defineGraphqlGeneConfig(TargetModel, {}) as GeneConfig
+      }
 
-      TargetModel.geneConfig.__implementedInterfaces.push(BaseModelName)
+      excludeGraphqlAssociation(TargetModel, inverseKey)
+
+      BelongsTo(() => TargetModel, {
+        foreignKey: junction.foreignKey,
+        constraints: false,
+      })(BaseModel.prototype, attributeName)
+
+      const concreteGeneConfig = TargetModel.geneConfig
+      concreteGeneConfig.__implementedInterfaces =
+        concreteGeneConfig.__implementedInterfaces || []
+
+      concreteGeneConfig.__implementedInterfaces.push(BaseModelName)
     })
 
     registerPolymorphicAbstractType(BaseModelName)
@@ -59,66 +113,109 @@ export function Polymorphic<M extends ModelStatic = ModelStatic>(
       varType: 'interface',
       include: ['id' as InferFields<M>],
 
+      __polymorphicJunction: {
+        foreignKey: junction.foreignKey,
+        discriminatorKey: junction.discriminatorKey,
+      },
+      __polymorphicAssociations: associationNames,
+
       directives: [
         {
           name: '',
           /**
-           * Rewrites `source[field]` (e.g. `page.blocks`) from hub rows with populated
-           * `heroBlock` / `textBlock` (and nulls on the rest) into the single loaded concrete
-           * instance per row via {@link resolveAssociation}, so the value shape matches
-           * GraphQL fragments and `resolveType` (`constructor.name`).
+           * Normalizes Sequelize hub rows (`PageBlock`): prefer eager-loaded concrete `heroBlock` / `textBlock`
+           * when present; otherwise emit `{ id, __typename }` from the discriminator + FK for type-only selections.
            */
           handler({ source, field }) {
-            const rawItems = source[field as keyof typeof source] as ModelStatic | ModelStatic[]
+            const rawItems = source[field as keyof typeof source] as unknown
             const items = Array.isArray(rawItems) ? rawItems : [rawItems]
 
-            // Overwrite original field entries
-            source[field as keyof typeof source] = items.map(resolveAssociation)
+            source[field as keyof typeof source] = items.map(resolveAssociation) as never
           },
         },
       ],
-    })
+    } as GeneConfig<M>)
   }
 }
 
-/**
- * Picks the Sequelize nested instance that was actually included for this row
- * (see `_options.includeNames`), or returns the hub row unchanged.
- *
- * ⚠️ NEEDS TO CHANGE FOR V2 ⚠️
- *
- * It is incorrect to iterate only over the associations included in the graphql operation since
- * it should still be valid to requests the block ids only without any specific fragment. We get
- * an error in this case:
- *
- * > Abstract type "PageBlock" was resolved to a non-object type "PageBlock"
- *
- * We're planning to change the polymorphic pattern in Sequelize to use a junction table:
- * @see https://sequelize.org/docs/v6/advanced-association-concepts/polymorphic-associations/#configuring-a-many-to-many-polymorphic-association
- *
- * This would solve this issue and solve the association filtering as well (also not working right now).
- */
-function resolveAssociation(item: ModelStatic & { _options?: { includeNames?: string[] } }) {
-  const { includeNames = [] } = item._options || {}
-  // e.g. includeNames = ['heroBlock', 'textBlock']
-
-  for (const name of includeNames) {
-    const association = item[name as keyof typeof item]
-    if (association) return association // return the concrete instance
+type PolymorphicHubInstance = Record<string, unknown> & {
+  constructor: ModelStaticWithGene & {
+    geneConfig?: GeneConfig & {
+      __polymorphicAssociations?: readonly string[]
+      __polymorphicJunction?: { foreignKey: string; discriminatorKey: string }
+    }
   }
-  return item // return the hub row unchanged as a fallback
+  _options?: { includeNames?: string[] }
+}
+
+function resolveAssociation(hubInstance: PolymorphicHubInstance): unknown {
+  const cfg = hubInstance.constructor.geneConfig
+  const associationNames = cfg?.__polymorphicAssociations ?? []
+  const junction = cfg?.__polymorphicJunction
+
+  if (junction) {
+    const fkRaw = readModelAttribute(hubInstance, junction.foreignKey)
+    const discriminatorRaw = readModelAttribute(hubInstance, junction.discriminatorKey)
+    const typename =
+      discriminatorRaw === null || discriminatorRaw === undefined ? '' : String(discriminatorRaw)
+
+    if (typename.length > 0 && fkRaw !== null && fkRaw !== undefined) {
+      const canonicalKey = getAttributeByModelName(typename)
+      const canonical = hubInstance[canonicalKey]
+      if (modelInstanceMatchesConcreteName(canonical, typename)) return canonical
+
+      for (const name of associationNames) {
+        const inst = hubInstance[name]
+        if (modelInstanceMatchesConcreteName(inst, typename)) return inst
+      }
+
+      let id: unknown = fkRaw
+      if (typeof fkRaw === 'string' && fkRaw.trim() !== '') {
+        const numeric = Number(fkRaw)
+        id = Number.isFinite(numeric) ? numeric : fkRaw
+      }
+
+      return { __typename: typename, id }
+    }
+  }
+
+  for (const name of associationNames) {
+    const assoc = hubInstance[name]
+    if (assoc) return assoc
+  }
+
+  return hubInstance
+}
+
+function modelInstanceMatchesConcreteName(value: unknown, concreteModelName: string): boolean {
+  if (!value || typeof value !== 'object') return false
+  const ctor = (value as { constructor?: { name?: string } }).constructor
+  return typeof ctor?.name === 'string' && ctor.name === concreteModelName
 }
 
 /**
- * Get the expected attribute name for a given associated model.
- * @example
- * getAttributeByModelName('HeroBlock') // => 'heroBlock'
- * getAttributeByModelName('TextBlock') // => 'textBlock'
+ * Sequelize association property convention for polymorphic hubs.
+ * @example `getAttributeByModelName('HeroBlock')` → `'heroBlock'`.
  */
 export function getAttributeByModelName(modelName: string) {
   return modelName.charAt(0).toLowerCase() + modelName.slice(1)
 }
 
-function getAttributeIdName(attributeName: string) {
-  return `${attributeName}Id`
+/**
+ * Inverse `HasMany` accessor used only so Sequelize merges the discriminator `scope`; hidden from Gene GraphQL fields.
+ */
+function polymorphicInverseHasManyKey(hubModelName: string, concreteModelName: string) {
+  return `_geneInversePolymorphic${hubModelName}_${concreteModelName}`
+}
+
+function excludeGraphqlAssociation(TargetModel: ModelStaticWithGene, graphqlFieldKey: string) {
+  const cfg = TargetModel.geneConfig
+  if (!cfg) return
+
+  const exclude = [...(cfg.exclude ?? [])] as (string | RegExp)[]
+
+  if (!exclude.some(e => typeof e === 'string' && e === graphqlFieldKey)) {
+    exclude.push(graphqlFieldKey)
+    cfg.exclude = exclude as GeneConfig['exclude']
+  }
 }

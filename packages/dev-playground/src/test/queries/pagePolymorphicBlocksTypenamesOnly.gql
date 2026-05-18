@@ -1,0 +1,10 @@
+query PagePolymorphicBlocksTypenamesOnly($path: String!) {
+  pageByPath(where: { path: { eq: $path } }) {
+    id
+    path
+    blocks {
+      id
+      __typename
+    }
+  }
+}

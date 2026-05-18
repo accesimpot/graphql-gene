@@ -175,6 +175,15 @@ export interface GeneConfig<
    * @internal - Populated by the `@Polymorphic` decorator.
    */
   __implementedInterfaces?: GraphqlTypeName[]
+
+  /**
+   * Polymorphic hub: single FK column + discriminator used with scoped Sequelize `BelongsTo`s.
+   * @internal — Populated by `@Polymorphic` (junction pattern).
+   */
+  __polymorphicJunction?: { foreignKey: string; discriminatorKey: string }
+
+  /** @internal — Sequelize association property names wired by `@Polymorphic` */
+  __polymorphicAssociations?: readonly string[]
 }
 
 export type GeneTypeConfig<
