@@ -147,6 +147,18 @@ Choose one consistent pagination shape per list field and document it; graphql-g
 
 - **Do not expose sensitive profile data** on types or fields meant for anonymous flows. If you need `userExists(email)` semantics, return a boolean or a minimal type—not a full `User` that can be expanded in another operation.
 - **Do not leak raw server errors** to clients. Return safe, generic user-facing messages; log details server-side.
+- **Fence off secrets.** For models that must never appear as GraphQL objects (for example OAuth token rows behind something like `AuthToken`), use `geneConfig` so no fields are emitted. Even “internal-only” tables can slip onto the schema later—make absence from the API an explicit choice, not an oversight.
+
+```ts
+@Table
+class AuthToken extends Model {
+  // ...
+
+  static readonly geneConfig = defineGraphqlGeneConfig(AuthToken, {
+    include: [], // don't include any field
+  })
+}
+```
 
 ---
 
@@ -170,12 +182,6 @@ When something should change business resolution (not just “which user”), mo
 Fields should **hang under the object they belong to** (orders under `Customer` / `AuthenticatedUser`, settings under the resource they configure, etc.) instead of sprouting unrelated top-level queries that hide implicit coupling.
 
 That keeps **dependencies visible in the schema**, helps resolvers stay cohesive, and lines up includes with natural Sequelize associations.
-
----
-
-## One round trip when possible
-
-Prefer **one operation** that asks for everything the screen needs over **chains of client queries** that depend on each previous response. graphql-gene’s includes and nested defaults support deep selections once the schema is shaped sensibly.
 
 ---
 
