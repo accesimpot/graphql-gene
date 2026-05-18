@@ -17,7 +17,8 @@ export type PolymorphicJunctionOptions = {
   discriminatorKey: string
 }
 
-function readModelAttribute(record: unknown, key: string): unknown {
+/** Reads a column from a Sequelize `Model` instance (`get(key)` when available, else property access). */
+function getModelAttributeValue(record: unknown, key: string): unknown {
   if (record !== null && typeof record === 'object' && 'get' in record) {
     const getter = (record as { get: (k: string) => unknown }).get
     if (typeof getter === 'function') return getter.call(record, key)
@@ -81,7 +82,7 @@ export function Polymorphic<M extends ModelStatic = ModelStatic>(
       const TargetModel = _TargetModel as ModelStaticWithGene
       const typeName = TargetModel.name as string
       const attributeName = getAttributeByModelName(typeName)
-      const inverseKey = polymorphicInverseHasManyKey(BaseModel.name, typeName)
+      const inverseKey = buildInversePolymorphicHasManyKey(BaseModel.name, typeName)
 
       HasMany(() => BaseModel as ModelStatic, {
         foreignKey: junction.foreignKey,
@@ -93,7 +94,7 @@ export function Polymorphic<M extends ModelStatic = ModelStatic>(
         TargetModel.geneConfig = defineGraphqlGeneConfig(TargetModel, {}) as GeneConfig
       }
 
-      excludeGraphqlAssociation(TargetModel, inverseKey)
+      ensureAssociationExcludedFromGeneConfig(TargetModel, inverseKey)
 
       BelongsTo(() => TargetModel, {
         foreignKey: junction.foreignKey,
@@ -125,12 +126,13 @@ export function Polymorphic<M extends ModelStatic = ModelStatic>(
           /**
            * Normalizes Sequelize hub rows (`PageBlock`): prefer eager-loaded concrete `heroBlock` / `textBlock`
            * when present; otherwise emit `{ id, __typename }` from the discriminator + FK for type-only selections.
+           * Uses {@link resolvePolymorphicHubRow} per list item.
            */
           handler({ source, field }) {
             const rawItems = source[field as keyof typeof source] as unknown
             const items = Array.isArray(rawItems) ? rawItems : [rawItems]
 
-            source[field as keyof typeof source] = items.map(resolveAssociation) as never
+            source[field as keyof typeof source] = items.map(resolvePolymorphicHubRow) as never
           },
         },
       ],
@@ -148,25 +150,26 @@ type PolymorphicHubInstance = Record<string, unknown> & {
   _options?: { includeNames?: string[] }
 }
 
-function resolveAssociation(hubInstance: PolymorphicHubInstance): unknown {
+/** Resolves one hub list element to a concrete block instance, a `{ id, __typename }` stub, or the raw hub row. */
+function resolvePolymorphicHubRow(hubInstance: PolymorphicHubInstance): unknown {
   const cfg = hubInstance.constructor.geneConfig
   const associationNames = cfg?.__polymorphicAssociations ?? []
   const junction = cfg?.__polymorphicJunction
 
   if (junction) {
-    const fkRaw = readModelAttribute(hubInstance, junction.foreignKey)
-    const discriminatorRaw = readModelAttribute(hubInstance, junction.discriminatorKey)
+    const fkRaw = getModelAttributeValue(hubInstance, junction.foreignKey)
+    const discriminatorRaw = getModelAttributeValue(hubInstance, junction.discriminatorKey)
     const typename =
       discriminatorRaw === null || discriminatorRaw === undefined ? '' : String(discriminatorRaw)
 
     if (typename.length > 0 && fkRaw !== null && fkRaw !== undefined) {
       const canonicalKey = getAttributeByModelName(typename)
       const canonical = hubInstance[canonicalKey]
-      if (modelInstanceMatchesConcreteName(canonical, typename)) return canonical
+      if (isConcreteModelInstance(canonical, typename)) return canonical
 
       for (const name of associationNames) {
         const inst = hubInstance[name]
-        if (modelInstanceMatchesConcreteName(inst, typename)) return inst
+        if (isConcreteModelInstance(inst, typename)) return inst
       }
 
       let id: unknown = fkRaw
@@ -187,7 +190,8 @@ function resolveAssociation(hubInstance: PolymorphicHubInstance): unknown {
   return hubInstance
 }
 
-function modelInstanceMatchesConcreteName(value: unknown, concreteModelName: string): boolean {
+/** Whether `value` is an object whose `constructor.name` matches the concrete Sequelize model name. */
+function isConcreteModelInstance(value: unknown, concreteModelName: string): boolean {
   if (!value || typeof value !== 'object') return false
   const ctor = (value as { constructor?: { name?: string } }).constructor
   return typeof ctor?.name === 'string' && ctor.name === concreteModelName
@@ -201,14 +205,13 @@ export function getAttributeByModelName(modelName: string) {
   return modelName.charAt(0).toLowerCase() + modelName.slice(1)
 }
 
-/**
- * Inverse `HasMany` accessor used only so Sequelize merges the discriminator `scope`; hidden from Gene GraphQL fields.
- */
-function polymorphicInverseHasManyKey(hubModelName: string, concreteModelName: string) {
+/** Builds the hidden inverse `HasMany` property name (scoped by hub + concrete type). */
+function buildInversePolymorphicHasManyKey(hubModelName: string, concreteModelName: string) {
   return `_geneInversePolymorphic${hubModelName}_${concreteModelName}`
 }
 
-function excludeGraphqlAssociation(TargetModel: ModelStaticWithGene, graphqlFieldKey: string) {
+/** Ensures the inverse-association property is omitted from generated GraphQL on the concrete model. */
+function ensureAssociationExcludedFromGeneConfig(TargetModel: ModelStaticWithGene, graphqlFieldKey: string) {
   const cfg = TargetModel.geneConfig
   if (!cfg) return
 
