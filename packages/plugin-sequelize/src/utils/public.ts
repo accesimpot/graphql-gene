@@ -311,11 +311,16 @@ export function getFieldIncludeOptions(options: {
   }
 
   if (options.isList) {
-    const skip = typeof options.args.skip === 'number' ? options.args.skip : SKIP_ARG_DEFAULT
-    const limit = typeof options.args.limit === 'number' ? options.args.limit : LIMIT_ARG_DEFAULT
+    if (options.omitAssociation) {
+      const skip = typeof options.args.skip === 'number' ? options.args.skip : SKIP_ARG_DEFAULT
+      const limit = typeof options.args.limit === 'number' ? options.args.limit : LIMIT_ARG_DEFAULT
 
-    includeOptions.offset = skip
-    includeOptions.limit = limit
+      includeOptions.offset = skip
+      includeOptions.limit = limit
+    } else {
+      if (typeof options.args.skip === 'number') includeOptions.offset = options.args.skip
+      if (typeof options.args.limit === 'number') includeOptions.limit = options.args.limit
+    }
   }
 
   return includeOptions

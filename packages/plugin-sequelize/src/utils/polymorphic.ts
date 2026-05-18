@@ -1,11 +1,13 @@
 import {
   defineGraphqlGeneConfig,
+  isRegisteredPolymorphicAbstractType,
   registerPolymorphicAbstractType,
   type GeneConfig,
   type GraphqlTypeName,
   type InferFields,
 } from 'graphql-gene'
 import { BelongsTo, Column, DataType, ForeignKey, type ModelStatic } from 'sequelize-typescript'
+import { isModel } from './guards'
 
 /**
  * Declares a polymorphic hub model: one join row points to exactly one concrete block
@@ -111,7 +113,12 @@ function resolveAssociation(item: ModelStatic & { _options?: { includeNames?: st
 
 /** Maps preloaded / queried polymorphic hub rows to concrete Sequelize instances when applicable. */
 export function resolvePolymorphicHubLoadedRows(rows: ReadonlyArray<unknown>) {
-  return rows.map(item => resolveAssociation(item as Parameters<typeof resolveAssociation>[0]))
+  return rows.map(item => {
+    if (!isModel(item)) return item
+    const typeName = (item.constructor as { name: string }).name
+    if (!isRegisteredPolymorphicAbstractType(typeName)) return item
+    return resolveAssociation(item as unknown as Parameters<typeof resolveAssociation>[0])
+  })
 }
 
 /**

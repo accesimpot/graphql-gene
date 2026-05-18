@@ -1,13 +1,19 @@
 query orderWithInventory($id: String!) {
   order(id: $id) {
     items {
-      quantity
+      count
+      items {
+        quantity
 
-      product {
-        name
-        variants {
-          inventory {
-            stock
+        product {
+          name
+          variants {
+            count
+            items {
+              inventory {
+                stock
+              }
+            }
           }
         }
       }
