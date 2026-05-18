@@ -6,18 +6,22 @@ query mostRecentOrderByStatus($status: String!) {
     fieldAddedWithExtendTypes(prefix: "status", separator: ": ")
 
     items {
-      id
-      price
-      quantity
-      product {
-        name
-        color
+      items {
+        id
+        price
+        quantity
+        product {
+          name
+          color
 
-        group {
-          products {
-            id
+          group {
+            products {
+              items {
+                id
+              }
+            }
+            categories
           }
-          categories
         }
       }
     }

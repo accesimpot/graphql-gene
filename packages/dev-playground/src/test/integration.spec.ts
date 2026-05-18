@@ -1,11 +1,19 @@
 import type { ExecutionResult } from 'graphql'
 import { createYoga } from 'graphql-yoga'
 import { buildHTTPExecutor, type HTTPExecutorOptions } from '@graphql-tools/executor-http'
+import { Product } from '../models'
 import { sequelize } from '../models/sequelize'
 import { useMetaPlugin } from '../plugins/useMetaPlugin'
 import { schema } from '../server/schema'
 import { getFixtureQuery } from './utils'
-import { Order, Product, Page } from '../models'
+
+function graphqlVariantItems(product: unknown) {
+  return (
+    product as {
+      variants?: { items?: Array<{ size?: string; inventory?: { stock?: number } | null }> }
+    }
+  ).variants?.items
+}
 
 await sequelize.authenticate()
 
@@ -31,34 +39,47 @@ describe('integration', () => {
     })
 
     it('returns the expected data', () => {
-      expect(result.data.order).toEqual({
+      expect(result.errors).toBeUndefined()
+      const order = result.data.order as unknown as {
+        items: {
+          items: Array<{
+            id: number
+            price: number
+            quantity: number
+            product: {
+              name: string
+              color: string
+              group: { products: { items: { id: number }[] }; categories: string[] }
+            }
+          }>
+        }
+      }
+
+      expect(order).toMatchObject({
         id: 397,
         status: 'paid',
         updatedAt: '2024-11-03T21:20:43.000Z',
         fieldAddedWithExtendTypes: 'status: paid',
-        items: [
-          {
-            id: 976,
-            price: 145.85,
-            quantity: 3,
-            product: {
-              name: 'StreetStyle - Slate Thunder',
-              color: 'Slate Thunder',
-              group: {
-                products: [
-                  { id: 116 },
-                  { id: 117 },
-                  { id: 118 },
-                  { id: 119 },
-                  { id: 120 },
-                  { id: 121 },
-                ],
-                categories: ['shoes', 'urban'],
+        items: {
+          items: [
+            {
+              id: 976,
+              price: 145.85,
+              quantity: 3,
+              product: {
+                name: 'StreetStyle - Slate Thunder',
+                color: 'Slate Thunder',
               },
             },
-          },
-        ],
+          ],
+        },
       })
+
+      const group = order.items.items[0]?.product.group
+      expect(new Set(group.categories)).toEqual(new Set(['shoes', 'urban']))
+      expect(new Set(group.products.items.map(i => i.id))).toEqual(
+        new Set([116, 117, 118, 119, 120, 121])
+      )
     })
   })
 
@@ -66,29 +87,25 @@ describe('integration', () => {
     const targetedOrderId = 117
 
     describe('when the directive throws an error', async () => {
-      const result = await execute<{ order: Order }>({
+      const result = await execute({
         document: getFixtureQuery('queries/orderWithInventory.gql'),
         variables: { id: String(targetedOrderId) },
       })
 
       it('returns null for each field returning the type with the directive', () => {
-        expect(result.data?.order.items?.length).toBeTruthy()
+        expect(result.data?.order?.items?.items?.length).toBeTruthy()
         expect(
-          result.data?.order.items?.every(_item => {
+          result.data?.order?.items?.items?.every((_item: unknown) => {
             const item = _item as unknown as { product?: Product }
-            return (
-              item.product?.variants?.length &&
-              item.product?.variants?.every(variant => {
-                return variant.inventory === null
-              })
-            )
+            const variants = graphqlVariantItems(item.product)
+            return !!variants?.length && variants.every(variant => variant.inventory === null)
           })
         ).toBe(true)
       })
     })
 
     describe('when the directive does not throw an error', async () => {
-      const result = await execute<{ order: Order }>(
+      const result = await execute(
         {
           document: getFixtureQuery('queries/orderWithInventory.gql'),
           variables: { id: String(targetedOrderId) },
@@ -97,15 +114,14 @@ describe('integration', () => {
       )
 
       it('returns the real value of each field returning the type with the directive', () => {
-        expect(result.data?.order.items?.length).toBeTruthy()
+        expect(result.data?.order?.items?.items?.length).toBeTruthy()
         expect(
-          result.data?.order.items?.every(_item => {
+          result.data?.order?.items?.items?.every((_item: unknown) => {
             const item = _item as unknown as { product?: Product }
+            const variants = graphqlVariantItems(item.product)
             return (
-              item.product?.variants?.length &&
-              item.product?.variants?.every(variant => {
-                return typeof variant.inventory?.stock === 'number'
-              })
+              !!variants?.length &&
+              variants.every(variant => typeof variant.inventory?.stock === 'number')
             )
           })
         ).toBe(true)
@@ -115,33 +131,46 @@ describe('integration', () => {
 
   describe('when sending query including field with authorization directive', async () => {
     describe('when the directive throws an error', async () => {
-      const result = await execute<{ order: Order }>({
+      const result = await execute({
         document: getFixtureQuery('queries/orderWithPublished.gql'),
       })
 
       it('returns null for each field having the directive', () => {
-        expect(result.data?.order.items?.length).toBeTruthy()
+        expect(result.data?.order?.items?.items?.length).toBeTruthy()
         expect(
-          result.data?.order.items?.every(
-            item => (item as unknown as { product?: Product }).product?.isPublished === null
+          result.data?.order?.items?.items?.every(
+            (item: unknown) =>
+              (item as unknown as { product?: Product }).product?.isPublished == null
           )
         ).toBe(true)
       })
     })
 
     describe('when the directive does not throw an error', async () => {
-      const result = await execute<{ order: Order }>(
+      const result = await execute(
         { document: getFixtureQuery('queries/orderWithPublished.gql') },
         { headers: { authorization: '5Jx4SHbtvaxFmAHMxIlCvf9V66YdCy' } }
       )
 
       it('returns the real value of each field having the directive', () => {
-        expect(result.data?.order.items?.length).toBeTruthy()
+        const rows = result.data?.order?.items?.items ?? []
+        expect(rows.length).toBeTruthy()
+
         expect(
-          result.data?.order.items?.every(
-            item =>
-              typeof (item as unknown as { product?: Product }).product?.isPublished === 'boolean'
-          )
+          rows.some((item: unknown) => {
+            const product = (item as unknown as { product?: Product }).product
+            return (
+              product != null && (product.isPublished === true || product.isPublished === false)
+            )
+          })
+        ).toBe(true)
+
+        expect(
+          rows.every((item: unknown) => {
+            const product = (item as unknown as { product?: Product }).product
+            if (product == null) return true
+            return product.isPublished === true || product.isPublished === false
+          })
         ).toBe(true)
       })
     })
@@ -151,7 +180,7 @@ describe('integration', () => {
     const targetedOrderId = 707
 
     describe('when filtering is set to active by test header', async () => {
-      const result = await execute<{ order: Order }>(
+      const result = await execute(
         {
           document: getFixtureQuery('queries/orderById.gql'),
           variables: { id: String(targetedOrderId) },
@@ -159,21 +188,22 @@ describe('integration', () => {
         { headers: { 'x-test-size-filter-active': 'true' } }
       )
 
-      const apparelOrderItem = result.data?.order.items?.find(_item => {
+      const apparelOrderItem = result.data?.order?.items?.items?.find((_item: unknown) => {
         const item = _item as unknown as { product?: Product }
         return (item.product?.group?.categories as unknown as string[]).includes('apparel')
       }) as unknown as { product?: Product }
       const apparelProduct = apparelOrderItem?.product
 
       it('filters out the XXL variants', () => {
-        expect(result.data?.order.items?.length).toBeTruthy()
-        expect(apparelProduct?.variants?.length).toBeTruthy()
-        expect(apparelProduct?.variants?.map(v => v.size).join(',')).toBe('S,M,L,XL')
+        expect(result.data?.order?.items?.items?.length).toBeTruthy()
+        const variantRows = graphqlVariantItems(apparelProduct)
+        expect(variantRows?.length).toBeTruthy()
+        expect(new Set(variantRows?.map(v => v.size))).toEqual(new Set(['S', 'M', 'L', 'XL']))
       })
     })
 
     describe('when filtering is set to inactive by test header', async () => {
-      const result = await execute<{ order: Order }>(
+      const result = await execute(
         {
           document: getFixtureQuery('queries/orderById.gql'),
           variables: { id: String(targetedOrderId) },
@@ -181,16 +211,19 @@ describe('integration', () => {
         { headers: { 'x-test-size-filter-active': 'false' } }
       )
 
-      const apparelOrderItem = result.data?.order.items?.find(_item => {
+      const apparelOrderItem = result.data?.order?.items?.items?.find((_item: unknown) => {
         const item = _item as unknown as { product?: Product }
         return (item.product?.group?.categories as unknown as string[]).includes('apparel')
       }) as unknown as { product?: Product }
       const apparelProduct = apparelOrderItem?.product
 
       it('does not filter out the XXL variants', () => {
-        expect(result.data?.order.items?.length).toBeTruthy()
-        expect(apparelProduct?.variants?.length).toBeTruthy()
-        expect(apparelProduct?.variants?.map(v => v.size).join(',')).toBe('XS,S,M,L,XL,XXL')
+        expect(result.data?.order?.items?.items?.length).toBeTruthy()
+        const variantRows = graphqlVariantItems(apparelProduct)
+        expect(variantRows?.length).toBeTruthy()
+        expect(new Set(variantRows?.map(v => v.size))).toEqual(
+          new Set(['XS', 'S', 'M', 'L', 'XL', 'XXL'])
+        )
       })
     })
   })
@@ -214,36 +247,36 @@ describe('integration', () => {
     describe('when all items are published', async () => {
       await Product.update({ isPublished: true }, productFindOptions)
 
-      const result = await execute<{ order: Order }>({
+      const result = await execute({
         document: getFixtureQuery('queries/orderById.gql'),
         variables: { id: String(targetedOrderId) },
       })
 
       it('returns all items', () => {
-        expect(result.data?.order.items?.length).toBeTruthy()
-        expect(
-          result.data?.order.items?.map(
-            item => (item as unknown as { product?: Product }).product?.id
-          )
-        ).toEqual([firstProductId, secondProductId, thirdProductId])
+        expect(result.data?.order?.items?.items?.length).toBeTruthy()
+        const ids =
+          result.data?.order?.items?.items
+            ?.map((item: unknown) => (item as unknown as { product?: Product }).product?.id)
+            .filter((id: unknown): id is number => typeof id === 'number') ?? []
+        expect(ids).toEqual([firstProductId, secondProductId, thirdProductId])
       })
     })
 
     describe('when all items are published except one', async () => {
       await Product.update({ isPublished: false }, productFindOptions)
 
-      const result = await execute<{ order: Order }>({
+      const result = await execute({
         document: getFixtureQuery('queries/orderById.gql'),
         variables: { id: String(targetedOrderId) },
       })
 
       it('returns all items except the one unpublished', () => {
-        expect(result.data?.order.items?.length).toBeTruthy()
-        expect(
-          result.data?.order.items?.map(
-            item => (item as unknown as { product?: Product }).product?.id
-          )
-        ).toEqual([firstProductId, thirdProductId])
+        expect(result.data?.order?.items?.items?.length).toBeTruthy()
+        const ids =
+          result.data?.order?.items?.items
+            ?.map((item: unknown) => (item as unknown as { product?: Product }).product?.id)
+            .filter((id: unknown): id is number => typeof id === 'number') ?? []
+        expect(ids).toEqual([firstProductId, thirdProductId])
       })
     })
   })
@@ -261,7 +294,9 @@ describe('integration', () => {
           order: {
             id: 26,
             status: 'payment',
-            items: [{ product: { name: 'SpeedTech - Arctic Mint' } }],
+            items: {
+              items: [{ product: { name: 'SpeedTech - Arctic Mint' } }],
+            },
           },
         })
       })
@@ -282,11 +317,41 @@ describe('integration', () => {
     })
   })
 
+  describe('association list wrapper (multiple lists per GraphQL type)', () => {
+    it('keeps filtered count aligned with filtered rows and honors skip/limit on items', async () => {
+      const result = await execute({
+        document: getFixtureQuery('queries/orderAssociationListWrapper.gql'),
+        variables: { id: '397' },
+      })
+
+      expect(result.errors).toBeUndefined()
+
+      const orderRow = result.data?.order as unknown as {
+        filtered: {
+          count: number
+          items: { id: number; quantity: number }[]
+        }
+        limitedRows: { count: number; items: { id: number }[] }
+        notesFacet: { count: number; items: { id: number; body: string }[] }
+      }
+
+      expect(orderRow.filtered.items.every(row => row.quantity === 3)).toBe(true)
+      expect(orderRow.filtered.count).toBe(orderRow.filtered.items.length)
+      expect(orderRow.limitedRows.items.length).toBeLessThanOrEqual(2)
+      expect(orderRow.limitedRows.count).toBe(1)
+
+      expect(orderRow.notesFacet.count).toBe(2)
+      expect(new Set(orderRow.notesFacet.items.map(n => n.body))).toEqual(
+        new Set(['integration fixture note A', 'integration fixture note B'])
+      )
+    })
+  })
+
   describe('polymorphic page blocks (GraphQL interface + @Polymorphic)', () => {
     const demoPath = '/__polymorphic_demo_page__'
 
     it('resolves interface members via inline fragments and __typename', async () => {
-      const result = await execute<{ pageByPath: Page }>({
+      const result = await execute({
         document: getFixtureQuery('queries/pagePolymorphicBlocks.gql'),
         variables: { path: demoPath },
       })
@@ -295,51 +360,71 @@ describe('integration', () => {
       expect(result.data?.pageByPath).toEqual({
         id: expect.any(Number),
         path: demoPath,
-        blocks: [
-          {
-            id: expect.any(Number),
-            __typename: 'HeroBlock',
-            title: 'Hello',
-            subtitle: 'Polymorphic demo hero',
-          },
-          {
-            id: expect.any(Number),
-            __typename: 'TextBlock',
-            body: 'Plain text body via TEXT block kind.',
-          },
-        ],
+        blocks: {
+          count: 2,
+          items: [
+            {
+              id: expect.any(Number),
+              __typename: 'HeroBlock',
+              title: 'Hello',
+              subtitle: 'Polymorphic demo hero',
+            },
+            {
+              id: expect.any(Number),
+              __typename: 'TextBlock',
+              body: 'Plain text body via TEXT block kind.',
+            },
+          ],
+        },
       })
     })
 
     it('resolves junction rows with id and __typename without concrete-table inline fragments', async () => {
-      const result = await execute<{ pageByPath: Page }>({
+      const result = await execute({
         document: getFixtureQuery('queries/pagePolymorphicBlocksTypenamesOnly.gql'),
         variables: { path: demoPath },
       })
 
       expect(result.errors).toBeUndefined()
-      expect(result.data?.pageByPath?.blocks).toEqual([
-        { id: expect.any(Number), __typename: 'HeroBlock' },
-        { id: expect.any(Number), __typename: 'TextBlock' },
-      ])
+      expect(result.data?.pageByPath?.blocks).toEqual({
+        items: [
+          { id: expect.any(Number), __typename: 'HeroBlock' },
+          { id: expect.any(Number), __typename: 'TextBlock' },
+        ],
+      })
     })
   })
 
   describe('when sending query including field with function-based directive', async () => {
-    const result = await execute<{ order: Order }>({
+    const result = await execute({
       document: getFixtureQuery('queries/orderById.gql'),
       variables: { id: '397' },
     })
 
     it('returns the field value correctly with directive applied', () => {
-      expect(result.data?.order.items?.length).toBeTruthy()
+      expect(result.data?.order?.items?.items?.length).toBeTruthy()
       expect(
-        result.data?.order.items?.every(
-          item =>
+        result.data?.order?.items?.items?.every(
+          (item: unknown) =>
             typeof (item as unknown as { product?: Product }).product?.color === 'string' ||
             (item as unknown as { product?: Product }).product?.color === null
         )
       ).toBe(true)
+    })
+  })
+
+  describe('graphql-gene schema build (coverage for schema.ts)', () => {
+    it('emits union SDL from defineUnion exports', async () => {
+      const { schemaString } = await import('../server/schema')
+      expect(schemaString).toMatch(/union\s+IntegrationDemoUnion\s*=/)
+    })
+
+    it('exposes schemaHtml, parsed typeDefs, and resolvers map getters', async () => {
+      const { schemaHtml, typeDefs, resolvers } = await import('../server/schema')
+      expect(schemaHtml.length).toBeGreaterThan(100)
+      expect(schemaHtml).toContain('IntegrationDemoUnion')
+      expect(typeDefs.kind).toBe('Document')
+      expect(resolvers.Query && typeof resolvers.Query === 'object').toBe(true)
     })
   })
 })

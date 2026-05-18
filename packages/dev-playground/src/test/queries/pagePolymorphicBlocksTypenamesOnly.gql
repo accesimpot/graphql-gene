@@ -3,8 +3,10 @@ query PagePolymorphicBlocksTypenamesOnly($path: String!) {
     id
     path
     blocks {
-      id
-      __typename
+      items {
+        id
+        __typename
+      }
     }
   }
 }
