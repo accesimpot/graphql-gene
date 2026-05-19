@@ -110,9 +110,9 @@ _List association (wrapper justified):_
 ```graphql
 # Product has many Variants — collection semantics
 product {
-  variants {
+  variants(where: { size: { in: ["M"] } }, limit: 20, skip: 0) {
     count
-    items(where: { size: { in: ["M"] } }, limit: 20, skip: 0) {
+    items {
       id
       size
     }
