@@ -3,6 +3,7 @@ import {
   GraphQLObjectType,
   defaultFieldResolver,
   getNamedType,
+  type GraphQLFieldResolver,
   type GraphQLResolveInfo,
   type GraphQLSchema,
 } from 'graphql'
@@ -174,19 +175,25 @@ export function attachAssociationListWrapperResolvers(schema: GraphQLSchema, typ
 
       if (!types[wrapperMeta.targetGraphqlType]) continue
 
-      field.resolve = (
+      const previousParentFieldResolve: GraphQLFieldResolver<unknown, unknown> =
+        field.resolve ?? defaultFieldResolver
+
+      field.resolve = async (
         parent: unknown,
         facetArgs: Record<string, unknown>,
-        _ctx: unknown,
-        _info: GraphQLResolveInfo
+        ctx: unknown,
+        info: GraphQLResolveInfo
       ) => {
+        const prior = await Promise.resolve(
+          previousParentFieldResolve(parent, facetArgs, ctx, info)
+        )
+
         if (!isModel(parent)) {
-          throw new GraphQLError(
-            'Association list field parent must be a Sequelize model instance.'
-          )
+          return prior
         }
+
         const wrapperRoot: Record<string, unknown> = {}
-        const preload = Reflect.get(parent, fieldName)
+        const preload = isSafeArray(prior) ? prior : Reflect.get(parent, fieldName)
 
         if (isSafeArray(preload)) {
           // Staged copy: type-level directives filter `source[field]` (`items`) in-place before the
