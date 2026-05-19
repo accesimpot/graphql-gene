@@ -32,7 +32,7 @@ export default defineConfig({
 
     coverage: {
       enabled: true,
-      provider: 'istanbul',
+      provider: 'v8',
       // Only TS sources: `**` would match incidental asset globs like `.html?raw`.
       include: ['packages/core/src/**/*.ts', 'packages/plugin-sequelize/src/**/*.ts'],
 

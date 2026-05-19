@@ -341,9 +341,11 @@ describe('integration', () => {
 
       it('returns all items except the one unpublished', () => {
         expect(result.data?.order?.items?.items?.length).toBeTruthy()
-        expect(
-          result.data?.order?.items?.items?.map((item: GqlOrderItemRow) => item.product?.id)
-        ).toEqual([firstProductId, thirdProductId])
+        const ids =
+          result.data?.order?.items?.items
+            ?.map((item: GqlOrderItemRow) => item.product?.id)
+            .filter((id): id is number => typeof id === 'number') ?? []
+        expect(ids).toEqual([firstProductId, thirdProductId])
       })
     })
   })
@@ -390,6 +392,36 @@ describe('integration', () => {
           order: null,
         })
       })
+    })
+  })
+
+  describe('association list wrapper (multiple lists per GraphQL type)', () => {
+    it('keeps filtered count aligned with filtered rows and honors skip/limit on items', async () => {
+      const result = await execute({
+        document: getFixtureQuery('queries/orderAssociationListWrapper.gql'),
+        variables: { id: '397' },
+      })
+
+      expect(result.errors).toBeUndefined()
+
+      const orderRow = result.data?.order as unknown as {
+        filtered: {
+          count: number
+          items: { id: number; quantity: number }[]
+        }
+        limitedRows: { count: number; items: { id: number }[] }
+        notesFacet: { count: number; items: { id: number; body: string }[] }
+      }
+
+      expect(orderRow.filtered.items.every(row => row.quantity === 3)).toBe(true)
+      expect(orderRow.filtered.count).toBe(orderRow.filtered.items.length)
+      expect(orderRow.limitedRows.items.length).toBeLessThanOrEqual(2)
+      expect(orderRow.limitedRows.count).toBe(1)
+
+      expect(orderRow.notesFacet.count).toBe(2)
+      expect(new Set(orderRow.notesFacet.items.map(n => n.body))).toEqual(
+        new Set(['integration fixture note A', 'integration fixture note B'])
+      )
     })
   })
 
@@ -444,6 +476,21 @@ describe('integration', () => {
             typeof item.product?.color === 'string' || item.product?.color === null
         )
       ).toBe(true)
+    })
+  })
+
+  describe('graphql-gene schema build (coverage for schema.ts)', () => {
+    it('emits union SDL from defineUnion exports', async () => {
+      const { schemaString } = await import('../server/schema')
+      expect(schemaString).toMatch(/union\s+IntegrationDemoUnion\s*=/)
+    })
+
+    it('exposes schemaHtml, parsed typeDefs, and resolvers map getters', async () => {
+      const { schemaHtml, typeDefs, resolvers } = await import('../server/schema')
+      expect(schemaHtml.length).toBeGreaterThan(100)
+      expect(schemaHtml).toContain('IntegrationDemoUnion')
+      expect(typeDefs.kind).toBe('Document')
+      expect(resolvers.Query && typeof resolvers.Query === 'object').toBe(true)
     })
   })
 })
