@@ -28,6 +28,8 @@ export type TypeDefLines = Record<
   {
     varType: GraphQLVarType
     directives: Set<string>
+    /** For `GraphQL Object` types only: interfaces that this type implements. */
+    implementedInterfaces?: GraphQLTypeName[]
     lines: FieldLines
   }
 >
@@ -90,4 +92,14 @@ export type GenePlugin<M = any> = {
     args: GeneDefaultResolverArgs<M>
     info: GraphQLResolveInfo
   }): Promise<GraphqlToTypescript<ModelKey>>
+
+  /**
+   * Optional hook to attach field resolvers after the executable schema is built
+   * (e.g. Sequelize association list wrappers).
+   */
+  attachSchemaResolvers?(options: {
+    schema: GraphQLSchema
+    types: AnyObject
+    typeDefLines: TypeDefLines
+  }): void
 }

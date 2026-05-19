@@ -1,0 +1,22 @@
+query PagePolymorphicBlocks($path: String!) {
+  pageByPath(where: { path: { eq: $path } }) {
+    id
+    path
+    blocks {
+      count
+      items {
+        id
+        __typename
+
+        ... on HeroBlock {
+          title
+          subtitle
+        }
+
+        ... on TextBlock {
+          body
+        }
+      }
+    }
+  }
+}

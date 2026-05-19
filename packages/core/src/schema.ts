@@ -26,6 +26,7 @@ import {
   isFieldIncluded,
   isObject,
   getGloballyExtendedTypes,
+  attachPolymorphicAbstractResolveTypes,
   getReturnTypeName,
   getFieldDefinition,
   setGeneConfigByType,
@@ -119,6 +120,15 @@ export function generateSchema<
     plugins: options.plugins || [],
     types: options.types,
   })
+  ;(options.plugins || []).forEach(plugin => {
+    plugin.attachSchemaResolvers?.({
+      schema: executableSchema,
+      types: options.types,
+      typeDefLines,
+    })
+  })
+
+  attachPolymorphicAbstractResolveTypes(executableSchema)
 
   return {
     schema: executableSchema,
@@ -339,13 +349,8 @@ function generateTypeDefs<M, SchemaTypes extends AnyObject>(options: {
     schemaOptions: options,
   }
 
-  if (options.plugin.populateTypeDefs) {
-    const { afterTypeDefHooks: hooks } = options.plugin.populateTypeDefs(optionsForPopulateTypeDefs)
-    afterTypeDefHooks.push(...hooks)
-  } else {
-    const typeDef = options.plugin.getTypeDef(optionsForPopulateTypeDefs)
-    options.typeDefLines[options.modelKey] = typeDef
-  }
+  const { afterTypeDefHooks: hooks } = options.plugin.populateTypeDefs(optionsForPopulateTypeDefs)
+  afterTypeDefHooks.push(...hooks)
 
   registerDirectives({
     // @ts-expect-error Fix type issue raised by incompatible TSource
@@ -496,6 +501,8 @@ function registerDirectives(options: {
   each: (details: { directiveDef: string; directive: GeneDirectiveConfig }) => void
 }) {
   options.configs?.forEach(directive => {
+    if (!directive.name) return
+
     // Define or extend the directive in the schema
     options.defs[directive.name] = options.defs[directive.name] || { argsDef: {} }
 
@@ -546,8 +553,17 @@ function stringifyFieldLines(typeKey: string, fieldLines: TypeDefLines[0]) {
     return `union ${typeKey} = ${getVarDef('', ' | ')}`
   }
 
+  const implementedInterfaces = fieldLines.implementedInterfaces?.length
+    ? fieldLines.implementedInterfaces
+    : []
+
+  const implementsClause =
+    fieldLines.varType === 'type' && implementedInterfaces.length
+      ? ` implements ${implementedInterfaces.join(' & ')}`
+      : ''
+
   return [
-    `${fieldLines.varType} ${typeKey}${printDirectives(fieldLines.directives)} {`,
+    `${fieldLines.varType} ${typeKey}${implementsClause}${printDirectives(fieldLines.directives)} {`,
     getVarDef(),
     `}`,
   ].join('\n')

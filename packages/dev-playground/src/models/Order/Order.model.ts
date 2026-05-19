@@ -17,7 +17,7 @@ import {
   defineEnum,
   defineInput,
 } from 'graphql-gene'
-import { getQueryIncludeOf } from '@graphql-gene/plugin-sequelize'
+import { getQueryIncludeOf, applySqliteNestedHasManySeparate } from '@graphql-gene/plugin-sequelize'
 import { OrderItem } from '../OrderItem/OrderItem.model'
 import { Address } from '../Address/Address.model'
 
@@ -97,7 +97,10 @@ extendTypes({
           messageType = 'error'
           text = 'Status could not be updated.'
         } else {
-          const findOptions = getQueryIncludeOf(info, 'Order')
+          const findOptions = getQueryIncludeOf(info, 'Order', { lookFromOperationRoot: true })
+          if (findOptions?.include?.length) {
+            applySqliteNestedHasManySeparate(Order, findOptions.include)
+          }
           order = await Order.findOne({ ...findOptions, where: { id: args.id } })
 
           // Just pretend to update the status

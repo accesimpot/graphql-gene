@@ -35,7 +35,7 @@ Plan for a major version of GraphQL Gene: goals, breaking changes, and migration
 
 ### 2.1 Current behavior (v1)
 
-- Has-many (and similar) association fields get `page`, `perPage`, `where`, `order`, and resolve to a plain list type (e.g. `[Child!]`).
+- Has-many (and similar) association fields resolve to a **wrapper** `{ count, items }` with **`skip`**, **`limit`**, **`where`**, and **`order`** on the association field itself (see §2.4).
 - `where` inputs are generated from the **child type’s fields** (scalars and shallow handling for nested associations via `id`), as in `generateDefaultQueryFilterTypeDefs` in `packages/core/src/defaultResolver.ts`.
 
 ### 2.2 Problems
@@ -49,23 +49,23 @@ Plan for a major version of GraphQL Gene: goals, breaking changes, and migration
 | Approach                                             | Shape                                                       | Pros                                                                                      | Cons                                                        |
 | ---------------------------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | **A. Relay-style connection**                        | `edges { cursor, node }`, `pageInfo`, optional `totalCount` | De facto standard for GraphQL pagination; stable cursors; great for large, evolving lists | Heavier schema; more boilerplate for internal/CMS clients   |
-| **B. Simple list result**                            | `{ count: Int!, items: [Child!]! }` (or `nodes`)            | Easy to document; matches “count + page of rows”; fits admin tooling                      | Not cursor-based; offset semantics unless extended later    |
+| **B. Simple list result**                            | `{ count: Int!, items: [Child!]! }`                         | Easy to document; matches “count + page of rows”; fits admin tooling                      | Not cursor-based; offset semantics unless extended later    |
 | **C. Keep v1 flat list + add a sibling count field** | e.g. `variantsCount(where: …)` next to `variants(…)`        | Minimal change to list field                                                              | Two fields to keep in sync; awkward for nested associations |
 
 **Winner: B** as the **default** generated shape for Gene list associations. **Pattern A** (Relay-style connections: `edges`, `pageInfo`, cursors) is **planned for a future release**—not the v2 default—so integrators who need the GraphQL Cursor Connections model can get first-class support later without changing the offset + simple-result story for everyone else (see also section 3 on cursor pagination).
 
 ### 2.4 Target API (breaking, illustrative)
 
-Filtering and pagination arguments belong to the facet that returns rows (`items` / `nodes`), not scattered ambiguously on the parent.
+Filtering and pagination arguments (**`where`**, **`order`**, **`skip`**, **`limit`**) live on the **association field** that returns the wrapper. The wrapper’s **`count`** and **`items`** facets are **argument-free**—they share the filter implied by the parent field selection (same operation args), so filters are not duplicated between `count` and `items`.
 
 ```graphql
 # v1 (conceptual)
 variants(where: { size: { in: ["US 10"] } }) { id size }
 
 # v2 (example — pagination args follow section 3: skip + limit)
-variants {
+variants(where: { size: { in: ["US 10"] } }, limit: 10, skip: 0) {
   count
-  items(where: { size: { in: ["US 10"] } }, limit: 10, skip: 0) {
+  items {
     id
     size
   }
@@ -90,11 +90,11 @@ Gene today distinguishes **list** associations (GraphQL list of objects) from **
 
 **Does the same “one level deep” wrapper make sense for a single association?**
 
-|                                        | **List (e.g. has-many)**                                                                | **Single (e.g. belongs-to / has-one)**                                                      |
-| -------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| **Primary job of the field**           | Return **many** rows, often filtered and paginated                                      | Return **at most one** related row (or null)                                                |
-| **What “metadata” usually means here** | `count` under the same filters, plus arguments on `items` (`where`, `skip`, `limit`)    | Often **nothing extra** at the edge: the FK join picks the row                              |
-| **Wrapper adds value?**                | **Yes**: separates aggregate (`count`) from row selection (`items`) and holds list args | **Usually no**: there is no meaningful `count` (only present/absent), and no `skip`/`limit` |
+|                                        | **List (e.g. has-many)**                                                                                             | **Single (e.g. belongs-to / has-one)**                                                      |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| **Primary job of the field**           | Return **many** rows, often filtered and paginated                                                                   | Return **at most one** related row (or null)                                                |
+| **What “metadata” usually means here** | `count` plus row facet **`items`**, with **list/filter args on the association field** (`where`, `skip`, `limit`, …) | Often **nothing extra** at the edge: the FK join picks the row                              |
+| **Wrapper adds value?**                | **Yes**: separates aggregate (`count`) from rows (`items`) without duplicating args on each facet                    | **Usually no**: there is no meaningful `count` (only present/absent), and no `skip`/`limit` |
 
 **Recommendation:** Keep the **wrapper + list metadata** pattern for **array-returning** association fields only. For **single** associations, keep the **flat nullable object** as the default GraphQL shape: the field resolves directly to `Child` or `null`. That matches common GraphQL style and avoids noisy nesting (`brand { … }` rather than `brand { node { … } }` or `brand { meta { … } value { … } }`) when there is no second dimension of data to expose at the edge.
 
@@ -263,7 +263,7 @@ This applies both to **core association fields** (section 2) and to **admin CRUD
 
 ### 3.1 Current patterns
 
-- **Gene v1**: `page`, `perPage`, `where`, `order` on list fields — **offset-style** pagination.
+- **Gene v1**: plain `[Child!]` lists with `page`, `perPage`, `where`, `order` on the field — **offset-style** pagination (**deprecated** in favor of wrappers + `skip`/`limit` on the association field).
 - **Early adopters**: only a small set of schemas used these names in production; v2 is the right moment to align with common ecosystem patterns before the library is marketed broadly.
 
 ### 3.2 Options compared (strategy, not naming)
@@ -301,7 +301,7 @@ Contentful does **not** use `page` / `perPage` on collections; it uses **`skip` 
 1. **Standardize offset pagination on `limit` + `skip`** (both `Int`, with clear defaults and max caps in docs).
 
    - Matches Contentful’s offset collections and maps directly to Sequelize `limit` / `offset`.
-   - **`page` / `perPage` are not the canonical names** in v2 docs or generated SDL; they can remain **optional aliases** via global config for migration or DX if needed, but the **documented, portable contract** should be `skip` + `limit`.
+   - **`page` / `perPage` are removed** from generated SDL in favor of **`skip` + `limit`** on list-shaped reads (top-level queries and association parents). Optional documented sugar that expands to `skip`/`limit` remains possible outside the schema if needed.
 
 2. **When cursor support is added**, expose it either:
 
@@ -484,7 +484,7 @@ _Note: RBAC stands for role-based access control_
 ## 8. Open decisions
 
 - Edge cases where a **single** association might need an **opt-in** wrapper (see §2.5 — default is **no** wrapper).
-- Global config vs. per-field overrides for wrapper field names (`items` vs. `nodes`).
+- **Resolved:** The row facet is named **`items`** (alongside **`count`**). Nested `items { items { … } }` is expected when the association field is also `items`.
 - Exact GraphQL names for **role-aware meta** (extend `*Meta` vs. new root fields).
 - Exact **nested `where` input** grammar for deep filters (relation paths, depth limits, alignment with Sequelize `include`/`where`).
 - Whether **`translations`** must always be the GraphQL alias or a **`geneConfig`** key (e.g. `cmsTranslationField: 'translations'`) is allowed when legacy schemas cannot rename the association.
