@@ -190,7 +190,7 @@ describe('integration', () => {
 
       const apparelOrderItem = result.data?.order?.items?.items?.find((_item: unknown) => {
         const item = _item as unknown as { product?: Product }
-        return (item.product?.group?.categories as unknown as string[]).includes('apparel')
+        return item.product?.group?.categories?.includes('apparel')
       }) as unknown as { product?: Product }
       const apparelProduct = apparelOrderItem?.product
 
@@ -213,7 +213,7 @@ describe('integration', () => {
 
       const apparelOrderItem = result.data?.order?.items?.items?.find((_item: unknown) => {
         const item = _item as unknown as { product?: Product }
-        return (item.product?.group?.categories as unknown as string[]).includes('apparel')
+        return item.product?.group?.categories?.includes('apparel')
       }) as unknown as { product?: Product }
       const apparelProduct = apparelOrderItem?.product
 
@@ -344,6 +344,24 @@ describe('integration', () => {
       expect(new Set(orderRow.notesFacet.items.map(n => n.body))).toEqual(
         new Set(['integration fixture note A', 'integration fixture note B'])
       )
+    })
+
+    it('filters association list items with one-level-deep where on a related model', async () => {
+      const result = await execute({
+        document: getFixtureQuery('queries/orderItemsDeepFilter.gql'),
+        variables: { id: '399', productName: 'Fusion - Ocean Mist' },
+      })
+
+      expect(result.errors).toBeUndefined()
+
+      const facet = (
+        result.data?.order as unknown as {
+          byProductName: { count: number; items: { product: { name: string } }[] }
+        }
+      ).byProductName
+
+      expect(facet.count).toBe(1)
+      expect(facet.items.every(row => row.product.name === 'Fusion - Ocean Mist')).toBe(true)
     })
   })
 

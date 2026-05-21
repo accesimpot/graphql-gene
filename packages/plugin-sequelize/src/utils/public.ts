@@ -20,7 +20,7 @@ import {
 import type { OrderItem } from 'sequelize'
 import type { Model } from 'sequelize-typescript'
 import type { DefaultResolverIncludeOptions, GeneSequelizeWhereOptions } from '../types'
-import { populateWhereOptions } from './internal'
+import { populateWhereOptions, type PopulateWhereOptionsContext } from './internal'
 import {
   GENE_ASSOCIATION_LIST_ITEMS_FIELD,
   getGeneAssociationListWrapperMeta,
@@ -34,6 +34,7 @@ import { getAttributeByModelName } from './polymorphic'
 import { isSafeArray } from './guards'
 
 export * from './polymorphic'
+export { markFieldAsAssociation, isMarkedAsAssociation } from './associationMap'
 
 /** Frames the current Sequelize include object when traversing synthetic wrapper facets so lookahead state stays distinct from ORM include shapes. */
 const GENE_ASSOCIATION_INCLUDE_FRAME_KEY = '__geneAssociationIncludeFrame'
@@ -171,7 +172,11 @@ function handleNextIncludeOptions(details: NextHandlerDetails<DefaultResolverInc
     return include
   }
 
-  const include = getFieldIncludeOptions({ association: field, args, isList })
+  const include = getFieldIncludeOptions({
+    association: field,
+    args,
+    isList,
+  })
 
   state.include = state.include || []
   state.include.push(include)
@@ -262,6 +267,7 @@ export function getFieldFindOptions(options: {
   args: { [arg: string]: unknown }
   isList: boolean
   omitAssociation?: boolean
+  filterContext?: PopulateWhereOptionsContext
 }) {
   return getFieldIncludeOptions(options)
 }
@@ -271,6 +277,8 @@ export function getFieldIncludeOptions(options: {
   args: { [arg: string]: unknown }
   isList: boolean
   omitAssociation?: boolean
+  /** Enables one-level-deep association predicates in `where` (see PLAN §2.7). */
+  filterContext?: PopulateWhereOptionsContext
 }) {
   const includeOptions: DefaultResolverIncludeOptions = {}
   if (options.association && !options.omitAssociation) {
@@ -278,6 +286,7 @@ export function getFieldIncludeOptions(options: {
   }
 
   const where: GeneSequelizeWhereOptions = {}
+  const deepIncludes: DefaultResolverIncludeOptions[] = []
 
   if (!options.isList) {
     if (options.association && !options.omitAssociation) return includeOptions
@@ -290,7 +299,16 @@ export function getFieldIncludeOptions(options: {
 
   if (isObject(options.args.where)) {
     includeOptions.where = where
-    populateWhereOptions(options.args.where, where)
+    populateWhereOptions(
+      options.args.where,
+      where,
+      options.filterContext ? { ...options.filterContext, includes: deepIncludes } : undefined
+    )
+  }
+
+  if (deepIncludes.length) {
+    includeOptions.include = includeOptions.include || []
+    includeOptions.include.push(...deepIncludes)
   }
 
   if (isSafeArray(options.args.order)) {

@@ -127,9 +127,17 @@ async function ensureAssociationItemsFacetLoaded(
     args: facetArgs,
     isList: true,
     omitAssociation: true,
+    filterContext: {
+      ownerGraphqlType: TargetModel.name,
+      includes: [],
+    },
   })
 
   const nestedInclude = getQueryInclude(info)
+  const mergedInclude = [
+    ...(columnOpts.include || []),
+    ...(nestedInclude?.include || []),
+  ]
 
   const rows = await TargetModel.findAll({
     where: { ...fkWhere, ...columnOpts.where },
@@ -137,6 +145,7 @@ async function ensureAssociationItemsFacetLoaded(
     offset: columnOpts.offset,
     limit: columnOpts.limit,
     ...(nestedInclude || {}),
+    ...(mergedInclude.length ? { include: mergedInclude } : {}),
   })
 
   wrapperRoot.items = resolvePolymorphicHubLoadedRows(rows)
@@ -232,10 +241,15 @@ export function attachAssociationListWrapperResolvers(schema: GraphQLSchema, typ
           args: facetArgs,
           isList: false,
           omitAssociation: true,
+          filterContext: {
+            ownerGraphqlType: TargetModel.name,
+            includes: [],
+          },
         })
 
         return TargetModel.count({
           where: { ...fkWhere, ...filterOpts.where },
+          include: filterOpts.include,
           distinct: true,
         })
       }

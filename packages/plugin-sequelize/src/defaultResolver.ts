@@ -28,7 +28,14 @@ export async function defaultResolver<
   const isList = isListType(parseType(options.config.returnType))
   const findFn = isList ? 'findAll' : 'findOne'
 
-  const topLevelFindOptions = getFieldFindOptions({ args: options.args, isList })
+  const topLevelFindOptions = getFieldFindOptions({
+    args: options.args,
+    isList,
+    filterContext: {
+      ownerGraphqlType: model.name,
+      includes: [],
+    },
+  })
   const includeOptions = getQueryInclude(options.info)
 
   return (await model[findFn]({

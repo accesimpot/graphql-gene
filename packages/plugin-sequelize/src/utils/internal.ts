@@ -1,10 +1,23 @@
-import { AND_OR_OPERATORS, type GeneDefaultResolverArgs, type ValueOf } from 'graphql-gene'
-import type { GeneSequelizeWhereOptions } from '../types'
+import {
+  AND_OR_OPERATORS,
+  isObject,
+  type GeneDefaultResolverArgs,
+  type ValueOf,
+} from 'graphql-gene'
+import type { DefaultResolverIncludeOptions, GeneSequelizeWhereOptions } from '../types'
 import { GENE_TO_SEQUELIZE_OPERATORS } from '../constants'
+import { isMarkedAsAssociation } from './associationMap'
+import { isWhereOperatorMap } from './deepWhere'
+
+export type PopulateWhereOptionsContext = {
+  ownerGraphqlType: string
+  includes: DefaultResolverIncludeOptions[]
+}
 
 export function populateWhereOptions<M>(
   whereArgs: GeneDefaultResolverArgs<M>['where'],
-  state: GeneSequelizeWhereOptions
+  state: GeneSequelizeWhereOptions,
+  context?: PopulateWhereOptionsContext
 ) {
   for (const attr in whereArgs) {
     const parseOperators = (
@@ -32,10 +45,24 @@ export function populateWhereOptions<M>(
           whereArgs[attr].forEach((nestedWhereArgs: typeof whereArgs) => {
             const nextState = {} as GeneSequelizeWhereOptions
             state[op].push(nextState)
-            populateWhereOptions(nestedWhereArgs, nextState)
+            populateWhereOptions(nestedWhereArgs, nextState, context)
           })
         }
       }
+    } else if (
+      context &&
+      isWhereOperatorMap(whereArgs[attr]) === false &&
+      isObject(whereArgs[attr]) &&
+      isMarkedAsAssociation(context.ownerGraphqlType, attr)
+    ) {
+      const nestedWhere: GeneSequelizeWhereOptions = {}
+      populateWhereOptions(whereArgs[attr] as never, nestedWhere)
+
+      context.includes.push({
+        association: attr,
+        where: nestedWhere,
+        required: true,
+      })
     } else {
       state[attr] = state[attr] || {}
 

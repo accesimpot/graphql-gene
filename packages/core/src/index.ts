@@ -4,6 +4,7 @@ export {
   generateDefaultQueryFilterTypeDefs,
   getWhereOptionsInputName,
   getQueryOrderEnumName,
+  type GenerateDefaultQueryFilterTypeDefsOptions,
 } from './defaultResolver'
 
 export * from './defineConfig'

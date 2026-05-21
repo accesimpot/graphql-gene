@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Op } from 'sequelize'
 import type { GeneSequelizeWhereOptions } from '../types'
+import { markFieldAsAssociation } from './associationMap'
 import { populateWhereOptions } from './internal'
 
 describe('populateWhereOptions', () => {
@@ -32,5 +33,32 @@ describe('populateWhereOptions', () => {
     expect(state.name).toEqual({ [Op.like]: '%foo%' })
     expect(state.qty).toEqual({ [Op.lt]: 10 })
     expect(state.removed).toEqual({ [Op.is]: null })
+  })
+
+  it('turns one-level association predicates into required includes', () => {
+    markFieldAsAssociation('DeepParent', 'child')
+
+    const state: GeneSequelizeWhereOptions = {}
+    const includes = []
+
+    populateWhereOptions(
+      {
+        child: { label: { eq: 'match' } },
+      } as never,
+      state,
+      {
+        ownerGraphqlType: 'DeepParent',
+        includes,
+      }
+    )
+
+    expect(state).toEqual({})
+    expect(includes).toEqual([
+      {
+        association: 'child',
+        where: { label: { [Op.eq]: 'match' } },
+        required: true,
+      },
+    ])
   })
 })

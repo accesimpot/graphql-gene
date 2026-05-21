@@ -15,7 +15,7 @@ import {
   JSON_SCALAR,
   SEQUELIZE_TYPE_TO_GRAPHQL,
 } from './constants'
-import { markFieldAsAssociation } from './utils/associationMap'
+import { isMarkedAsAssociation, markFieldAsAssociation } from './utils/associationMap'
 import {
   getGeneAssociationListWrapperTypeName,
   registerGeneAssociationListWrapper,
@@ -177,6 +177,9 @@ function generateAssociationFields(
           graphqlType: options.typeName,
           fieldKey: attributeKey,
           fieldType: associationModelName,
+          associationFilterDepth: 1,
+          isAssociationField: (ownerType, fieldName) =>
+            isMarkedAsAssociation(ownerType, fieldName),
         })
       })
     }
