@@ -112,12 +112,27 @@ export function generateOperatorInputLines(
   return lines
 }
 
-export function generateDefaultQueryFilterTypeDefs(options: {
+export type GenerateDefaultQueryFilterTypeDefsOptions = {
   typeDefLines: TypeDefLines
+  /** GraphQL type that owns the field being filtered (e.g. `Order` for `items`). */
   graphqlType: string
+  /** GraphQL field name that accepts the `where` argument (e.g. `items`). */
   fieldKey: string
+  /** GraphQL type of the filtered records (e.g. `OrderItem`). */
   fieldType: string
-}) {
+  /**
+   * When set, association fields on `fieldType` can use nested where inputs (one level per
+   * decrement). Pass `1` on parent association list filters; nested inputs are generated at `0`
+   * (scalars only).
+   */
+  associationFilterDepth?: 0 | 1
+  /** Return true when `fieldType.fieldName` is a Sequelize association exposed in GraphQL. */
+  isAssociationField?: (ownerGraphqlType: string, fieldName: string) => boolean
+}
+
+export function generateDefaultQueryFilterTypeDefs(
+  options: GenerateDefaultQueryFilterTypeDefsOptions
+) {
   const whereOptionsInputName = getWhereOptionsInputName(options.graphqlType, options.fieldKey)
   const orderEnumName = getQueryOrderEnumName(options.graphqlType, options.fieldKey)
 
@@ -156,6 +171,8 @@ export function generateDefaultQueryFilterTypeDefs(options: {
     [string, NonNullable<ReturnType<typeof findValidInputType>>]
   >([])
 
+  const associationFilterDepth = options.associationFilterDepth ?? 0
+
   Object.entries(options.typeDefLines[options.fieldType].lines).forEach(
     ([returnFieldKey, returnFieldConfig]) => {
       // Where Options Input
@@ -168,13 +185,31 @@ export function generateDefaultQueryFilterTypeDefs(options: {
 
       const validInputType = findValidInputType(returnFieldType.typeDef)
       let whereTypeDef = ''
+      const isAssociation =
+        options.isAssociationField?.(options.fieldType, returnFieldKey) ?? false
+      const relatedGraphqlType = getReturnTypeName(returnFieldType.typeDef)
 
       if (validInputType) {
         const operatorInputName = getOperatorInputName(validInputType)
         operatorInputsToGenerate.add([operatorInputName, validInputType])
         whereTypeDef = operatorInputName
+      } else if (isAssociation && associationFilterDepth > 0) {
+        const nestedWhereInputName = getWhereOptionsInputName(options.fieldType, returnFieldKey)
+
+        generateDefaultQueryFilterTypeDefs({
+          typeDefLines: options.typeDefLines,
+          graphqlType: options.fieldType,
+          fieldKey: returnFieldKey,
+          fieldType: relatedGraphqlType,
+          associationFilterDepth: 0,
+          isAssociationField: options.isAssociationField,
+        })
+
+        whereTypeDef = nestedWhereInputName
+      } else if (isAssociation && associationFilterDepth === 0) {
+        whereTypeDef = ''
       }
-      // If the return type is another Graphql Type because the field is an association
+      // Non-association object fields (e.g. FK id filters on legacy paths)
       else if (returnFieldType.typeDef in options.typeDefLines) {
         for (const key in options.typeDefLines[returnFieldType.typeDef].lines) {
           if (key === 'id') {
