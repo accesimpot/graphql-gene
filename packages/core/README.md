@@ -48,7 +48,7 @@ Use `graphql-gene` to generate automatically an executable schema out of your OR
 - <img src="https://github.com/user-attachments/assets/bd2f6032-5346-478f-ac0c-2c28703a8e12" width="18"> Type safe - Resolver arguments and return value are deeply typed.
 - 🎯 One source of truth - Types are defined once and shared between GraphQL and Typescript.
 - 💥 Works with anything - New or existing projects. Works with any GraphQL servers, ORM, or external sources.
-- 🔌 Plugins - Simple plugin system to potentially support any Node.js ORM. See [Writing a Plugin](../docs/guides/writing-a-plugin.md).
+- 🔌 Plugins - Simple plugin system to potentially support any Node.js ORM. See [Writing a Plugin](packages/docs/guides/writing-a-plugin.md).
 
 <br>
 
