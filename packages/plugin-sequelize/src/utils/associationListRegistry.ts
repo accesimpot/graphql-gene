@@ -1,3 +1,5 @@
+import { isMarkedAsAssociation } from './associationMap'
+
 /** Row facet field name on Gene association list wrappers (`count` + `items`). */
 export const GENE_ASSOCIATION_LIST_ITEMS_FIELD = 'items'
 
@@ -51,4 +53,15 @@ export function getGeneAssociationListWrapperMeta(typeName: string) {
 
 export function isGeneAssociationListWrapperGraphqlType(typeName: string) {
   return wrapperMetas.has(typeName)
+}
+
+/** Whether `associationField` on `parentGraphqlType` is a Gene HasMany association-list wrapper. */
+export function isGeneAssociationListWrapperAssociation(
+  parentGraphqlType: string,
+  associationField: string
+): boolean {
+  if (!isMarkedAsAssociation(parentGraphqlType, associationField)) return false
+  return isGeneAssociationListWrapperGraphqlType(
+    getGeneAssociationListWrapperTypeName(parentGraphqlType, associationField)
+  )
 }

@@ -8,7 +8,7 @@ import {
 import type { GeneContext } from 'graphql-gene/context'
 import type { Model as SequelizeModel, ModelStatic } from 'sequelize'
 import { getQueryInclude, getFieldFindOptions } from './utils'
-import { applySqliteNestedHasManySeparate } from './utils/includePostProcess'
+import { stripAssociationListWrapperIncludes } from './utils/includePostProcess'
 
 export async function defaultResolver<
   M,
@@ -32,7 +32,7 @@ export async function defaultResolver<
   const includeOptions = getQueryInclude(options.info)
 
   if (includeOptions?.include?.length) {
-    applySqliteNestedHasManySeparate(model, includeOptions.include)
+    stripAssociationListWrapperIncludes(model, includeOptions.include)
   }
 
   return (await model[findFn]({
