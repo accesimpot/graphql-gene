@@ -35,7 +35,10 @@ import { isSafeArray } from './guards'
 
 export * from './polymorphic'
 
-/** Frames the current Sequelize include object when traversing synthetic wrapper facets so lookahead state stays distinct from ORM include shapes. */
+/**
+ * Frames the current Sequelize include object when traversing synthetic wrapper facets so
+ * lookahead state stays distinct from ORM include shapes.
+ */
 const GENE_ASSOCIATION_INCLUDE_FRAME_KEY = '__geneAssociationIncludeFrame'
 
 function unwrapAssociationIncludeFrame(state: unknown): DefaultResolverIncludeOptions {
@@ -152,11 +155,7 @@ function handleNextIncludeOptions(details: NextHandlerDetails<DefaultResolverInc
   const namedReturn = getNamedType(fieldDef.type)
 
   if (isAssociationListWrapperOutputType(fieldDef.type)) {
-    const { hasItems } = scanAssociationWrapperFacets(
-      info,
-      namedReturn.name,
-      nextSelectionSet
-    )
+    const { hasItems } = scanAssociationWrapperFacets(info, namedReturn.name, nextSelectionSet)
     if (!hasItems) return {}
 
     // Wrapper HasMany associations load via facet resolvers, not parent eager includes.
