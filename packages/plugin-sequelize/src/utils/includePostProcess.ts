@@ -1,7 +1,7 @@
 import type { Model as SequelizeModel, ModelStatic } from 'sequelize'
 import type { DefaultResolverIncludeOptions } from '../types'
 import { isGeneAssociationListWrapperAssociation } from './associationListRegistry'
-import { isSequelizeModelStatic } from './guards'
+import { isModelStatic } from './guards'
 
 /**
  * Removes Sequelize eager includes for Gene association-list wrapper fields (`{ count, items }`).
@@ -30,7 +30,7 @@ export function stripAssociationListWrapperIncludes(
 
     const assoc = associationName ? parentModel.associations?.[associationName] : undefined
     const target =
-      assoc && 'target' in assoc && isSequelizeModelStatic(assoc.target) ? assoc.target : undefined
+      assoc && 'target' in assoc && isModelStatic(assoc.target) ? assoc.target : undefined
 
     if (target && inc.include?.length) {
       stripAssociationListWrapperIncludes(target, inc.include, target.name)

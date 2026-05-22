@@ -19,7 +19,7 @@ import {
   isModel,
   isPlainRecord,
   isSafeArray,
-  isSequelizeModelStatic,
+  isModelStatic,
   type AssociationJoinColumns,
   type ModelInstanceWithClass,
 } from './utils/guards'
@@ -103,7 +103,7 @@ function targetModelFromAssociation(parent: unknown, associationField: string): 
   const assoc = assertAssociation(parent, associationField)
   const target = Reflect.get(assoc, 'target')
 
-  if (!isSequelizeModelStatic(target)) {
+  if (!isModelStatic(target)) {
     throw new GraphQLError('Association target is not a Sequelize model class.')
   }
   return target
