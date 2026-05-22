@@ -152,23 +152,15 @@ function handleNextIncludeOptions(details: NextHandlerDetails<DefaultResolverInc
   const namedReturn = getNamedType(fieldDef.type)
 
   if (isAssociationListWrapperOutputType(fieldDef.type)) {
-    const { hasItems, hasCount } = scanAssociationWrapperFacets(
+    const { hasItems } = scanAssociationWrapperFacets(
       info,
       namedReturn.name,
       nextSelectionSet
     )
-    if (!hasItems || !hasCount) return {}
+    if (!hasItems) return {}
 
-    const include = getFieldIncludeOptions({
-      association: field,
-      args,
-      isList: true,
-    })
-
-    state.include = state.include || []
-    state.include.push(include)
-
-    return include
+    // Wrapper HasMany associations load via facet resolvers, not parent eager includes.
+    return frameAssociationInclude(state)
   }
 
   const include = getFieldIncludeOptions({ association: field, args, isList })

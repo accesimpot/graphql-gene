@@ -11,7 +11,7 @@ import type { Association, ModelStatic } from 'sequelize'
 import { Model } from 'sequelize-typescript'
 import { getGloballyExtendedTypes, type AnyObject } from 'graphql-gene'
 import { getFieldIncludeOptions, getQueryInclude } from './utils/public'
-import { applySqliteNestedHasManySeparate } from './utils/includePostProcess'
+import { stripAssociationListWrapperIncludes } from './utils/includePostProcess'
 import { resolvePolymorphicHubLoadedRows } from './utils/polymorphic'
 import { getGeneAssociationListWrapperMeta } from './utils/associationListRegistry'
 import {
@@ -139,7 +139,7 @@ async function ensureAssociationItemsFacetLoaded(
   const mergedFind: DefaultResolverIncludeOptions = { ...(nestedInclude || {}) }
   applyGeneConfigRootFindOptions(TargetModel, mergedFind)
   if (mergedFind.include?.length) {
-    applySqliteNestedHasManySeparate(TargetModel, mergedFind.include)
+    stripAssociationListWrapperIncludes(TargetModel, mergedFind.include)
   }
 
   const rows = await TargetModel.findAll({
