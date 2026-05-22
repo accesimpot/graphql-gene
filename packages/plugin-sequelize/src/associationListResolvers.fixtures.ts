@@ -1,4 +1,3 @@
-import 'reflect-metadata'
 import { Column, DataType, Model, Sequelize, Table } from 'sequelize-typescript'
 
 /** Memory SQLite models shared by association-list resolver unit tests. */
