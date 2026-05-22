@@ -138,6 +138,7 @@ async function ensureAssociationItemsFacetLoaded(
   const nestedInclude = getQueryInclude(info)
   const mergedFind: DefaultResolverIncludeOptions = { ...(nestedInclude || {}) }
   applyGeneConfigRootFindOptions(TargetModel, mergedFind)
+
   if (mergedFind.include?.length) {
     stripAssociationListWrapperIncludes(TargetModel, mergedFind.include)
   }
@@ -147,7 +148,7 @@ async function ensureAssociationItemsFacetLoaded(
     order: columnOpts.order,
     offset: columnOpts.offset,
     limit: columnOpts.limit,
-    ...mergedFind,
+    include: mergedFind.include,
   })
 
   wrapperRoot.items = resolvePolymorphicHubLoadedRows(rows)
