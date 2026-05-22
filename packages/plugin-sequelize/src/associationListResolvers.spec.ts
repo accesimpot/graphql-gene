@@ -179,10 +179,9 @@ describe('attachAssociationListWrapperResolvers', () => {
     findAllSpy.mockRestore()
   })
 
-  it('throws when the parent is not a Sequelize model instance', async () => {
-    const { GraphQLSchema, GraphQLObjectType, GraphQLInt, GraphQLList, graphql } = await import(
-      'graphql'
-    )
+  it('returns the prior resolver result when the parent is not a Sequelize model instance', async () => {
+    const { GraphQLSchema, GraphQLObjectType, GraphQLInt, GraphQLList, GraphQLString, graphql } =
+      await import('graphql')
 
     const { markFieldAsAssociation } = await import('./utils/associationMap')
     const { registerGeneAssociationListWrapper, getGeneAssociationListWrapperTypeName } =
@@ -207,13 +206,19 @@ describe('attachAssociationListWrapperResolvers', () => {
       fields: {
         count: { type: GraphQLInt },
         items: { type: new GraphQLList(childGraphQLType) },
+        marker: { type: GraphQLString },
       },
     })
+
+    const priorValue = { marker: 'prior-only' }
 
     const parentGraphQLType = new GraphQLObjectType({
       name: 'LonelyParent',
       fields: {
-        items: { type: wrapperType },
+        items: {
+          type: wrapperType,
+          resolve: () => priorValue,
+        },
       },
     })
 
@@ -233,10 +238,10 @@ describe('attachAssociationListWrapperResolvers', () => {
 
     const result = await graphql({
       schema,
-      source: `{ parent { items { count } } }`,
+      source: `{ parent { items { marker } } }`,
     })
 
-    expect(result.errors?.length).toBeTruthy()
-    expect(result.errors?.[0]?.message).toMatch(/Sequelize model/)
+    expect(result.errors).toBeUndefined()
+    expect(result.data).toEqual({ parent: { items: priorValue } })
   })
 })
