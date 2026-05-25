@@ -9,11 +9,7 @@ import {
 } from 'graphql'
 import type { Association, ModelStatic } from 'sequelize'
 import { Model } from 'sequelize-typescript'
-import {
-  getGloballyExtendedTypes,
-  isRegisteredPolymorphicAbstractType,
-  type AnyObject,
-} from 'graphql-gene'
+import { getGloballyExtendedTypes, type AnyObject } from 'graphql-gene'
 import { getFieldIncludeOptions, getQueryInclude } from './utils/public'
 import { stripAssociationListWrapperIncludes } from './utils/includePostProcess'
 import { resolvePolymorphicHubLoadedRows } from './utils/polymorphic'
@@ -54,8 +50,6 @@ export type GeneAssociationListWeakPayload = {
   parent: Model
   associationField: string
   facetArgs: Record<string, unknown>
-  /** GraphQL object type name for the association target (hub models use {@link resolvePolymorphicHubLoadedRows}). */
-  targetGraphqlType: string
 }
 
 export const geneAssociationListPayloadByWrapperRoot = new WeakMap<
@@ -157,10 +151,7 @@ async function ensureAssociationItemsFacetLoaded(
     include: mergedFind.include,
   })
 
-  const targetGraphqlType = payload.targetGraphqlType ?? TargetModel.name
-  wrapperRoot.items = isRegisteredPolymorphicAbstractType(targetGraphqlType)
-    ? resolvePolymorphicHubLoadedRows(rows)
-    : rows
+  wrapperRoot.items = resolvePolymorphicHubLoadedRows(rows)
 }
 
 export function attachAssociationListWrapperResolvers(schema: GraphQLSchema, types: AnyObject) {
@@ -208,16 +199,12 @@ export function attachAssociationListWrapperResolvers(schema: GraphQLSchema, typ
         if (isSafeArray(preload)) {
           // Staged copy: type-level directives filter `source[field]` (`items`) in-place before the
           // facet resolver runs; Sequelize's preload array must stay untouched.
-          const staged = preload.slice()
-          wrapperRoot.items = isRegisteredPolymorphicAbstractType(wrapperMeta.targetGraphqlType)
-            ? resolvePolymorphicHubLoadedRows(staged)
-            : staged
+          wrapperRoot.items = resolvePolymorphicHubLoadedRows(preload.slice())
         }
         geneAssociationListPayloadByWrapperRoot.set(wrapperRoot, {
           parent,
           associationField: fieldName,
           facetArgs,
-          targetGraphqlType: wrapperMeta.targetGraphqlType,
         })
         return wrapperRoot
       }
