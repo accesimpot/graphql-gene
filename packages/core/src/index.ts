@@ -2,6 +2,8 @@ export * from './constants'
 export {
   populateArgsDefForDefaultResolver,
   generateDefaultQueryFilterTypeDefs,
+  getWhereOptionsInputName,
+  getQueryOrderEnumName,
 } from './defaultResolver'
 
 export * from './defineConfig'

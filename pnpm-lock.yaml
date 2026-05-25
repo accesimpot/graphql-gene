@@ -163,6 +163,8 @@ importers:
         specifier: ^5.8.2
         version: 5.8.2
 
+  packages/docs: {}
+
   packages/plugin-sequelize:
     dependencies:
       graphql-lookahead:

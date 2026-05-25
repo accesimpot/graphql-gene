@@ -9,8 +9,11 @@ mutation updateOrderStatus($id: String!, $status: OrderStatusEnum!) {
       status
 
       items {
-        product {
-          name
+        count
+        items {
+          product {
+            name
+          }
         }
       }
     }

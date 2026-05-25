@@ -97,7 +97,7 @@ extendTypes({
           messageType = 'error'
           text = 'Status could not be updated.'
         } else {
-          const findOptions = getQueryIncludeOf(info, 'Order')
+          const findOptions = getQueryIncludeOf(info, 'Order', { lookFromOperationRoot: true })
           order = await Order.findOne({ ...findOptions, where: { id: args.id } })
 
           // Just pretend to update the status
