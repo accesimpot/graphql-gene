@@ -1,6 +1,6 @@
 export * from './models'
 
-export { ProductReviewAverage } from './Product/Product.model'
+export { ProductReviewAverage, IntegrationDemoUnion } from './Product/Product.model'
 export {
   UpdateOrderStatusOutput,
   OrderStatusEnum,

@@ -3,7 +3,7 @@ import { generateSchema } from 'graphql-gene'
 import { pluginSequelize } from '@graphql-gene/plugin-sequelize'
 import * as graphqlTypes from '../models/graphqlTypes'
 
-const { schema, schemaString, schemaHtml } = generateSchema({
+const { schema, schemaString, schemaHtml, typeDefs, resolvers } = generateSchema({
   resolvers: {
     Date: DateResolver,
     DateTime: DateTimeResolver,
@@ -15,4 +15,4 @@ const { schema, schemaString, schemaHtml } = generateSchema({
   },
 })
 
-export { schema, schemaString, schemaHtml }
+export { schema, schemaString, schemaHtml, typeDefs, resolvers }

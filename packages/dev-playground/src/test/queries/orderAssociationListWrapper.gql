@@ -1,0 +1,25 @@
+query orderAssociationListWrapper($id: String!, $notesLimit: Int = 10) {
+  order(id: $id) {
+    id
+    filtered: items(where: { quantity: { eq: 3 } }) {
+      count
+      items {
+        id
+        quantity
+      }
+    }
+    limitedRows: items(limit: 2, skip: 0) {
+      count
+      items {
+        id
+      }
+    }
+    notesFacet: notes(limit: $notesLimit, skip: 0) {
+      count
+      items {
+        id
+        body
+      }
+    }
+  }
+}

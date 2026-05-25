@@ -19,6 +19,7 @@ import {
 } from 'graphql-gene'
 import { getQueryIncludeOf } from '@graphql-gene/plugin-sequelize'
 import { OrderItem } from '../OrderItem/OrderItem.model'
+import { OrderNote } from '../OrderNote/OrderNote.model'
 import { Address } from '../Address/Address.model'
 
 export
@@ -44,6 +45,9 @@ class Order extends Model<InferAttributes<Order>, InferCreationAttributes<Order>
 
   @HasMany(() => OrderItem)
   declare items: OrderItem[] | null
+
+  @HasMany(() => OrderNote)
+  declare notes: OrderNote[] | null
 
   @ForeignKey(() => Address)
   @Column(DataType.INTEGER)
