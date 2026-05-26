@@ -3,12 +3,21 @@ import {
   GraphQLObjectType,
   defaultFieldResolver,
   getNamedType,
+  type GraphQLFieldResolver,
   type GraphQLResolveInfo,
   type GraphQLSchema,
 } from 'graphql'
-import type { Association, Model, ModelStatic } from 'sequelize'
-import { isObject, type AnyObject, LIMIT_ARG_DEFAULT, SKIP_ARG_DEFAULT } from 'graphql-gene'
+import type { Association, ModelStatic } from 'sequelize'
+import { Model } from 'sequelize-typescript'
+import {
+  getGloballyExtendedTypes,
+  isObject,
+  LIMIT_ARG_DEFAULT,
+  SKIP_ARG_DEFAULT,
+  type AnyObject,
+} from 'graphql-gene'
 import { getFieldIncludeOptions, getQueryInclude } from './utils/public'
+import { stripAssociationListWrapperIncludes } from './utils/includePostProcess'
 import { resolvePolymorphicHubLoadedRows } from './utils/polymorphic'
 import { getGeneAssociationListWrapperMeta } from './utils/associationListRegistry'
 import {
@@ -16,14 +25,35 @@ import {
   isModel,
   isPlainRecord,
   isSafeArray,
-  isSequelizeModelStatic,
+  isModelStatic,
   type AssociationJoinColumns,
   type ModelInstanceWithClass,
 } from './utils/guards'
 import { isMarkedAsAssociation } from './utils/associationMap'
+import type { DefaultResolverIncludeOptions } from './types'
+
+function applyGeneConfigRootFindOptions(
+  ModelClass: ModelStatic<Model>,
+  findOptionsRoot: DefaultResolverIncludeOptions
+) {
+  const geneCfg =
+    getGloballyExtendedTypes().geneConfig[
+      ModelClass.name as keyof ReturnType<typeof getGloballyExtendedTypes>['geneConfig']
+    ]
+  const hook =
+    geneCfg && typeof geneCfg === 'object' && 'findOptions' in geneCfg
+      ? (geneCfg as { findOptions?: (d: unknown) => void }).findOptions
+      : undefined
+  if (typeof hook !== 'function') return
+
+  hook({
+    findOptions: findOptionsRoot,
+    state: findOptionsRoot,
+  })
+}
 
 export type GeneAssociationListWeakPayload = {
-  parent: ModelInstanceWithClass
+  parent: Model
   associationField: string
   facetArgs: Record<string, unknown>
 }
@@ -97,7 +127,7 @@ function targetModelFromAssociation(parent: unknown, associationField: string): 
   const assoc = assertAssociation(parent, associationField)
   const target = Reflect.get(assoc, 'target')
 
-  if (!isSequelizeModelStatic(target)) {
+  if (!isModelStatic(target)) {
     throw new GraphQLError('Association target is not a Sequelize model class.')
   }
   return target
@@ -130,13 +160,19 @@ async function ensureAssociationItemsFacetLoaded(
   })
 
   const nestedInclude = getQueryInclude(info)
+  const mergedFind: DefaultResolverIncludeOptions = { ...(nestedInclude || {}) }
+  applyGeneConfigRootFindOptions(TargetModel, mergedFind)
+
+  if (mergedFind.include?.length) {
+    stripAssociationListWrapperIncludes(TargetModel, mergedFind.include)
+  }
 
   const rows = await TargetModel.findAll({
     where: { ...fkWhere, ...columnOpts.where },
     order: columnOpts.order,
     offset: columnOpts.offset,
     limit: columnOpts.limit,
-    ...(nestedInclude || {}),
+    include: mergedFind.include,
   })
 
   wrapperRoot.items = resolvePolymorphicHubLoadedRows(rows)
@@ -164,19 +200,25 @@ export function attachAssociationListWrapperResolvers(schema: GraphQLSchema, typ
 
       if (!types[wrapperMeta.targetGraphqlType]) continue
 
-      field.resolve = (
+      const previousParentFieldResolve: GraphQLFieldResolver<unknown, unknown> =
+        field.resolve ?? defaultFieldResolver
+
+      field.resolve = async (
         parent: unknown,
         facetArgs: Record<string, unknown>,
-        _ctx: unknown,
-        _info: GraphQLResolveInfo
+        ctx: unknown,
+        info: GraphQLResolveInfo
       ) => {
+        const prior = await Promise.resolve(
+          previousParentFieldResolve(parent, facetArgs, ctx, info)
+        )
+
         if (!isModel(parent)) {
-          throw new GraphQLError(
-            'Association list field parent must be a Sequelize model instance.'
-          )
+          return prior
         }
+
         const wrapperRoot: Record<string, unknown> = {}
-        const preload = Reflect.get(parent, fieldName)
+        const preload = isSafeArray(prior) ? prior : Reflect.get(parent, fieldName)
 
         if (isSafeArray(preload) && !isAssociationFacetRequiringFreshQuery(facetArgs)) {
           // Staged copy: type-level directives filter `source[field]` (`items`) in-place before the

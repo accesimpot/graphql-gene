@@ -4,6 +4,7 @@ query orderById($id: String!) {
     status
 
     items {
+      count
       items {
         price
         quantity
@@ -17,6 +18,7 @@ query orderById($id: String!) {
           }
 
           variants {
+            count
             items {
               size
             }

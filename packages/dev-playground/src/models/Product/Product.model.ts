@@ -9,7 +9,7 @@ import {
   Table,
 } from 'sequelize-typescript'
 import type { CreationOptional, InferAttributes, InferCreationAttributes } from 'sequelize'
-import { defineType, extendTypes } from 'graphql-gene'
+import { defineType, defineUnion, extendTypes } from 'graphql-gene'
 import { authorizationDirective } from '../../directives/authorization.directive'
 import { ProductGroup } from '../ProductGroup/ProductGroup.model'
 import { ProductVariant } from '../ProductVariant/ProductVariant.model'
@@ -48,6 +48,9 @@ export const ProductReviewAverage = defineType({
   rating: 'Float',
   total: 'Int',
 })
+
+/** Covers graphql-gene `defineUnion` / union SDL emission in `schema.ts`. */
+export const IntegrationDemoUnion = defineUnion(['Product', 'Order'])
 
 extendTypes({
   Product: {

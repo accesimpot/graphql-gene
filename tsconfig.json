@@ -11,6 +11,9 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
 
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+
     /* Strictness */
     "strict": true,
     "noImplicitOverride": true,

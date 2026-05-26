@@ -35,7 +35,10 @@ import { isSafeArray } from './guards'
 
 export * from './polymorphic'
 
-/** Frames the current Sequelize include object when traversing synthetic wrapper facets so lookahead state stays distinct from ORM include shapes. */
+/**
+ * Frames the current Sequelize include object when traversing synthetic wrapper facets so
+ * lookahead state stays distinct from ORM include shapes.
+ */
 const GENE_ASSOCIATION_INCLUDE_FRAME_KEY = '__geneAssociationIncludeFrame'
 
 function unwrapAssociationIncludeFrame(state: unknown): DefaultResolverIncludeOptions {
@@ -152,23 +155,11 @@ function handleNextIncludeOptions(details: NextHandlerDetails<DefaultResolverInc
   const namedReturn = getNamedType(fieldDef.type)
 
   if (isAssociationListWrapperOutputType(fieldDef.type)) {
-    const { hasItems, hasCount } = scanAssociationWrapperFacets(
-      info,
-      namedReturn.name,
-      nextSelectionSet
-    )
-    if (!hasItems || !hasCount) return {}
+    const { hasItems } = scanAssociationWrapperFacets(info, namedReturn.name, nextSelectionSet)
+    if (!hasItems) return {}
 
-    const include = getFieldIncludeOptions({
-      association: field,
-      args,
-      isList: true,
-    })
-
-    state.include = state.include || []
-    state.include.push(include)
-
-    return include
+    // Wrapper HasMany associations load via facet resolvers, not parent eager includes.
+    return frameAssociationInclude(state)
   }
 
   const include = getFieldIncludeOptions({ association: field, args, isList })
@@ -311,11 +302,16 @@ export function getFieldIncludeOptions(options: {
   }
 
   if (options.isList) {
-    const skip = typeof options.args.skip === 'number' ? options.args.skip : SKIP_ARG_DEFAULT
-    const limit = typeof options.args.limit === 'number' ? options.args.limit : LIMIT_ARG_DEFAULT
+    if (options.omitAssociation) {
+      const skip = typeof options.args.skip === 'number' ? options.args.skip : SKIP_ARG_DEFAULT
+      const limit = typeof options.args.limit === 'number' ? options.args.limit : LIMIT_ARG_DEFAULT
 
-    includeOptions.offset = skip
-    includeOptions.limit = limit
+      includeOptions.offset = skip
+      includeOptions.limit = limit
+    } else {
+      if (typeof options.args.skip === 'number') includeOptions.offset = options.args.skip
+      if (typeof options.args.limit === 'number') includeOptions.limit = options.args.limit
+    }
   }
 
   return includeOptions

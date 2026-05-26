@@ -4,6 +4,7 @@ query orderWithPublished {
     status
 
     items {
+      count
       items {
         product {
           id

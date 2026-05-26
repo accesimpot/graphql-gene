@@ -7,10 +7,12 @@ import {
   Model,
   Table,
 } from 'sequelize-typescript'
-import { defineGraphqlGeneConfig } from 'graphql-gene'
 import { Order } from '../Order/Order.model'
 
-/** Lightweight HasMany on {@link Order} so the playground can cover multiple association-list wrappers per GraphQL type. */
+/**
+ * Lightweight HasMany on {@link Order} so the playground can cover multiple association-list
+ * wrappers per GraphQL type.
+ */
 export
 @Table
 class OrderNote extends Model {
@@ -25,6 +27,4 @@ class OrderNote extends Model {
   @AllowNull(false)
   @Column(DataType.STRING)
   declare body: string
-
-  static readonly geneConfig = defineGraphqlGeneConfig(OrderNote, {})
 }

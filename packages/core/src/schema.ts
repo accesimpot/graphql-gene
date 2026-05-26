@@ -120,6 +120,13 @@ export function generateSchema<
     plugins: options.plugins || [],
     types: options.types,
   })
+  ;(options.plugins || []).forEach(plugin => {
+    plugin.attachSchemaResolvers?.({
+      schema: executableSchema,
+      types: options.types,
+      typeDefLines,
+    })
+  })
 
   ;(options.plugins || []).forEach(plugin => {
     plugin.attachSchemaResolvers?.({

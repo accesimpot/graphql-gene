@@ -6,6 +6,7 @@ query mostRecentOrderByStatus($status: String!) {
     fieldAddedWithExtendTypes(prefix: "status", separator: ": ")
 
     items {
+      count
       items {
         id
         price
@@ -16,6 +17,7 @@ query mostRecentOrderByStatus($status: String!) {
 
           group {
             products {
+              count
               items {
                 id
               }
