@@ -1,6 +1,7 @@
 import {
   defineGraphqlGeneConfig,
   isObject,
+  isPlainObject,
   registerPolymorphicAbstractType,
   type GeneConfig,
   type GraphqlTypeName,
@@ -33,17 +34,20 @@ export type PolymorphicJunctionOptions = {
  */
 function hasHubColumn(modelCtor: ModelStatic, attributeKey: string): boolean {
   const proto = modelCtor.prototype
+
   if (typeof Reflect.getMetadata === 'function') {
-    const meta = Reflect.getMetadata(SEQUELIZE_ATTRIBUTES_METADATA_KEY, proto) as
-      | Record<string, unknown>
-      | undefined
-    if (meta && attributeKey in meta) return true
+    const meta = Reflect.getMetadata(SEQUELIZE_ATTRIBUTES_METADATA_KEY, proto)
+    if (isPlainObject(meta) && attributeKey in meta) return true
   }
 
-  const raw = (modelCtor as unknown as { rawAttributes?: Record<string, unknown> }).rawAttributes
-  if (raw && attributeKey in raw) return true
+  const rawAttributes =
+    isPlainObject(modelCtor) &&
+    'rawAttributes' in modelCtor &&
+    isPlainObject(modelCtor.rawAttributes)
+      ? modelCtor.rawAttributes
+      : undefined
 
-  return false
+  return Boolean(rawAttributes && attributeKey in rawAttributes)
 }
 
 /** Registers `@Column` metadata for junction FK + discriminator when the model does not define them (e.g. no `declare` / `@Column`). */
