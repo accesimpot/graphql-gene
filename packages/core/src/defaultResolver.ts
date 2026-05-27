@@ -185,8 +185,7 @@ export function generateDefaultQueryFilterTypeDefs(
 
       const validInputType = findValidInputType(returnFieldType.typeDef)
       let whereTypeDef = ''
-      const isAssociation =
-        options.isAssociationField?.(options.fieldType, returnFieldKey) ?? false
+      const isAssociation = options.isAssociationField?.(options.fieldType, returnFieldKey) ?? false
       const relatedGraphqlType = getReturnTypeName(returnFieldType.typeDef)
 
       if (validInputType) {

@@ -178,8 +178,7 @@ function generateAssociationFields(
           fieldKey: attributeKey,
           fieldType: associationModelName,
           associationFilterDepth: 1,
-          isAssociationField: (ownerType, fieldName) =>
-            isMarkedAsAssociation(ownerType, fieldName),
+          isAssociationField: (ownerType, fieldName) => isMarkedAsAssociation(ownerType, fieldName),
         })
       })
     }
