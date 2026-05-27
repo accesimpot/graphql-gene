@@ -9,7 +9,18 @@ import {
 } from 'graphql-gene'
 import { BelongsTo, Column, DataType, HasMany, type ModelStatic } from 'sequelize-typescript'
 
-type ModelStaticWithGene = ModelStatic & { geneConfig?: GeneConfig }
+/** `geneConfig` fields that `@Polymorphic` reads or writes on concrete target models. */
+type PolymorphicTargetGeneConfig = Pick<
+  GeneConfig,
+  '__implementedInterfaces' | 'include' | 'exclude'
+>
+
+type PolymorphicHubGeneConfig = PolymorphicTargetGeneConfig & {
+  __polymorphicJunction?: { foreignKey: string; discriminatorKey: string }
+  __polymorphicAssociations?: readonly string[]
+}
+
+type ModelStaticWithGene = ModelStatic & { geneConfig?: PolymorphicTargetGeneConfig }
 
 /** sequelize-typescript column metadata key (see `attribute-service.ts`). */
 const SEQUELIZE_ATTRIBUTES_METADATA_KEY = 'sequelize:attributes'
@@ -70,11 +81,11 @@ function ensurePolymorphicJunctionColumns(
 function getModelAttributeValue(record: unknown, key: string): unknown {
   if (!isObject(record)) return undefined
 
-  if ('get' in record) {
-    const getter = record.get
-    if (typeof getter === 'function') return getter.call(record, key)
+  if ('get' in record && typeof record.get === 'function') {
+    return record.get.call(record, key)
   }
-  return record[key as keyof typeof record]
+
+  return (record as Record<string, unknown>)[key]
 }
 
 /**
@@ -115,7 +126,7 @@ function getModelAttributeValue(record: unknown, key: string): unknown {
  * @param junction — Optional FK + discriminator attribute names (`DEFAULT_POLYMORPHIC_JUNCTION` when omitted).
  */
 export function Polymorphic<M extends ModelStatic = ModelStatic>(
-  possibleTypes: () => ModelStatic[],
+  possibleTypes: () => ModelStaticWithGene[],
   junction?: PolymorphicJunctionOptions
 ) {
   return (constructor: M & { geneConfig?: GeneConfig<M> }) => {
@@ -125,29 +136,24 @@ export function Polymorphic<M extends ModelStatic = ModelStatic>(
     }
 
     const BaseModel = constructor
-    const BaseModelName = BaseModel.name as GraphqlTypeName
 
     ensurePolymorphicJunctionColumns(BaseModel, resolvedJunction)
 
-    const rawTargetTypes = possibleTypes()
-    const targetTypes = rawTargetTypes as ModelStatic[]
+    const targetTypes = possibleTypes()
     const associationNames = targetTypes.map(t => getAttributeByModelName(t.name))
 
-    targetTypes.forEach(_TargetModel => {
-      const TargetModel = _TargetModel as ModelStaticWithGene
-      const typeName = TargetModel.name as string
+    targetTypes.forEach(TargetModel => {
+      const typeName = TargetModel.name
       const attributeName = getAttributeByModelName(typeName)
       const inverseKey = buildInversePolymorphicHasManyKey(BaseModel.name, typeName)
 
-      HasMany(() => BaseModel as ModelStatic, {
+      HasMany(() => BaseModel, {
         foreignKey: resolvedJunction.foreignKey,
         constraints: false,
         scope: { [resolvedJunction.discriminatorKey]: typeName },
       })(TargetModel.prototype, inverseKey)
 
-      if (!TargetModel.geneConfig) {
-        TargetModel.geneConfig = defineGraphqlGeneConfig(TargetModel, {}) as GeneConfig
-      }
+      TargetModel.geneConfig ??= defineGraphqlGeneConfig(TargetModel, {})
 
       ensureAssociationExcludedFromGeneConfig(TargetModel, inverseKey)
 
@@ -159,10 +165,10 @@ export function Polymorphic<M extends ModelStatic = ModelStatic>(
       const concreteGeneConfig = TargetModel.geneConfig
       concreteGeneConfig.__implementedInterfaces = concreteGeneConfig.__implementedInterfaces || []
 
-      concreteGeneConfig.__implementedInterfaces.push(BaseModelName)
+      concreteGeneConfig.__implementedInterfaces.push(BaseModel.name as GraphqlTypeName)
     })
 
-    registerPolymorphicAbstractType(BaseModelName)
+    registerPolymorphicAbstractType(BaseModel.name)
 
     BaseModel.geneConfig = defineGraphqlGeneConfig(BaseModel, {
       varType: 'interface',
@@ -183,10 +189,13 @@ export function Polymorphic<M extends ModelStatic = ModelStatic>(
            * Uses {@link resolvePolymorphicHubRow} per list item.
            */
           handler({ source, field }) {
-            const rawItems = source[field as keyof typeof source] as unknown
+            if (!isPlainObject(source)) return
+
+            const values = source as Record<string, unknown>
+            const rawItems = values[field]
             const items = Array.isArray(rawItems) ? rawItems : [rawItems]
 
-            source[field as keyof typeof source] = items.map(resolvePolymorphicHubRow) as never
+            values[field] = items.map(resolvePolymorphicHubRow)
           },
         },
       ],
@@ -196,16 +205,15 @@ export function Polymorphic<M extends ModelStatic = ModelStatic>(
 
 type PolymorphicHubInstance = Record<string, unknown> & {
   constructor: ModelStaticWithGene & {
-    geneConfig?: GeneConfig & {
-      __polymorphicAssociations?: readonly string[]
-      __polymorphicJunction?: { foreignKey: string; discriminatorKey: string }
-    }
+    geneConfig?: PolymorphicHubGeneConfig
   }
   _options?: { includeNames?: string[] }
 }
 
 /** Resolves one hub list element to a concrete block instance, a `{ id, __typename }` stub, or the raw hub row. */
-function resolvePolymorphicHubRow(hubInstance: PolymorphicHubInstance): unknown {
+function resolvePolymorphicHubRow(hubInstance: unknown): unknown {
+  if (!isPolymorphicHubInstance(hubInstance)) return hubInstance
+
   const cfg = hubInstance.constructor.geneConfig
   const associationNames = cfg?.__polymorphicAssociations ?? []
   const junction = cfg?.__polymorphicJunction
@@ -249,14 +257,23 @@ function resolvePolymorphicHubRow(hubInstance: PolymorphicHubInstance): unknown 
  * `items` facet, etc.). Uses the same logic as the hub model’s type-level directive.
  */
 export function resolvePolymorphicHubLoadedRows(rows: ReadonlyArray<unknown>): unknown[] {
-  return rows.map(row => resolvePolymorphicHubRow(row as PolymorphicHubInstance))
+  return rows.map(resolvePolymorphicHubRow)
 }
 
 /** Whether `value` is an object whose `constructor.name` matches the concrete Sequelize model name. */
 function isConcreteModelInstance(value: unknown, concreteModelName: string): boolean {
-  if (!value || typeof value !== 'object') return false
-  const ctor = (value as { constructor?: { name?: string } }).constructor
+  if (!isPlainObject(value)) return false
+
+  const ctor = hasConstructor(value) ? value.constructor : undefined
   return typeof ctor?.name === 'string' && ctor.name === concreteModelName
+}
+
+function hasConstructor(value: unknown): value is object & { constructor: { name?: string } } {
+  return isPlainObject(value) && 'constructor' in value && typeof value.constructor === 'function'
+}
+
+function isPolymorphicHubInstance(value: unknown): value is PolymorphicHubInstance {
+  return isPlainObject(value) && hasConstructor(value) && 'geneConfig' in value.constructor
 }
 
 /**
@@ -280,10 +297,10 @@ function ensureAssociationExcludedFromGeneConfig(
   const cfg = TargetModel.geneConfig
   if (!cfg) return
 
-  const exclude = [...(cfg.exclude ?? [])] as (string | RegExp)[]
+  const exclude = [...(cfg.exclude ?? [])]
 
   if (!exclude.some(e => typeof e === 'string' && e === graphqlFieldKey)) {
     exclude.push(graphqlFieldKey)
-    cfg.exclude = exclude as GeneConfig['exclude']
+    cfg.exclude = exclude
   }
 }

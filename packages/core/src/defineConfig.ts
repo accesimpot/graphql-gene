@@ -104,6 +104,16 @@ export type StrictExtendedTypes<
   TArgDefs extends ArgsDefinition = undefined,
 > = ExtendedTypes<TSource, TContext, TArgDefs, GraphqlReturnTypes<ValidGraphqlType>>
 
+/**
+ * One `include` / `exclude` entry: inferred model keys when `M` is a concrete model;
+ * plain `string` when `M` is still the default `unknown` (e.g. `Pick<GeneConfig, 'include'>`).
+ */
+export type GeneConfigFieldEntry<M = unknown> = unknown extends M
+  ? M extends unknown
+    ? string | RegExp
+    : InferFields<M> | RegExp
+  : InferFields<M> | RegExp
+
 export interface GeneConfig<
   M = unknown,
   TSource = M | Record<string, unknown> | undefined,
@@ -113,9 +123,9 @@ export interface GeneConfig<
   TVarType extends GraphQLVarType = GraphQLVarType,
 > {
   /** Array of fields to include in the GraphQL type (default: include all). */
-  include?: (InferFields<M> | RegExp)[]
+  include?: GeneConfigFieldEntry<M>[]
   /** Array of fields to exclude in the GraphQL type (default: ['createdAt', updatedAt']). */
-  exclude?: (InferFields<M> | RegExp)[]
+  exclude?: GeneConfigFieldEntry<M>[]
 
   /** To include the timestamp attributes or not (default: false). */
   includeTimestamps?: boolean | ('createdAt' | 'updatedAt')[]
