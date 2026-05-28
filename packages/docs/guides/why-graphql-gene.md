@@ -28,35 +28,172 @@ GraphQL Gene is the combination of those requirements: a small core plus plugins
 
 ## How graphql-gene delivers (in practice)
 
+Below are representative shapes from a Gene + Sequelize app: the **operations** clients send, and the **JSON** they get back. Setup (`generateSchema`, `geneConfig`, typing) is in the [main README](../../../README.md); conventions for `me`, mutations, and security are in [Schema design](./schema-design.md).
+
 ### Define models once; types follow
 
-You export ORM models and optional `defineType` / `defineEnum` helpers from a single `graphqlTypes` module, call `generateSchema`, and wire the result into any GraphQL server (Yoga, Apollo, etc.). The [main README](../../../README.md) walks through setup, `GeneSchema` / `GeneContext` augmentation with `GeneTypesToTypescript`, and inspecting `schemaString` / `schemaHtml` locally.
+You export ORM models (and optional `defineType` / `defineEnum` helpers) from one module; Gene emits SDL and resolvers from that source. `geneConfig` controls which fields appear on each GraphQL type, **aliases** (e.g. `User` vs `AuthenticatedUser`), and **directives**—no parallel schema to maintain.
 
-`geneConfig` on each model controls which columns appear on the GraphQL type, aliases (e.g. public `User` vs `AuthenticatedUser`), and directives—see [Schema design](./schema-design.md) for `me`, aliases, and cache-friendly mutations.
+### Scoped types: `me`, aliases, and directives
 
-### TypeScript without the usual pain
+The same Sequelize model can surface as different GraphQL types with different fields and auth. A public lookup stays narrow; `me` can load nested associations only when selected (lookahead).
 
-Mutation resolvers in the README show the intended experience: `args` and return shapes are **inferred** from the GraphQL definition you colocate on the model (`extendTypes`, `defineType`), so invalid enum literals or wrong payload shapes fail at compile time. There is no second schema layer to keep in sync.
+```graphql
+query PublicUser($id: ID!) {
+  user(id: $id) {
+    id
+    username
+  }
+}
 
-### Directives as first-class, typed middleware
+query MeForAccount {
+  me {
+    id
+    email
+    orders {
+      id
+      status
+    }
+  }
+}
+```
 
-Authorization, polymorphic rewriting, and other cross-cutting behavior use **`defineDirective`** factories attached in `geneConfig`. Handlers run around resolvers; at the type level, failed auth yields `null` on the field rather than a half-resolved object. See [Gene directives](./directives.md) and the [@userAuth example](../../../README.md#example-user-authentication-directive) in the README.
+Invalid or missing auth on `me` resolves to **`null` on the field**, not a hollow object:
 
-That design is what makes **granular access control** workable in production:
+```json
+{
+  "data": {
+    "me": null
+  }
+}
+```
 
-- **`@userAuth`** on `AuthenticatedUser` loads the session user once, with includes driven by the operation (`getQueryIncludeOf`).
-- **Aliases** expose different field sets for the same Sequelize model (`User` vs `AuthenticatedUser` vs admin-only types).
-- **Additional directives** can enforce rules that depend on nested data already on `context` from `me`—for example, allowing a field only when the parent case id is in the user's assigned cases—without hiding policy in unrelated top-level resolvers. [Schema design](./schema-design.md) documents keeping scope visible on types and fields instead of custom headers or implicit modes.
+Directive factories (`defineDirective`, `@userAuth`, etc.) attach in `geneConfig`—see [Gene directives](./directives.md). v2 will add first-class **`roles`** on types/fields aligned with the CMS module ([PLAN_V2 §5](../../../PLAN_V2.md#5-authorization-roles-in-field-config--auth-directive-factory-on-generateschema)).
 
-v2 will align this further with **first-class `roles` on types/fields** and a single auth directive factory on `generateSchema`, so CMS metadata and the public API share one RBAC story—see [PLAN_V2.md §5](../../../PLAN_V2.md#5-authorization-roles-in-field-config--auth-directive-factory-on-generateschema).
+### Generated queries, filters, and association lists
 
-### GraphQL-first operations
+Default Query resolvers and association fields get `where`, `order`, `skip`, and `limit` from your models—**including nested associations**. List associations return a **`count` + `items`** wrapper (dev-playground; [PLAN_V2 §2](../../../PLAN_V2.md#2-association-fields-from-flat-lists-to-a-standard-result-shape)).
 
-Default Query resolvers, nested `where` / `order` / `skip` / `limit`, and association-level filters are generated from the graph. Clients declare what they need; the Sequelize plugin uses lookahead so you do not manually `include` every association. For advanced shapes (polymorphic CMS blocks, computed fields), see [Polymorphic page blocks](./polymorphic-blocks.md) and the `findOptions` pattern in [Schema design](./schema-design.md).
+```graphql
+query OrderByStatus($status: String!) {
+  order(where: { status: { eq: $status } }, order: [updatedAt_DESC]) {
+    id
+    status
+    items {
+      count
+      items {
+        id
+        product {
+          name
+          color
+          group {
+            products(where: { color: { eq: "Blue Thunder" } }, limit: 5) {
+              count
+              items {
+                id
+                name
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+```json
+{
+  "data": {
+    "order": {
+      "id": "117",
+      "status": "paid",
+      "items": {
+        "count": 1,
+        "items": [
+          {
+            "id": "976",
+            "product": {
+              "name": "StreetStyle - Slate Thunder",
+              "color": "Slate Thunder",
+              "group": {
+                "products": {
+                  "count": 2,
+                  "items": [
+                    { "id": "116", "name": "StreetStyle - Blue Thunder" },
+                    { "id": "117", "name": "StreetStyle - Slate Thunder" }
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+Filters and pagination on the same association field (aliases optional):
+
+```graphql
+query OrderLists($id: String!, $notesLimit: Int = 5) {
+  order(id: $id) {
+    filtered: items(where: { quantity: { eq: 3 } }) {
+      count
+      items { id quantity }
+    }
+    notesFacet: notes(limit: $notesLimit) {
+      count
+      items { id body }
+    }
+  }
+}
+```
+
+```json
+{
+  "data": {
+    "order": {
+      "filtered": { "count": 1, "items": [{ "id": "976", "quantity": 3 }] },
+      "notesFacet": {
+        "count": 2,
+        "items": [{ "id": "1", "body": "Called client" }]
+      }
+    }
+  }
+}
+```
+
+Polymorphic CMS-style blocks (union + fragments) are in [Polymorphic page blocks](./polymorphic-blocks.md)—with a full query/response example there.
+
+### Mutations and TypeScript inference
+
+Mutations colocated on models return typed payloads—`args` and return shapes are inferred from the GraphQL definition (`extendTypes`, `defineType`), so enums and fields fail at compile time if they drift.
+
+```graphql
+mutation RegisterProspect($email: String!, $locale: String) {
+  registerProspect(email: $email, locale: $locale) {
+    type
+    text
+  }
+}
+```
+
+```json
+{
+  "data": {
+    "registerProspect": {
+      "type": "success",
+      "text": null
+    }
+  }
+}
+```
 
 ### Extensible without forking
 
-New ORMs or data sources can plug in via the plugin API—see [Writing a plugin](./writing-a-plugin.md). The core stays server- and ORM-agnostic.
+New ORMs or data sources plug in via the plugin API—see [Writing a plugin](./writing-a-plugin.md). The core stays server- and ORM-agnostic.
 
 ---
 
