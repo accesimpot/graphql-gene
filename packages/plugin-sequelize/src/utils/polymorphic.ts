@@ -52,9 +52,8 @@ export function hasHubColumn(modelCtor: ModelStatic, attributeKey: string): bool
   }
 
   const rawAttributes =
-    'rawAttributes' in modelCtor &&
-    isPlainObject((modelCtor as { rawAttributes?: unknown }).rawAttributes)
-      ? (modelCtor as { rawAttributes: Record<string, unknown> }).rawAttributes
+    'rawAttributes' in modelCtor && isPlainObject(modelCtor.rawAttributes)
+      ? modelCtor.rawAttributes
       : undefined
 
   return Boolean(rawAttributes && attributeKey in rawAttributes)
