@@ -54,8 +54,9 @@ class OrderItem extends Model {
 
       productOptions.where = { ...productOptions.where, isPublished: true }
 
-      // SQLite: required INNER JOINs on this association can generate invalid nested subqueries.
-      productOptions.required = OrderItem.sequelize?.getDialect?.() !== 'sqlite'
+      // By making it "required", we tell Sequelize to use an INNER JOIN, therefore exclude
+      // order items that don't have product.isPublished equal to `true`.
+      productOptions.required = true
     },
   })
 }
