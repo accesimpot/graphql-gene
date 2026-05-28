@@ -43,7 +43,7 @@ export type PolymorphicJunctionOptions = {
  * Sequelize-typescript stores `@Column` definitions in Reflect metadata (`sequelize:attributes`) when `reflect-metadata`
  * is loaded (standard for sequelize-typescript apps). Otherwise we rely on Sequelize `Model.rawAttributes` after init.
  */
-function hasHubColumn(modelCtor: ModelStatic, attributeKey: string): boolean {
+export function hasHubColumn(modelCtor: ModelStatic, attributeKey: string): boolean {
   const proto = modelCtor.prototype
 
   if (typeof Reflect.getMetadata === 'function') {
@@ -52,10 +52,9 @@ function hasHubColumn(modelCtor: ModelStatic, attributeKey: string): boolean {
   }
 
   const rawAttributes =
-    isPlainObject(modelCtor) &&
     'rawAttributes' in modelCtor &&
-    isPlainObject(modelCtor.rawAttributes)
-      ? modelCtor.rawAttributes
+    isPlainObject((modelCtor as { rawAttributes?: unknown }).rawAttributes)
+      ? (modelCtor as { rawAttributes: Record<string, unknown> }).rawAttributes
       : undefined
 
   return Boolean(rawAttributes && attributeKey in rawAttributes)
