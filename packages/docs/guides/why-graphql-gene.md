@@ -177,24 +177,38 @@ Polymorphic CMS-style blocks (union + fragments) are in [Polymorphic page blocks
 
 Mutations colocated on models return typed payloads—`args` and return shapes are inferred from the GraphQL definition (`extendTypes`, `defineType`), so enums and fields fail at compile time if they drift.
 
-```graphql
-mutation RegisterProspect($email: String!, $locale: String) {
-  registerProspect(email: $email, locale: $locale) {
-    type
-    text
-  }
-}
-```
+```ts
+export const OrderStatusEnum = defineEnum(['cart', 'payment', 'paid', 'shipped'])
 
-```json
-{
-  "data": {
-    "registerProspect": {
-      "type": "success",
-      "text": null
-    }
-  }
-}
+export const UpdateOrderStatusOutput = defineType({
+  message: 'String!',
+  order: 'Order',
+})
+
+extendTypes({
+  Mutation: {
+    updateOrderStatus: {
+      args: { id: 'String!', status: 'OrderStatusEnum!' },
+      returnType: 'UpdateOrderStatusOutput!',
+
+      async resolver({ args }) {
+        // args is inferred as:
+        // { id: string; status: 'cart' | 'payment' | 'paid' | 'shipped' }
+        const order = await Order.findByPk(args.id)
+
+        // Dummy mutation
+        order?.setDataValue('status', args.status)
+
+        // The return value is checked against UpdateOrderStatusOutput.
+        // e.g. TS error if we return undefined or an object with `message` only
+        return {
+          message: 'Status updated successfully.',
+          order,
+        }
+      },
+    },
+  },
+})
 ```
 
 ### Extensible without forking
