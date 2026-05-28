@@ -1,0 +1,42 @@
+---
+description: Prefer runtime narrowing over `as` type assertions in TypeScript
+globs: '**/*.{ts,mts}'
+alwaysApply: false
+---
+
+# TypeScript: avoid `as` type assertions
+
+Do not sprinkle `as SomeType` to silence the compiler. Assertions hide mistakes and **hurt type accuracy**; prefer code TypeScript can narrow from real checks.
+
+## Default approach
+
+Use runtime conditions and type guards so types follow JavaScript:
+
+- `typeof`, `in`, `instanceof`, `Array.isArray`, null checks
+- Shared guards (`isPlainObject`, `isObject`, etc.) from the codebase
+- Early returns and discriminated unions instead of casting
+
+```typescript
+// ❌ Avoid
+const attrs = (modelCtor as ModelStatic).rawAttributes
+
+// ✅ Prefer
+const rawAttributes =
+  'rawAttributes' in modelCtor && isPlainObject(modelCtor.rawAttributes)
+    ? modelCtor.rawAttributes
+    : undefined
+```
+
+## When `as` is acceptable (rare)
+
+Use a type assertion only if narrowing is impractical **and** one of these holds:
+
+1. **Safe** — you just validated the value (e.g. immediately after a guard or parse step).
+2. **Contained risk** — wrapped in `try`/`catch` or a small utility that catches invalid casts and fails clearly.
+3. **Types only** — the alternative is a large, fragile generic maze; document why in a one-line comment.
+
+Even then, prefer `satisfies`, explicit generics, or a named type-guard function over inline `as`.
+
+## Review bar
+
+If you reach for `as`, first try: refactor the types, add a guard, or fix the upstream API type. Treat new assertions as a last resort, not a default fix.
