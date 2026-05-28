@@ -288,6 +288,4 @@ These guides spell out conventions we use in production and in the dev playgroun
 
 ## Summary
 
-We built GraphQL Gene because no existing option combined **GraphQL-first** ergonomics, **Sequelize-aligned** schema generation, **deep TypeScript inference**, and **field-level authorization** tied to real user context—without a CMS platform's deploy surprises or a SaaS content model we do not own. It is the API layer Elio Tax runs in production today; we open-sourced it so teams with similar constraints can adopt the same patterns without reimplementing filters, lookahead, and directive middleware from scratch.
-
-There is **no admin UI in the box yet**—by design. The next major step is exposing the **CMS GraphQL backend** documented in [PLAN_V2.md](../../../PLAN_V2.md) so you can ship your own interface on top. Until then, start with the [main README](../../../README.md) quick setup, then [Schema design](./schema-design.md) for how we structure `me`, types, and safe operations around sensitive data.
+We built GraphQL Gene because no existing option combined **GraphQL-first** ergonomics, **schema as application code**, **deep TypeScript inference**, and **type or field-level authorization** tied to real user context—without publishing schema changes through a CMS platform or depending on a SaaS content model we do not own. It is the API layer Elio Tax runs in production today; we open-sourced it so teams with similar constraints can adopt the same patterns without reimplementing filters, lookahead, and directive middleware from scratch.
