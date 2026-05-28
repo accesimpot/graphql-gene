@@ -173,9 +173,9 @@ query OrderLists($id: String!) {
 
 Polymorphic CMS-style blocks (union + fragments) are in [Polymorphic page blocks](./polymorphic-blocks.md)—with a full query/response example there.
 
-### Mutations and TypeScript inference
+### Resolver TypeScript inference
 
-Mutations colocated on models return typed payloads—`args` and return shapes are inferred from the GraphQL definition (`extendTypes`, `defineType`), so enums and fields fail at compile time if they drift.
+Resolvers colocated on models return typed payloads for both queries and mutations—`args` and return shapes are inferred from the GraphQL definition (`extendTypes`, `defineType`), so enums and fields fail at compile time if they drift.
 
 ```ts
 export const OrderStatusEnum = defineEnum(['cart', 'payment', 'paid', 'shipped'])
