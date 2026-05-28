@@ -237,6 +237,10 @@ Contentful’s GraphQL API is polished and pleasant to query—including **neste
 
 Storyblok fits the same broad category as Contentful: excellent **headless CMS** GraphQL for marketing and editorial content, not for replacing a transactional Sequelize domain model. Useful for pages and components; not a substitute when the graph must mirror tax cases, filings, and assignments in **your** database with custom authorization.
 
+### Directus
+
+Directus is closer to Strapi than to graphql-gene: a self-hosted platform with a CMS interface, database-mirrored collections, and generated REST/GraphQL APIs. Its source of truth is the database plus Directus metadata; graphql-gene treats the schema more like **schema as code**, with Sequelize models, SDL, directives, and resolver extensions moving through the normal development process: mandatory code review, CI checks for breaking changes, and blue-green deployments. Directus is attractive when you want a full admin platform, but it carries similar Strapi-like tradeoffs: broad framework surface, runtime configuration to manage, and less natural resolver-level application code around individual GraphQL fields.
+
 ### Plain GraphQL server (Yoga, Apollo, etc.)
 
 Maximum control and minimal magic—and maximum **boilerplate**: every Query field, filter input, include strategy, and auth check must be written and kept consistent with TypeScript types. Teams that outgrow hand-rolled resolvers often adopt codegen or schema builders (Pothos, TypeGraphQL); graphql-gene targets the case where the **ORM is already the source of truth** and you want generated filters and default resolvers with escape hatches (`extendTypes`, custom resolvers, plugins).
