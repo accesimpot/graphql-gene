@@ -208,38 +208,44 @@ type PolymorphicHubInstance = Record<string, unknown> & {
   _options?: { includeNames?: string[] }
 }
 
+type PolymorphicHubInstanceWithJunction = PolymorphicHubInstance & {
+  constructor: PolymorphicHubInstance['constructor'] & {
+    geneConfig: PolymorphicHubGeneConfig & {
+      __polymorphicJunction: PolymorphicJunctionOptions
+    }
+  }
+}
+
 /** Resolves one hub list element to a concrete block instance, a `{ id, __typename }` stub, or the raw hub row. */
 function resolvePolymorphicHubRow(hubInstance: unknown): unknown {
   if (!isPolymorphicHubInstance(hubInstance)) return hubInstance
 
   const cfg = hubInstance.constructor.geneConfig
-  const associationNames = cfg?.__polymorphicAssociations ?? []
-  const junction = cfg?.__polymorphicJunction
+  const associationNames = cfg.__polymorphicAssociations ?? []
+  const junction = cfg.__polymorphicJunction
 
-  if (junction) {
-    const fkRaw = getModelAttributeValue(hubInstance, junction.foreignKey)
-    const discriminatorRaw = getModelAttributeValue(hubInstance, junction.discriminatorKey)
-    const typename =
-      discriminatorRaw === null || discriminatorRaw === undefined ? '' : String(discriminatorRaw)
+  const fkRaw = getModelAttributeValue(hubInstance, junction.foreignKey)
+  const discriminatorRaw = getModelAttributeValue(hubInstance, junction.discriminatorKey)
+  const typename =
+    discriminatorRaw === null || discriminatorRaw === undefined ? '' : String(discriminatorRaw)
 
-    if (typename.length > 0 && fkRaw !== null && fkRaw !== undefined) {
-      const canonicalKey = getAttributeByModelName(typename)
-      const canonical = hubInstance[canonicalKey]
-      if (isConcreteModelInstance(canonical, typename)) return canonical
+  if (typename.length > 0 && fkRaw !== null && fkRaw !== undefined) {
+    const canonicalKey = getAttributeByModelName(typename)
+    const canonical = hubInstance[canonicalKey]
+    if (isConcreteModelInstance(canonical, typename)) return canonical
 
-      for (const name of associationNames) {
-        const inst = hubInstance[name]
-        if (isConcreteModelInstance(inst, typename)) return inst
-      }
-
-      let id: unknown = fkRaw
-      if (typeof fkRaw === 'string' && fkRaw.trim() !== '') {
-        const numeric = Number(fkRaw)
-        id = Number.isFinite(numeric) ? numeric : fkRaw
-      }
-
-      return { __typename: typename, id }
+    for (const name of associationNames) {
+      const inst = hubInstance[name]
+      if (isConcreteModelInstance(inst, typename)) return inst
     }
+
+    let id: unknown = fkRaw
+    if (typeof fkRaw === 'string' && fkRaw.trim() !== '') {
+      const numeric = Number(fkRaw)
+      id = Number.isFinite(numeric) ? numeric : fkRaw
+    }
+
+    return { __typename: typename, id }
   }
 
   for (const name of associationNames) {
@@ -270,8 +276,28 @@ function hasConstructor(value: unknown): value is object & { constructor: { name
   return isPlainObject(value) && 'constructor' in value && typeof value.constructor === 'function'
 }
 
-function isPolymorphicHubInstance(value: unknown): value is PolymorphicHubInstance {
-  return isPlainObject(value) && hasConstructor(value) && 'geneConfig' in value.constructor
+function isPolymorphicHubGeneConfig(
+  geneConfig: unknown
+): geneConfig is PolymorphicHubGeneConfig & { __polymorphicJunction: PolymorphicJunctionOptions } {
+  if (!isPlainObject(geneConfig) || !('__polymorphicJunction' in geneConfig)) return false
+
+  const junction = geneConfig['__polymorphicJunction']
+  return (
+    isPlainObject(junction) &&
+    'foreignKey' in junction &&
+    typeof junction['foreignKey'] === 'string' &&
+    'discriminatorKey' in junction &&
+    typeof junction['discriminatorKey'] === 'string'
+  )
+}
+
+function isPolymorphicHubInstance(value: unknown): value is PolymorphicHubInstanceWithJunction {
+  return (
+    isPlainObject(value) &&
+    hasConstructor(value) &&
+    'geneConfig' in value.constructor &&
+    isPolymorphicHubGeneConfig(value.constructor.geneConfig)
+  )
 }
 
 /**
