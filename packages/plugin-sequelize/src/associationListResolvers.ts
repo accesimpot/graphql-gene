@@ -72,7 +72,7 @@ export const geneAssociationListPayloadByWrapperRoot = new WeakMap<
  * includes and hooks as the parent query) stay valid when the client did not narrow the facet.
  */
 function isAssociationFacetRequiringFreshQuery(facetArgs: Record<string, unknown>): boolean {
-  if (isObject(facetArgs.where) && facetArgs.where !== null) return true
+  if (isObject(facetArgs.where)) return true
   if (Array.isArray(facetArgs.order)) return true
 
   const limit = typeof facetArgs.limit === 'number' ? facetArgs.limit : LIMIT_ARG_DEFAULT
