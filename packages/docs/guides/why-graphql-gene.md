@@ -6,7 +6,7 @@ This guide explains the problems we kept hitting elsewhere, how graphql-gene add
 
 **Today:** graphql-gene is a **schema and resolver library**—there is no CMS admin UI yet (coming soon). You define models in code, generate the GraphQL API, and ship your own clients.
 
-**Coming (v2 sneak peek):** we are porting a **CMS backend module** we already run in production into the library—`cms` queries and mutations, `*Meta` for dynamic forms, hierarchy-based discovery—so admin workflows can use the same GraphQL contract as your product API. We also plan a **hosted admin experience**—including a free tier that connects to your GraphQL API (you keep the servers and database; we host the admin app). That UI will not live in this open-source repo. See [PLAN_V2.md](../../../PLAN_V2.md) (especially §4 Admin CRUD and §4.6 navigation) for goals, scope, and boundaries.
+**Coming (v2 sneak peek):** we want to port a **CMS backend module** we already run in production into the library—`cms` queries and mutations, `*Meta` for dynamic forms, hierarchy-based discovery—so admin workflows can use the same GraphQL contract as your product API. We also plan a **hosted admin experience**—including a free tier that connects to your GraphQL API (you keep the servers and database; we host the admin app). That UI will not live in this open-source repo. See [PLAN_V2.md](../../../PLAN_V2.md) (especially §4 Admin CRUD and §4.6 navigation) for goals, scope, and boundaries.
 
 ---
 
