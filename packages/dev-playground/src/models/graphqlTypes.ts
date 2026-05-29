@@ -1,3 +1,6 @@
+/** Initializes Sequelize models (associations) before SDL/schema consumers import concrete types. */
+import './sequelize'
+
 export * from './models'
 
 export { ProductReviewAverage, IntegrationDemoUnion } from './Product/Product.model'

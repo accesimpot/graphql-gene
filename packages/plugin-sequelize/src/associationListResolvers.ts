@@ -9,7 +9,13 @@ import {
 } from 'graphql'
 import type { Association, ModelStatic } from 'sequelize'
 import { Model } from 'sequelize-typescript'
-import { getGloballyExtendedTypes, type AnyObject } from 'graphql-gene'
+import {
+  getGloballyExtendedTypes,
+  isObject,
+  LIMIT_ARG_DEFAULT,
+  SKIP_ARG_DEFAULT,
+  type AnyObject,
+} from 'graphql-gene'
 import { getFieldIncludeOptions, getQueryInclude } from './utils/public'
 import { stripAssociationListWrapperIncludes } from './utils/includePostProcess'
 import { resolvePolymorphicHubLoadedRows } from './utils/polymorphic'
@@ -56,6 +62,24 @@ export const geneAssociationListPayloadByWrapperRoot = new WeakMap<
   Record<string, unknown>,
   GeneAssociationListWeakPayload
 >()
+
+/**
+ * When true, a bare Sequelize preload of the association cannot satisfy the request; we must
+ * query with `getFieldIncludeOptions` (pagination, filters, order).
+ *
+ * GraphQL may supply default `limit`/`skip` values; we only reload when pagination differs from
+ * those defaults or when `where` / `order` are set, so preloaded rows (built with the same
+ * includes and hooks as the parent query) stay valid when the client did not narrow the facet.
+ */
+function isAssociationFacetRequiringFreshQuery(facetArgs: Record<string, unknown>): boolean {
+  if (isObject(facetArgs.where)) return true
+  if (Array.isArray(facetArgs.order)) return true
+
+  const limit = typeof facetArgs.limit === 'number' ? facetArgs.limit : LIMIT_ARG_DEFAULT
+  const skip = typeof facetArgs.skip === 'number' ? facetArgs.skip : SKIP_ARG_DEFAULT
+
+  return limit !== LIMIT_ARG_DEFAULT || skip !== SKIP_ARG_DEFAULT
+}
 
 function assertAssociationJoinColumns(assoc: Association): AssociationJoinColumns {
   if (!hasAssociationJoinColumns(assoc)) {
@@ -196,7 +220,7 @@ export function attachAssociationListWrapperResolvers(schema: GraphQLSchema, typ
         const wrapperRoot: Record<string, unknown> = {}
         const preload = isSafeArray(prior) ? prior : Reflect.get(parent, fieldName)
 
-        if (isSafeArray(preload)) {
+        if (isSafeArray(preload) && !isAssociationFacetRequiringFreshQuery(facetArgs)) {
           // Staged copy: type-level directives filter `source[field]` (`items`) in-place before the
           // facet resolver runs; Sequelize's preload array must stay untouched.
           wrapperRoot.items = resolvePolymorphicHubLoadedRows(preload.slice())

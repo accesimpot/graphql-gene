@@ -202,8 +202,19 @@ export function getDefaultFieldLinesObject(): FieldLines[0] {
   return { directives: new Set<string>([]), typeDef: '', argsDef: {} }
 }
 
-export function isObject<T>(variable: T) {
-  return variable !== null && typeof variable === 'object'
+type IsAny<T> = 0 extends 1 & T ? true : false
+type ObjectLike<T> = IsAny<T> extends true ? unknown : T extends readonly unknown[] ? T : object
+type PlainObject<T> = IsAny<T> extends true ? object : T extends object ? T : object
+
+export function isObject<T>(value: T): value is T & ObjectLike<T> {
+  return value !== null && typeof value === 'object'
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- `any` input must narrow to `object`, not stay `any`
+export function isPlainObject(value: any): value is object
+export function isPlainObject<T>(value: T): value is T & PlainObject<T>
+export function isPlainObject(value: unknown): boolean {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
 export function isEmptyObject<T extends object>(obj: T) {

@@ -204,6 +204,7 @@ describe('integration', () => {
 
       it('returns the real value of each field having the directive', () => {
         expect(result.data?.order?.items?.items?.length).toBeTruthy()
+
         expect(
           result.data?.order?.items?.items?.every(
             (item: GqlOrderItemRow) => typeof item.product?.isPublished === 'boolean'
@@ -457,6 +458,21 @@ describe('integration', () => {
             },
           ],
         },
+      })
+    })
+
+    it('resolves junction rows with id and __typename without concrete-table inline fragments', async () => {
+      const result = await execute<PageQueryPayload>({
+        document: getFixtureQuery('queries/pagePolymorphicBlocksTypenamesOnly.gql'),
+        variables: { path: demoPath },
+      })
+
+      expect(result.errors).toBeUndefined()
+      expect(result.data?.pageByPath?.blocks).toEqual({
+        items: [
+          { id: expect.any(Number), __typename: 'HeroBlock' },
+          { id: expect.any(Number), __typename: 'TextBlock' },
+        ],
       })
     })
   })

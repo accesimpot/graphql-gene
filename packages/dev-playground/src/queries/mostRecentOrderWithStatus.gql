@@ -1,0 +1,28 @@
+query mostRecentOrderWithStatus($status: String!) {
+  order(where: { status: { eq: $status } }, order: [updatedAt_DESC]) {
+    id
+    status
+    updatedAt
+
+    items {
+      id
+      price
+      quantity
+      product {
+        name
+        color
+
+        group {
+          product {
+            id
+          }
+          groupCategories {
+            category {
+              name
+            }
+          }
+        }
+      }
+    }
+  }
+}
