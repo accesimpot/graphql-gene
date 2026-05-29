@@ -186,7 +186,7 @@ describe('integration', () => {
         expect(result.data?.order?.items?.items?.length).toBeTruthy()
         expect(
           result.data?.order?.items?.items?.every(
-            (item: GqlOrderItemRow) => item.product?.isPublished == null
+            (item: GqlOrderItemRow) => item.product?.isPublished === null
           )
         ).toBe(true)
       })
@@ -203,24 +203,12 @@ describe('integration', () => {
       })
 
       it('returns the real value of each field having the directive', () => {
-        const rows = result.data?.order?.items?.items ?? []
-        expect(rows.length).toBeTruthy()
+        expect(result.data?.order?.items?.items?.length).toBeTruthy()
 
         expect(
-          rows.some((item: GqlOrderItemRow) => {
-            const product = item.product
-            return (
-              product != null && (product.isPublished === true || product.isPublished === false)
-            )
-          })
-        ).toBe(true)
-
-        expect(
-          rows.every((item: GqlOrderItemRow) => {
-            const product = item.product
-            if (product == null) return true
-            return product.isPublished === true || product.isPublished === false
-          })
+          result.data?.order?.items?.items?.every(
+            (item: GqlOrderItemRow) => typeof item.product?.isPublished === 'boolean'
+          )
         ).toBe(true)
       })
     })
