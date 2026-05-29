@@ -71,7 +71,7 @@ extendTypes({
 })
 ```
 
-**Hub** ([Sequelize polymorphic junction](https://sequelize.org/docs/v6/advanced-association-concepts/polymorphic-associations/#configuring-a-many-to-many-polymorphic-association)) — **`@Polymorphic(() => […])`** adds junction columns by default (`targetId` + `targetType`, overridable) and wires scoped inverse `HasMany` relations on concrete models, hub `BelongsTo` accessors (`heroBlock`, `textBlock`, …), Gene excludes on inverse accessors, the hub `interface`, and the rewriting directive.
+**Hub** ([Sequelize polymorphic junction](https://sequelize.org/docs/v6/advanced-association-concepts/polymorphic-associations/#configuring-a-many-to-many-polymorphic-association)) — `@Polymorphic(() => […])` adds junction columns by default (`targetId` + `targetType`, overridable) and wires scoped inverse `HasMany` relations on concrete models, hub `BelongsTo` accessors (`heroBlock`, `textBlock`, …), Gene excludes on inverse accessors, the hub `interface`, and the rewriting directive.
 
 ```ts
 import { BelongsTo, Column, DataType, ForeignKey, Model, Table } from 'sequelize-typescript'
@@ -96,7 +96,7 @@ export class PageBlock extends Model {
 }
 ```
 
-After `sequelize.sync`, the pivot table carries **`targetId`** and **`targetType`** (unless you passed custom names or declared those columns yourself), plus **`pageId`**. `targetType` stores each concrete Sequelize model name (e.g. `HeroBlock`). One pivot row ⇒ one block ⇒ one `(targetType, targetId)` pair.
+After `sequelize.sync`, the pivot table carries `targetId` and `targetType` (unless you passed custom names or declared those columns yourself), plus `pageId`. `targetType` stores each concrete Sequelize model name (e.g. `HeroBlock`). One pivot row ⇒ one block ⇒ one `(targetType, targetId)` pair.
 
 **Concrete blocks** — ordinary models with `geneConfig` as needed (only an excerpt shown).
 
@@ -113,11 +113,11 @@ export class HeroBlock extends Model {
 
 ## Equivalent without Polymorphic
 
-Plain Sequelize follows the polymorphic junction pattern: **`HeroBlock.hasMany(PageBlock)`** with **`foreignKey: 'targetId'`** (or your chosen FK), **`constraints: false`**, **`scope: { targetType: 'HeroBlock' }`** (or your discriminator key), mirrored for **`TextBlock`**. The pivot declares **`BelongsTo(HeroBlock)`** / **`BelongsTo(TextBlock)`** without `scope`.
+Plain Sequelize follows the polymorphic junction pattern: `HeroBlock.hasMany(PageBlock)` with `foreignKey: 'targetId'` (or your chosen FK), `constraints: false`, `scope: { targetType: 'HeroBlock' }` (or your discriminator key), mirrored for `TextBlock`. The pivot declares `BelongsTo(HeroBlock)` / `BelongsTo(TextBlock)` without `scope`.
 
-`@Polymorphic` creates those scoped inverse accessors under **`_geneInversePolymorphic…`** names and adds them to each concrete model’s **`geneConfig.exclude`** so they never become GraphQL fields. It still registers **`PageBlock`** as an `interface`, wires concrete implementations, attaches the rewriter (`id` + `__typename` without fragment-shaped includes when appropriate), and matches inline fragments → nested includes.
+`@Polymorphic` creates those scoped inverse accessors under `_geneInversePolymorphic…` names and adds them to each concrete model’s `geneConfig.exclude` so they never become GraphQL fields. It still registers `PageBlock` as an `interface`, wires concrete implementations, attaches the rewriter (`id` + `__typename` without fragment-shaped includes when appropriate), and matches inline fragments → nested includes.
 
-Trace **`packages/plugin-sequelize` → `Polymorphic`** when duplicating decorators manually.
+Trace `packages/plugin-sequelize` → `Polymorphic` when duplicating decorators manually.
 
 ## Querying
 
@@ -189,13 +189,13 @@ Shape only; numeric `id`s are illustrative.
 
 ## What graphql-gene does
 
-`@Polymorphic` mirrors Sequelize’s polymorphic junction recipe: scoped inverse **`HasMany`** relations live on concrete models (**`constraints: false`**, **`foreignKey` + discriminator scope**) while the hub exposes plain **`BelongsTo`** accessors (`heroBlock`, `textBlock`, …) keyed by the same FK. Sequelize therefore merges discriminators onto **`PageBlocks`** when expanding nested includes underneath **`Page.blocks`**, keeping **`limit` / `skip`** aligned with pivot rows—not with each nullable FK column alternative.
+`@Polymorphic` mirrors Sequelize’s polymorphic junction recipe: scoped inverse `HasMany` relations live on concrete models (`constraints: false`, `foreignKey` + discriminator scope) while the hub exposes plain `BelongsTo` accessors (`heroBlock`, `textBlock`, …) keyed by the same FK. Sequelize therefore merges discriminators onto `PageBlocks` when expanding nested includes underneath `Page.blocks`, keeping `limit` / `skip` aligned with pivot rows—not with each nullable FK column alternative.
 
-Gene’s rewriting directive runs before nested resolvers hydrate: prefer Sequelize instances whose **`constructor.name`** matches **`targetType`**, otherwise synthesize **`{ id: targetId, __typename: targetType }`** so callers can retrieve **`__typename`** (and FK-backed **id** fields) without includes for unrelated concrete branches.
+Gene’s rewriting directive runs before nested resolvers hydrate: prefer Sequelize instances whose `constructor.name` matches `targetType`, otherwise synthesize `{ id: targetId, __typename: targetType }` so callers can retrieve `__typename` (and FK-backed `id` fields) without includes for unrelated concrete branches.
 
-GraphQL still exposes a **`PageBlock`-named `interface` constrained to **`id`**; discriminator / FK columns and editorial pivot metadata stay Sequelize-only unless you opt them back into **`geneConfig.include`\*\*.
+GraphQL still exposes a `PageBlock`-named `interface` constrained to `id`; discriminator / FK columns and editorial pivot metadata stay Sequelize-only unless you opt them back into `geneConfig.include`.
 
-The page retains a canonical **`HasMany` → pivot** association; **`PageBlock`** joins concrete tables polymorphically underneath.
+The page retains a canonical `HasMany` → pivot association; `PageBlock` joins concrete tables polymorphically underneath.
 
 ## Frontend and component trees
 
