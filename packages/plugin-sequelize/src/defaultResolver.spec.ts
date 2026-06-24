@@ -95,4 +95,38 @@ describe('defaultResolver', () => {
     const findOptions = findAll.mock.calls[0]?.[0] as { include: DefaultResolverIncludeOptions[] }
     expect(findOptions.include).toEqual([lookaheadInclude])
   })
+
+  it('does not pass unstripped lookahead includes after wrapper stripping empties the merge', async () => {
+    const { defaultResolver } = await import('./defaultResolver')
+
+    const wrapperInclude: DefaultResolverIncludeOptions = {
+      association: 'items',
+      include: [{ association: 'product' }],
+    }
+
+    getFieldFindOptions.mockReturnValue({ where: { status: { [Op.eq]: 'paid' } } })
+    getQueryInclude.mockReturnValue({ include: [wrapperInclude] })
+
+    stripAssociationListWrapperIncludes.mockImplementation((_model, includes) => {
+      includes.splice(0, includes.length)
+    })
+
+    const findOne = vi.fn().mockResolvedValue(null)
+    const model = {
+      name: 'Order',
+      associations: {},
+      findOne,
+    }
+
+    await defaultResolver({
+      model,
+      modelKey: 'Order',
+      config: { returnType: 'Order' },
+      args: { where: { status: { eq: 'paid' } } },
+      info: {} as GraphQLResolveInfo,
+    })
+
+    const findOptions = findOne.mock.calls[0]?.[0] as { include?: DefaultResolverIncludeOptions[] }
+    expect(findOptions.include).toBeUndefined()
+  })
 })
