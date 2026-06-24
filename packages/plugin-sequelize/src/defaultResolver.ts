@@ -38,12 +38,18 @@ export async function defaultResolver<
   })
   const includeOptions = getQueryInclude(options.info)
 
-  if (includeOptions?.include?.length) {
-    stripAssociationListWrapperIncludes(model, includeOptions.include)
+  const mergedInclude = [
+    ...(topLevelFindOptions.include ?? []),
+    ...(includeOptions?.include ?? []),
+  ]
+
+  if (mergedInclude.length) {
+    stripAssociationListWrapperIncludes(model, mergedInclude)
   }
 
   return (await model[findFn]({
     ...topLevelFindOptions,
     ...includeOptions,
+    ...(mergedInclude.length ? { include: mergedInclude } : {}),
   })) as GraphqlToTypescript<ModelKey>
 }
