@@ -4,10 +4,6 @@ GraphQL Gene is an open-source library built by [Elio Tax](https://www.elio-tax.
 
 This guide explains the problems we kept hitting elsewhere, how graphql-gene addresses them today, and how it fits next to other tools you may already know.
 
-**Today:** graphql-gene is a **schema and resolver library**—there is no CMS admin UI yet (coming soon). You define models in code, generate the GraphQL API, and ship your own clients.
-
-**Coming (v2 sneak peek):** we want to port a **CMS backend module** we already run in production into the library—`cms` queries and mutations, `*Meta` for dynamic forms, hierarchy-based discovery—so admin workflows can use the same GraphQL contract as your product API. We also plan a **hosted admin experience**—including a free tier that connects to your GraphQL API (you keep the servers and database; we host the admin app). That UI will not live in this open-source repo. See [PLAN_V2.md](../../../PLAN_V2.md) (especially §4 Admin CRUD and §4.6 navigation) for goals, scope, and boundaries.
-
 ---
 
 ## What we needed
@@ -258,45 +254,6 @@ Directus is closer to Strapi than to graphql-gene: a self-hosted platform with a
 ### Plain GraphQL server (Yoga, Apollo, etc.)
 
 Maximum control and minimal magic—and maximum **boilerplate**: every Query field, filter input, include strategy, and auth check must be written and kept consistent with TypeScript types. Teams that outgrow hand-rolled resolvers often adopt codegen or schema builders (Pothos, TypeGraphQL); graphql-gene targets the case where the **ORM is already the source of truth** and you want generated filters and default resolvers with escape hatches (`extendTypes`, custom resolvers, plugins).
-
-### Other tools worth a look
-
-| Tool                                         | Relevance                                                                                                                                                                                                  |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Hasura / PostGraphile**                    | Strong auto GraphQL over SQL with row-level permissions in their metadata layer—great for Postgres-centric greenfield APIs, different from colocating auth on Sequelize models and `me`-driven directives. |
-| **Directus**                                 | Another self-hosted headless CMS with GraphQL; similar Strapi-like tradeoffs (platform vs library).                                                                                                        |
-| **Prisma + Pothos / GraphQL Code Generator** | Code-first or schema-first TypeScript with manual or generated types—more assembly required, no Sequelize-native default resolvers and nested `where` generation out of the box.                           |
-
----
-
-## Sneak peek: CMS backend (v2)
-
-We already run a **production admin CRUD pattern** in a private Elio Tax app (`enableAdminCrud`, `Query.cms` / `Mutation.cms`, `*Meta` JSON for form builders). **Gene v2** will move **only that backend** into this repository so open-source users get the same GraphQL contract without our product-specific Vue UI.
-
-| In scope in the library                                                                                                                                                         | Stays outside (your product)                  |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| `cms` namespace: list, get-by-id, create/update/delete, `*Meta`                                                                                                                 | Vue/React admin shell, routing, design system |
-| `registerCmsModel` (opt-in per model; no default root mutations for every type)                                                                                                 | Copy, branding, locale bundles                |
-| Hierarchy-aware **discovery** from `me` and associations—not a flat model dump ([§4.6](../../../PLAN_V2.md#46-navigation--discovery-association-hierarchy-not-flat-model-list)) |                                               |
-| Unified **`roles`** + auth directive factory with the public API ([§5](../../../PLAN_V2.md#5-authorization-roles-in-field-config--auth-directive-factory-on-generateschema))    |                                               |
-
-**Not in scope:** a reference CMS **interface** shipped from this repo ([PLAN_V2 §1 non-goals](../../../PLAN_V2.md#1-goals)). Polymorphic page blocks already work in the dev playground today; v2 will push further toward **GraphQL unions** for heterogeneous block lists ([§2.8](../../../PLAN_V2.md#28-polymorphic-associations-and-graphql-unions-page-blocks)).
-
-Typical flow for a CMS UI you build yourself (from [§5.8](../../../PLAN_V2.md#58-cms-discovery-flow-for-consumers-building-their-own-ui)): discovery/nav query → `*Meta` for the screen → data query with only the fields that role may see.
-
----
-
-## Design principles we document elsewhere
-
-These guides spell out conventions we use in production and in the dev playground:
-
-| Topic                                                 | Guide                                              |
-| ----------------------------------------------------- | -------------------------------------------------- |
-| `me`, aliases, mutations returning entities, security | [Schema design](./schema-design.md)                |
-| Directive handlers and SDL printing                   | [Directives](./directives.md)                      |
-| Polymorphic lists (CMS-style blocks)                  | [Polymorphic page blocks](./polymorphic-blocks.md) |
-| Custom ORM or data backends                           | [Writing a plugin](./writing-a-plugin.md)          |
-| v2 roadmap (CMS module, pagination, RBAC)             | [PLAN_V2.md](../../../PLAN_V2.md)                  |
 
 ---
 
