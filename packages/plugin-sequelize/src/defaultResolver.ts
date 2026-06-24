@@ -38,10 +38,7 @@ export async function defaultResolver<
   })
   const includeOptions = getQueryInclude(options.info)
 
-  const mergedInclude = [
-    ...(topLevelFindOptions.include ?? []),
-    ...(includeOptions?.include ?? []),
-  ]
+  const mergedInclude = [...(topLevelFindOptions.include ?? []), ...(includeOptions?.include ?? [])]
 
   if (mergedInclude.length) {
     stripAssociationListWrapperIncludes(model, mergedInclude)
