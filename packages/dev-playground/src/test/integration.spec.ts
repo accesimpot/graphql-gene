@@ -427,6 +427,24 @@ describe('integration', () => {
         expect(orderRow.notesFacet.count).toBe(2)
       }
     )
+
+    it('filters association list items with one-level-deep where on a related model', async () => {
+      const result = await execute({
+        document: getFixtureQuery('queries/orderItemsDeepFilter.gql'),
+        variables: { id: '399', productName: 'Fusion - Ocean Mist' },
+      })
+
+      expect(result.errors).toBeUndefined()
+
+      const facet = (
+        result.data?.order as unknown as {
+          byProductName: { count: number; items: { product: { name: string } }[] }
+        }
+      ).byProductName
+
+      expect(facet.count).toBe(1)
+      expect(facet.items.every(row => row.product.name === 'Fusion - Ocean Mist')).toBe(true)
+    })
   })
 
   describe('polymorphic page blocks (GraphQL interface + @Polymorphic)', () => {

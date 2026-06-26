@@ -28,15 +28,28 @@ export async function defaultResolver<
   const isList = isListType(parseType(options.config.returnType))
   const findFn = isList ? 'findAll' : 'findOne'
 
-  const topLevelFindOptions = getFieldFindOptions({ args: options.args, isList })
+  const topLevelFindOptions = getFieldFindOptions({
+    args: options.args,
+    isList,
+    filterContext: {
+      ownerGraphqlType: model.name,
+      includes: [],
+    },
+  })
   const includeOptions = getQueryInclude(options.info)
 
-  if (includeOptions?.include?.length) {
-    stripAssociationListWrapperIncludes(model, includeOptions.include)
+  const mergedInclude = [...(topLevelFindOptions.include ?? []), ...(includeOptions?.include ?? [])]
+
+  if (mergedInclude.length) {
+    stripAssociationListWrapperIncludes(model, mergedInclude)
   }
 
+  const { include: _discardedTopInclude, ...restTopLevelFindOptions } = topLevelFindOptions
+  const { include: _discardedInclude, ...restIncludeOptions } = includeOptions ?? {}
+
   return (await model[findFn]({
-    ...topLevelFindOptions,
-    ...includeOptions,
+    ...restTopLevelFindOptions,
+    ...restIncludeOptions,
+    ...(mergedInclude.length > 0 ? { include: mergedInclude } : {}),
   })) as GraphqlToTypescript<ModelKey>
 }

@@ -157,13 +157,19 @@ async function ensureAssociationItemsFacetLoaded(
     args: facetArgs,
     isList: true,
     omitAssociation: true,
+    filterContext: {
+      ownerGraphqlType: TargetModel.name,
+      includes: [],
+    },
   })
 
   const nestedInclude = getQueryInclude(info)
   const mergedFind: DefaultResolverIncludeOptions = { ...(nestedInclude || {}) }
   applyGeneConfigRootFindOptions(TargetModel, mergedFind)
 
-  if (mergedFind.include?.length) {
+  const mergedInclude = [...(columnOpts.include || []), ...(mergedFind.include || [])]
+  if (mergedInclude.length) {
+    mergedFind.include = mergedInclude
     stripAssociationListWrapperIncludes(TargetModel, mergedFind.include)
   }
 
@@ -274,10 +280,15 @@ export function attachAssociationListWrapperResolvers(schema: GraphQLSchema, typ
           args: facetArgs,
           isList: false,
           omitAssociation: true,
+          filterContext: {
+            ownerGraphqlType: TargetModel.name,
+            includes: [],
+          },
         })
 
         return TargetModel.count({
           where: { ...fkWhere, ...filterOpts.where },
+          include: filterOpts.include,
           distinct: true,
         })
       }

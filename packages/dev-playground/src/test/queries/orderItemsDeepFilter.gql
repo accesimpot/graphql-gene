@@ -1,0 +1,16 @@
+query orderItemsDeepFilter($id: String!, $productName: String!) {
+  order(id: $id) {
+    id
+    byProductName: items(where: { product: { name: { eq: $productName } } }) {
+      count
+      items {
+        id
+        quantity
+        product {
+          id
+          name
+        }
+      }
+    }
+  }
+}
