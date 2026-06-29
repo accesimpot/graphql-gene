@@ -19,7 +19,8 @@ declare module 'graphql-gene/plugin-settings' {
         : 'id'
       findOptionsState: DefaultResolverIncludeOptions
       modelClassOf: PrototypeOrNot<M> extends Model
-        ? abstract new (...args: any) => PrototypeOrNot<M>
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          abstract new (...args: any) => PrototypeOrNot<M>
         : never
     }>
   }

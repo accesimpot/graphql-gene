@@ -8,7 +8,10 @@ import {
 import type { GeneContext } from 'graphql-gene/context'
 import type { Model as SequelizeModel, ModelStatic } from 'sequelize'
 import { getQueryInclude, getFieldFindOptions } from './utils'
-import { stripAssociationListWrapperIncludes, shallowGeneHydrationIncludes } from './utils/includePostProcess'
+import {
+  stripAssociationListWrapperIncludes,
+  shallowGeneHydrationIncludes,
+} from './utils/includePostProcess'
 
 export async function defaultResolver<
   M,

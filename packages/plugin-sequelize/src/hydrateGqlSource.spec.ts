@@ -11,10 +11,8 @@ describe('hydrateGqlSource', () => {
       await UnitChild.create({ parentId: parent.id })
 
       const { markFieldAsAssociation } = await import('./utils/associationMap')
-      const {
-        registerGeneAssociationListWrapper,
-        getGeneAssociationListWrapperTypeName,
-      } = await import('./utils/associationListRegistry')
+      const { registerGeneAssociationListWrapper, getGeneAssociationListWrapperTypeName } =
+        await import('./utils/associationListRegistry')
 
       const wrapperName = getGeneAssociationListWrapperTypeName('UnitParent', 'items')
       registerGeneAssociationListWrapper(wrapperName, {

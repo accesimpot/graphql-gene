@@ -334,9 +334,19 @@ describe('attachAssociationListWrapperResolvers', () => {
 })
 
 describe('attachAssociationListWrapperResolvers (BelongsToMany)', () => {
-  let sequelize: Awaited<ReturnType<typeof import('./associationListResolvers.fixtures').createUnitBelongsToManySqlite>>['sequelize'] | undefined
-  let B2MParent: Awaited<ReturnType<typeof import('./associationListResolvers.fixtures').createUnitBelongsToManySqlite>>['B2MParent']
-  let B2MTag: Awaited<ReturnType<typeof import('./associationListResolvers.fixtures').createUnitBelongsToManySqlite>>['B2MTag']
+  let sequelize:
+    | Awaited<
+        ReturnType<
+          typeof import('./associationListResolvers.fixtures').createUnitBelongsToManySqlite
+        >
+      >['sequelize']
+    | undefined
+  let B2MParent: Awaited<
+    ReturnType<typeof import('./associationListResolvers.fixtures').createUnitBelongsToManySqlite>
+  >['B2MParent']
+  let B2MTag: Awaited<
+    ReturnType<typeof import('./associationListResolvers.fixtures').createUnitBelongsToManySqlite>
+  >['B2MTag']
 
   beforeAll(async () => {
     const { createUnitBelongsToManySqlite } = await import('./associationListResolvers.fixtures')
@@ -351,8 +361,15 @@ describe('attachAssociationListWrapperResolvers (BelongsToMany)', () => {
   })
 
   it('resolves count and items for a BelongsToMany association wrapper field', async () => {
-    const { GraphQLSchema, GraphQLObjectType, GraphQLInt, GraphQLNonNull, GraphQLList, GraphQLString, graphql } =
-      await import('graphql')
+    const {
+      GraphQLSchema,
+      GraphQLObjectType,
+      GraphQLInt,
+      GraphQLNonNull,
+      GraphQLList,
+      GraphQLString,
+      graphql,
+    } = await import('graphql')
 
     const parent = await B2MParent.create({})
     const tagA = await B2MTag.create({ label: 'alpha' })
@@ -449,8 +466,15 @@ describe('attachGqlSourceHydrationResolvers', () => {
   })
 
   it('passes hydrated association lists to sibling extendTypes-style resolvers', async () => {
-    const { GraphQLSchema, GraphQLObjectType, GraphQLInt, GraphQLNonNull, GraphQLList, GraphQLString, graphql } =
-      await import('graphql')
+    const {
+      GraphQLSchema,
+      GraphQLObjectType,
+      GraphQLInt,
+      GraphQLNonNull,
+      GraphQLList,
+      GraphQLString,
+      graphql,
+    } = await import('graphql')
 
     const parent = await UnitParent.create({})
     await UnitChild.create({ parentId: parent.id, id: 11 })

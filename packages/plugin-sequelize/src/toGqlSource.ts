@@ -2,9 +2,11 @@ import type { GeneAssociationList, GqlSourceBrand, PrototypeOrNot } from 'graphq
 import type { InferAttributes, Model } from 'sequelize'
 
 type ModelProto<M> =
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   M extends abstract new (...args: any) => infer I ? I : PrototypeOrNot<M>
 type ModelInstance<M> = ModelProto<M> & Model
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DefaultGraphqlTypeName<M> = M extends abstract new (...args: any) => any
   ? M extends { name: infer N extends string }
     ? N
@@ -50,10 +52,7 @@ type AssociationKeys<M> = {
 /** Column and association keys declared on the Sequelize model (mixins and internals omitted). */
 type GqlSourceModelKey<M> = AttributeKeys<M> | AssociationKeys<M>
 
-type ToGqlSourceValueCore<
-  V,
-  TTypeName extends string,
-> = [V] extends [readonly (infer E)[]]
+type ToGqlSourceValueCore<V, TTypeName extends string> = [V] extends [readonly (infer E)[]]
   ? IsSequelizeModel<E> extends true
     ? IsGeneAssociationListWrapperField<TTypeName> extends true
       ? GeneAssociationList<ToGqlSourceNested<E>>
@@ -75,9 +74,7 @@ type ToGqlSourceField<
   M,
   TTypeName extends string,
   K extends GqlSourceModelKey<M> & string,
-> = K extends keyof ModelProto<M>
-  ? ToGqlSourceValue<ModelProto<M>[K], TTypeName>
-  : never
+> = K extends keyof ModelProto<M> ? ToGqlSourceValue<ModelProto<M>[K], TTypeName> : never
 
 /**
  * Maps a Sequelize model type to the GraphQL object shape passed as resolver `source`.

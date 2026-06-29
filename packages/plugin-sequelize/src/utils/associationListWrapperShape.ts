@@ -17,11 +17,7 @@ export function isAssociationListWrapperOutputType(type: GraphQLOutputType): boo
 
   const fields = named.getFields()
   const itemsField = fields.items
-  return !!(
-    fields.count &&
-    itemsField &&
-    isListType(getNullableType(itemsField.type))
-  )
+  return !!(fields.count && itemsField && isListType(getNullableType(itemsField.type)))
 }
 
 export function scanAssociationWrapperFacets(

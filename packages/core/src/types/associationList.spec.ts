@@ -2,7 +2,8 @@ import type { GeneAssociationList, GeneAssociationListFacet } from './associatio
 
 type Assert<T extends true> = T
 
-type Equal<A, B> = (<G>() => G extends A ? 1 : 2) extends <G>() => G extends B ? 1 : 2 ? true : false
+type Equal<A, B> =
+  (<G>() => G extends A ? 1 : 2) extends <G>() => G extends B ? 1 : 2 ? true : false
 
 type _listShape = Assert<
   Equal<GeneAssociationList<{ id: number }>, { count: number; items: { id: number }[] }>

@@ -19,7 +19,8 @@ import type { GeneAssociationListWrapperGqlType, ToGqlSource } from './toGqlSour
 
 type Assert<T extends true> = T
 
-type Equal<A, B> = (<G>() => G extends A ? 1 : 2) extends <G>() => G extends B ? 1 : 2 ? true : false
+type Equal<A, B> =
+  (<G>() => G extends A ? 1 : 2) extends <G>() => G extends B ? 1 : 2 ? true : false
 
 @Table
 class ToGqlSourceParent extends Model<
@@ -107,7 +108,9 @@ type _wrapperGqlTypeName = Assert<
     'ToGqlSourceParentQuestionsGeneAssociationListResult'
   >
 >
-type _scalarFields = Assert<Equal<Pick<ParentSource, 'id' | 'title'>, Pick<ToGqlSourceParent, 'id' | 'title'>>>
+type _scalarFields = Assert<
+  Equal<Pick<ParentSource, 'id' | 'title'>, Pick<ToGqlSourceParent, 'id' | 'title'>>
+>
 type _hasManyField = Assert<
   ParentSource['questions'] extends GeneAssociationList<ChildSource> | null ? true : false
 >
@@ -129,7 +132,10 @@ describe('ToGqlSource', () => {
       title: 'Exam',
       questions: {
         count: 2,
-        items: [{ id: 1, allocatedTimeInMin: 10 }, { id: 2, allocatedTimeInMin: 20 }],
+        items: [
+          { id: 1, allocatedTimeInMin: 10 },
+          { id: 2, allocatedTimeInMin: 20 },
+        ],
       },
       addressId: 3,
       address: { id: 3, city: 'Paris' },

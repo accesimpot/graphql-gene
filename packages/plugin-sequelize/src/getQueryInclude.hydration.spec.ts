@@ -77,9 +77,7 @@ describe('getQueryInclude hydration includes', () => {
 
       expect(capturedInfo).toBeDefined()
       const includeOptions = getQueryInclude(capturedInfo!)
-      expect(includeOptions?.include).toEqual([
-        expect.objectContaining({ association: 'items' }),
-      ])
+      expect(includeOptions?.include).toEqual([expect.objectContaining({ association: 'items' })])
       expect(isGeneHydrationInclude(includeOptions?.include?.[0])).toBe(true)
     } finally {
       await sequelize.close()

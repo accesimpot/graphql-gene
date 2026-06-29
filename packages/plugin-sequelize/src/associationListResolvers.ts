@@ -402,10 +402,8 @@ export function attachAssociationListWrapperResolvers(schema: GraphQLSchema, typ
           isList: false,
           omitAssociation: true,
           filterContext: {
-            ownerGraphqlType: targetModelFromAssociation(
-              modelParent,
-              payload.associationField
-            ).name,
+            ownerGraphqlType: targetModelFromAssociation(modelParent, payload.associationField)
+              .name,
             includes: [],
           },
         })
