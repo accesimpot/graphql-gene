@@ -40,7 +40,8 @@ extendTypes({
   ProductGroup: {
     categories: {
       resolver: ({ source }) => {
-        return source.groupCategories.map(({ category }) => category?.name || '').filter(v => v)
+        const items = source.groupCategories?.items ?? []
+        return items.map(({ category }) => category?.name || '').filter(v => v)
       },
       returnType: '[String!]',
 

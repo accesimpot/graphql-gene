@@ -1,11 +1,16 @@
 import type { GeneAssociationList } from 'graphql-gene'
-import type { Model } from 'sequelize'
-import { isGeneAssociationListWrapperAssociation } from './utils/associationListRegistry'
+import type { Model, ModelStatic } from 'sequelize'
 import { isModel, isSafeArray } from './utils/guards'
 import { resolvePolymorphicHubLoadedRows } from './utils/polymorphic'
 
 export type HydratedGqlSource<T extends Model = Model> = T & {
   [field: string]: unknown
+}
+
+function isMultiAssociationField(parent: Model, associationField: string): boolean {
+  const ctor = parent.constructor as ModelStatic<Model>
+  const assoc = ctor.associations?.[associationField]
+  return !!assoc?.isMultiAssociation
 }
 
 function associationListFromPreload(
@@ -25,14 +30,11 @@ function associationListFromPreload(
  */
 export function hydrateGqlSource<T extends Model>(
   parent: T,
-  parentGraphqlType: string
+  _parentGraphqlType?: string
 ): HydratedGqlSource<T> {
   return new Proxy(parent, {
     get(target, prop, receiver) {
-      if (
-        typeof prop === 'string' &&
-        isGeneAssociationListWrapperAssociation(parentGraphqlType, prop)
-      ) {
+      if (typeof prop === 'string' && isMultiAssociationField(target, prop)) {
         return associationListFromPreload(target, prop)
       }
 

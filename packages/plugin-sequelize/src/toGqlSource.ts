@@ -1,8 +1,17 @@
-import type { GeneAssociationList, PrototypeOrNot } from 'graphql-gene'
+import type { GeneAssociationList, GqlSourceBrand, PrototypeOrNot } from 'graphql-gene'
 import type { InferAttributes, Model } from 'sequelize'
 
-type ModelProto<M> = PrototypeOrNot<M>
+type ModelProto<M> =
+  M extends abstract new (...args: any) => infer I ? I : PrototypeOrNot<M>
 type ModelInstance<M> = ModelProto<M> & Model
+
+type DefaultGraphqlTypeName<M> = M extends abstract new (...args: any) => any
+  ? M extends { name: infer N extends string }
+    ? N
+    : string
+  : string
+
+type ToGqlSourceNested<E> = ToGqlSource<E, DefaultGraphqlTypeName<E>>
 
 type IsSequelizeModel<T> = T extends Model ? true : false
 
@@ -47,11 +56,11 @@ type ToGqlSourceValueCore<
 > = [V] extends [readonly (infer E)[]]
   ? IsSequelizeModel<E> extends true
     ? IsGeneAssociationListWrapperField<TTypeName> extends true
-      ? GeneAssociationList<ToGqlSource<E>>
-      : ToGqlSource<E>[]
+      ? GeneAssociationList<ToGqlSourceNested<E>>
+      : ToGqlSourceNested<E>[]
     : V
   : IsSequelizeModel<V> extends true
-    ? ToGqlSource<V>
+    ? ToGqlSourceNested<V>
     : V
 
 type ToGqlSourceValue<V, TTypeName extends string> = null extends V
@@ -80,4 +89,10 @@ type ToGqlSourceField<
  */
 export type ToGqlSource<M, TTypeName extends string = string> = {
   [K in GqlSourceModelKey<M> & string]: ToGqlSourceField<M, TTypeName, K>
+}
+
+declare module 'graphql-gene' {
+  interface GqlSourceForPluginModel<M, TTypeName extends string> {
+    [GqlSourceBrand]: ToGqlSource<M, TTypeName>
+  }
 }

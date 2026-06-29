@@ -15,6 +15,7 @@ import type {
   Prop,
   PrototypeOrNot,
   ResolveGqlSource,
+  ModelClassOfInstance,
   SomeRequired,
   TypeOrFunction,
   ValidGraphqlType,
@@ -56,7 +57,10 @@ type AccurateTypeSource<
     ? HasPluginMatching<GraphqlTypes[TTypeName]> extends true
       ? FallbackIfInvalid<
           NonNullable<
-            ResolveGqlSource<PrototypeOrNot<GraphqlTypes[TTypeName]>, TTypeName & string>
+            ResolveGqlSource<
+              ModelClassOfInstance<NonNullable<GraphqlTypes[TTypeName]>>,
+              TTypeName & string
+            >
           >,
           TFallbackSource
         >
