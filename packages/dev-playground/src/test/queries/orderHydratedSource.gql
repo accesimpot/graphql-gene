@@ -1,10 +1,5 @@
 query orderHydratedSource($id: String!) {
   order(id: $id) {
-    itemCountViaHydratedSource
-    items {
-      items {
-        id
-      }
-    }
+    itemTotalQuantity
   }
 }

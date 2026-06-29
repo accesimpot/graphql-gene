@@ -5,7 +5,7 @@ import { sequelize } from '../models/sequelize'
 import { useMetaPlugin } from '../plugins/useMetaPlugin'
 import { schema } from '../server/schema'
 import { getFixtureQuery } from './utils'
-import { Product } from '../models'
+import { Order, Product } from '../models'
 
 /** GraphQL association-list wrapper `{ count, items }` (differs from Sequelize array fields) */
 type GqlAssociationList<T> = {
@@ -397,7 +397,14 @@ describe('integration', () => {
   })
 
   describe('hydrated resolver source', () => {
-    it('exposes preloaded association lists on extendTypes source', async () => {
+    it('loads sibling association via field findOptions when only the computed field is selected', async () => {
+      const orderRow = await Order.findByPk(397, { include: [{ association: 'items' }] })
+      const expectedTotal = (orderRow?.items ?? []).reduce(
+        (sum, item) => sum + (item.quantity ?? 0),
+        0
+      )
+      expect(expectedTotal).toBeGreaterThan(0)
+
       const result = await execute({
         document: getFixtureQuery('queries/orderHydratedSource.gql'),
         variables: { id: '397' },
@@ -405,13 +412,9 @@ describe('integration', () => {
 
       expect(result.errors).toBeUndefined()
 
-      const order = result.data?.order as {
-        itemCountViaHydratedSource?: number
-        items?: GqlAssociationList<{ id?: number }>
-      }
-
-      expect(order?.items?.items?.length).toBeGreaterThan(0)
-      expect(order?.itemCountViaHydratedSource).toBe(order?.items?.items?.length)
+      const order = result.data?.order as { itemTotalQuantity?: number; items?: unknown }
+      expect(order?.items).toBeUndefined()
+      expect(order?.itemTotalQuantity).toBe(expectedTotal)
     })
   })
 

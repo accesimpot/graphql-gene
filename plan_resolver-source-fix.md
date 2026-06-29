@@ -114,7 +114,7 @@ Types alone are not enough: without hydration, `source` is a Sequelize instance 
 
 1. GraphQL wrapper facet resolvers still load via accessors when the client selects `items { … }` without a parent preload (integration queries keep working).
 2. `source.items` on sibling resolvers is `null` when the association was not included on the parent Sequelize fetch — not a fake `{ count: 0, items: [] }`.
-3. Sibling resolvers (e.g. `itemCountViaHydratedSource` reading `source.items.items`) work when the parent fetch carries hydration-marked includes from lookahead.
+3. Sibling resolvers (e.g. `itemTotalQuantity` reading `source.items.items`) work when the parent fetch carries hydration-marked includes from lookahead.
 
 **Tests:** `hydrateGqlSource.spec.ts`, `includePostProcess.spec.ts`, `associationListResolvers.spec.ts` (hydration siblings), `defaultResolver.spec.ts` (hydration include preservation), dev-playground `orderHydratedSource.gql` integration test.
 

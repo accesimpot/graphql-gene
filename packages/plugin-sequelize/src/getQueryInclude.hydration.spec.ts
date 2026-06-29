@@ -47,7 +47,7 @@ describe('getQueryInclude hydration includes', () => {
       const orderType = new GraphQLObjectType({
         name: 'Order',
         fields: {
-          itemCountViaHydratedSource: { type: new GraphQLNonNull(GraphQLInt) },
+          itemTotalQuantity: { type: new GraphQLNonNull(GraphQLInt) },
           items: { type: wrapperType },
         },
       })
@@ -72,7 +72,7 @@ describe('getQueryInclude hydration includes', () => {
 
       await graphql({
         schema,
-        source: `query { order(id: "1") { itemCountViaHydratedSource items { items { id } } } }`,
+        source: `query { order(id: "1") { itemTotalQuantity items { items { id } } } }`,
       })
 
       expect(capturedInfo).toBeDefined()

@@ -17,7 +17,7 @@ import {
   defineEnum,
   defineInput,
 } from 'graphql-gene'
-import { getQueryIncludeOf } from '@graphql-gene/plugin-sequelize'
+import { getQueryIncludeOf, markGeneHydrationInclude } from '@graphql-gene/plugin-sequelize'
 import { OrderItem } from '../OrderItem/OrderItem.model'
 import { OrderNote } from '../OrderNote/OrderNote.model'
 import { Address } from '../Address/Address.model'
@@ -137,9 +137,17 @@ extendTypes({
       returnType: 'Boolean!',
     }),
 
-    itemCountViaHydratedSource: {
+    itemTotalQuantity: {
       returnType: 'Int!',
-      resolver: ({ source }) => source.items?.items?.length ?? -1,
+
+      findOptions({ findOptions }) {
+        findOptions.include = findOptions.include || []
+        if (!findOptions.include.some(opt => opt.association === 'items')) {
+          findOptions.include.push(markGeneHydrationInclude({ association: 'items' }))
+        }
+      },
+      resolver: ({ source }) =>
+        source.items?.items?.reduce((sum, item) => sum + (item.quantity ?? 0), 0) ?? 0,
     },
   },
 })
