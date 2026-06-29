@@ -22,6 +22,7 @@ import { resolvePolymorphicHubLoadedRows } from './utils/polymorphic'
 import { getGeneAssociationListWrapperMeta } from './utils/associationListRegistry'
 import {
   hasAssociationJoinColumns,
+  isInternalGraphqlType,
   isModel,
   isPlainRecord,
   isSafeArray,
@@ -311,7 +312,7 @@ export function attachAssociationListWrapperResolvers(schema: GraphQLSchema, typ
 
   for (const schemaType of Object.values(schema.getTypeMap())) {
     if (!(schemaType instanceof GraphQLObjectType)) continue
-    if (schemaType.name.startsWith('__')) continue
+    if (isInternalGraphqlType(schemaType.name)) continue
 
     const parentGraphqlTypeName = schemaType.name
 
