@@ -24,13 +24,13 @@ describe('hydrateGqlSource', () => {
       })
       markFieldAsAssociation('UnitParent', 'items')
 
-      const bare = hydrateGqlSource(parent, 'UnitParent')
+      const bare = hydrateGqlSource(parent)
       expect(bare.items).toBeNull()
 
       const loaded = await UnitParent.findByPk(parent.id, { include: [{ association: 'items' }] })
       if (!loaded) throw new Error('missing parent')
 
-      const hydrated = hydrateGqlSource(loaded, 'UnitParent')
+      const hydrated = hydrateGqlSource(loaded)
       expect(hydrated.items).toEqual({
         count: 1,
         items: [expect.objectContaining({ id: expect.any(Number), parentId: parent.id })],

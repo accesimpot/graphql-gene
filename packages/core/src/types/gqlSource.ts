@@ -3,9 +3,6 @@ import type { GraphqlToTypescript } from './graphqlToTypescript'
 /** Brand key used by ORM plugins to override resolver `source` typing via declaration merging. */
 export declare const GqlSourceBrand: unique symbol
 
-/** Sequelize / class constructor for a GraphQL object instance type (e.g. `typeof Order`). */
-export type ModelClassOfInstance<I> = abstract new (...args: any) => I
-
 /**
  * Augmented by ORM plugins (e.g. `@graphql-gene/plugin-sequelize`) to map Sequelize models to
  * GraphQL-shaped resolver parents.

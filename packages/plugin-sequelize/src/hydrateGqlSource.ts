@@ -28,10 +28,7 @@ function associationListFromPreload(
  * Presents a Sequelize row as the GraphQL-shaped resolver `source`: multi associations become
  * {@link GeneAssociationList} values when preloaded on the parent, otherwise `null`.
  */
-export function hydrateGqlSource<T extends Model>(
-  parent: T,
-  _parentGraphqlType?: string
-): HydratedGqlSource<T> {
+export function hydrateGqlSource<T extends Model>(parent: T): HydratedGqlSource<T> {
   return new Proxy(parent, {
     get(target, prop, receiver) {
       if (typeof prop === 'string' && isMultiAssociationField(target, prop)) {
@@ -44,6 +41,6 @@ export function hydrateGqlSource<T extends Model>(
   }) as HydratedGqlSource<T>
 }
 
-export function toResolverSource(parent: unknown, parentGraphqlType: string) {
-  return isModel(parent) ? hydrateGqlSource(parent, parentGraphqlType) : parent
+export function toResolverSource(parent: unknown) {
+  return isModel(parent) ? hydrateGqlSource(parent) : parent
 }

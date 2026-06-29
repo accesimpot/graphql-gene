@@ -18,6 +18,9 @@ declare module 'graphql-gene/plugin-settings' {
           : 'id'
         : 'id'
       findOptionsState: DefaultResolverIncludeOptions
+      modelClassOf: PrototypeOrNot<M> extends Model
+        ? abstract new (...args: any) => PrototypeOrNot<M>
+        : never
     }>
   }
 }

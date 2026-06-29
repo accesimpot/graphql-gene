@@ -19,7 +19,7 @@ export function attachGqlSourceHydrationResolvers(schema: GraphQLSchema, types: 
 
       const previousResolve = field.resolve ?? defaultFieldResolver
       field.resolve = (parent, args, context, info) =>
-        previousResolve(toResolverSource(parent, parentGraphqlType), args, context, info)
+        previousResolve(toResolverSource(parent), args, context, info)
     }
   }
 }
