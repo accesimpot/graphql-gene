@@ -22,12 +22,6 @@ type Assert<T extends true> = T
 
 type Equal<A, B> = (<G>() => G extends A ? 1 : 2) extends <G>() => G extends B ? 1 : 2 ? true : false
 
-declare module '@graphql-gene/plugin-sequelize' {
-  interface GeneBelongsToManyAssociationFields {
-    ToGqlSourceBelongsToManyParent: 'tags'
-  }
-}
-
 @Table
 class ToGqlSourceParent extends Model<
   InferAttributes<ToGqlSourceParent>,
@@ -102,6 +96,7 @@ declare module 'graphql-gene/schema' {
 
 type ParentSource = ToGqlSource<typeof ToGqlSourceParent, 'ToGqlSourceParent'>
 type ChildSource = ToGqlSource<typeof ToGqlSourceChild, 'ToGqlSourceChild'>
+type TagSource = ToGqlSource<typeof ToGqlSourceTag, 'ToGqlSourceTag'>
 type BelongsToManyParentSource = ToGqlSource<
   typeof ToGqlSourceBelongsToManyParent,
   'ToGqlSourceBelongsToManyParent'
@@ -121,10 +116,7 @@ type _belongsToField = Assert<
   ParentSource['address'] extends ToGqlSource<typeof ToGqlSourceAddress> | null ? true : false
 >
 type _belongsToManyField = Assert<
-  BelongsToManyParentSource['tags'] extends ToGqlSourceTag[] ? true : false
->
-type _belongsToManyNotWrapper = Assert<
-  BelongsToManyParentSource['tags'] extends GeneAssociationList<ToGqlSourceTag> ? false : true
+  BelongsToManyParentSource['tags'] extends GeneAssociationList<TagSource> ? true : false
 >
 type _mixinExcluded = Assert<'addTag' extends keyof ParentSource ? false : true>
 type _extendTypesSource = Assert<
@@ -153,13 +145,16 @@ describe('ToGqlSource', () => {
     expect(parent.address?.city).toBe('Paris')
   })
 
-  it('keeps BelongsToMany arrays as ORM rows, not GeneAssociationList wrappers', () => {
+  it('types BelongsToMany associations as GeneAssociationList wrappers', () => {
     const parent: BelongsToManyParentSource = {
       id: 1,
-      tags: [{ id: 1, label: 'alpha' }],
+      tags: {
+        count: 1,
+        items: [{ id: 1, label: 'alpha' }],
+      },
     }
 
-    expect(parent.tags).toHaveLength(1)
-    expect(parent.tags[0]?.label).toBe('alpha')
+    expect(parent.tags.items).toHaveLength(1)
+    expect(parent.tags.items[0]?.label).toBe('alpha')
   })
 })

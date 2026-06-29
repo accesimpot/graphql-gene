@@ -68,16 +68,13 @@ Introduce a mapped type that starts from the **Sequelize model** and selectively
 
 - **Base keys** — `InferAttributes` column keys plus association keys whose declared instance type is `Model` or `Model[]` (Sequelize mixins such as `addTag` are omitted automatically because they are functions, not model-shaped values).
 - **Columns / scalars** — keep ORM types from `InferAttributes`.
-- **HasMany wrapper associations** — when the parent GraphQL type name is known (`TTypeName`), rewrite `questions: Child[]` to `questions: GeneAssociationList<ToGqlSource<Child>>`. Wrapper detection matches runtime naming: `${Parent}${CapField}GeneAssociationListResult` (see `getGeneAssociationListWrapperTypeName` / `associationListRegistry`).
+- **HasMany / BelongsToMany wrapper associations** — when the parent GraphQL type name is known (`TTypeName`), rewrite `questions: Child[]` to `questions: GeneAssociationList<ToGqlSource<Child>>`. Wrapper detection matches runtime naming: `${Parent}${CapField}GeneAssociationListResult` (see `getGeneAssociationListWrapperTypeName` / `associationListRegistry`).
 - **BelongsTo / HasOne** — nested `ToGqlSource<Related>` (not a list wrapper).
-- **BelongsToMany** — keep ORM array shape until wrappers exist; declare fields on the augmentable `GeneBelongsToManyAssociationFields` interface (e.g. `ProductGroup: 'categories'`) so they are not mistaken for HasMany wrappers.
 - **Exclude GraphQL-only output fields** (`totalDuration`, `fooBar`, etc.) from `source` — they are not Sequelize model fields, so they never appear on `ToGqlSource` keys.
 
-`ToGqlSource` does **not** build its key set from the GraphQL schema or `extendTypes`; it only rewrites existing Sequelize association fields that graphql-gene exposes as list wrappers. Computed fields that return lists but are not model associations are out of scope.
+`ToGqlSource` does **not** build its key set from the GraphQL schema or `extendTypes`; it only rewrites existing Sequelize multi-association fields that graphql-gene exposes as list wrappers. Computed fields that return lists but are not model associations are out of scope.
 
-**Compile-time note:** BelongsToMany vs HasMany both appear as `Model[]` on the Sequelize model. Until schema-field codegen exists, apps augment `GeneBelongsToManyAssociationFields` for BelongsToMany keys. HasMany wrappers are inferred from a concrete parent `TTypeName` (always supplied via `extendTypes` / `ResolveGqlSource`).
-
-**Future (optional):** mirror `populateTypeDefs` / `registerGeneAssociationListWrapper` into generated typings so `GeneBelongsToManyAssociationFields` augmentation is unnecessary.
+**Implemented:** `populateTypeDefs` registers BelongsToMany associations like HasMany (`{ count, items }` wrappers). Facet resolvers load BelongsToMany rows via Sequelize association `get` / `count` accessors (not direct `foreignKey` queries on the target model).
 
 #### 1.3 Wire into `extendTypes` inference
 
@@ -207,7 +204,7 @@ After this ships in a new beta, integrators should be able to:
 
 ### Implementation notes
 
-- **Key files:** `defineConfig.ts`, `defaultResolver.ts`, `graphqlToTypescript.ts`, `populateTypeDefs.ts`, `associationListResolvers.ts`, `utils/includePostProcess.ts`, `utils/public.ts`, `associationListRegistry.ts`, `associationMap.ts`, `toGqlSource.ts`, `belongsToManyAssociationFields.ts`, `gqlSource.ts`
+- **Key files:** `defineConfig.ts`, `defaultResolver.ts`, `graphqlToTypescript.ts`, `populateTypeDefs.ts`, `associationListResolvers.ts`, `utils/includePostProcess.ts`, `utils/public.ts`, `associationListRegistry.ts`, `associationMap.ts`, `toGqlSource.ts`, `gqlSource.ts`
 - **Explicit non-goals:** Per-model workarounds (custom preload resolvers, clearing association arrays on the Sequelize instance, integrator-side flags). Solve association loading via lookahead includes, `null` when not selected, and hydrated GraphQL-shaped `source`.
 - Prefer minimal API surface; match existing code style; no `any` in new code.
 - Breaking change is acceptable in v2 beta if documented.

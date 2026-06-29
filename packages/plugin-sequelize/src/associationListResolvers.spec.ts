@@ -332,3 +332,102 @@ describe('attachAssociationListWrapperResolvers', () => {
     expect(result.data).toEqual({ parent: { items: priorValue } })
   })
 })
+
+describe('attachAssociationListWrapperResolvers (BelongsToMany)', () => {
+  let sequelize: Awaited<ReturnType<typeof import('./associationListResolvers.fixtures').createUnitBelongsToManySqlite>>['sequelize'] | undefined
+  let B2MParent: Awaited<ReturnType<typeof import('./associationListResolvers.fixtures').createUnitBelongsToManySqlite>>['B2MParent']
+  let B2MTag: Awaited<ReturnType<typeof import('./associationListResolvers.fixtures').createUnitBelongsToManySqlite>>['B2MTag']
+
+  beforeAll(async () => {
+    const { createUnitBelongsToManySqlite } = await import('./associationListResolvers.fixtures')
+    const ctx = await createUnitBelongsToManySqlite()
+    sequelize = ctx.sequelize
+    B2MParent = ctx.B2MParent
+    B2MTag = ctx.B2MTag
+  })
+
+  afterAll(async () => {
+    await sequelize?.close()
+  })
+
+  it('resolves count and items for a BelongsToMany association wrapper field', async () => {
+    const { GraphQLSchema, GraphQLObjectType, GraphQLInt, GraphQLNonNull, GraphQLList, GraphQLString, graphql } =
+      await import('graphql')
+
+    const parent = await B2MParent.create({})
+    const tagA = await B2MTag.create({ label: 'alpha' })
+    const tagB = await B2MTag.create({ label: 'beta' })
+    await parent.setTags([tagA, tagB])
+
+    const { markFieldAsAssociation } = await import('./utils/associationMap')
+    const { registerGeneAssociationListWrapper, getGeneAssociationListWrapperTypeName } =
+      await import('./utils/associationListRegistry')
+    const { attachAssociationListWrapperResolvers } = await import('./associationListResolvers')
+
+    const wrapperName = getGeneAssociationListWrapperTypeName('B2MParentUnit', 'tags')
+    registerGeneAssociationListWrapper(wrapperName, {
+      parentGraphqlType: 'B2MParentUnit',
+      associationField: 'tags',
+      targetGraphqlType: 'B2MTag',
+    })
+    markFieldAsAssociation('B2MParentUnit', 'tags')
+
+    const tagGraphQLType = new GraphQLObjectType({
+      name: 'B2MTag',
+      fields: {
+        id: { type: new GraphQLNonNull(GraphQLInt) },
+        label: { type: GraphQLString },
+      },
+    })
+
+    const wrapperType = new GraphQLObjectType({
+      name: wrapperName,
+      fields: {
+        count: { type: new GraphQLNonNull(GraphQLInt) },
+        items: {
+          type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(tagGraphQLType))),
+        },
+      },
+    })
+
+    const parentGraphQLType = new GraphQLObjectType({
+      name: 'B2MParentUnit',
+      fields: {
+        tags: {
+          type: new GraphQLNonNull(wrapperType),
+          args: {
+            limit: { type: GraphQLInt },
+            skip: { type: GraphQLInt },
+          },
+        },
+      },
+    })
+
+    const schema = new GraphQLSchema({
+      query: new GraphQLObjectType({
+        name: 'Query',
+        fields: {
+          parent: {
+            type: parentGraphQLType,
+            resolve: () => parent,
+          },
+        },
+      }),
+    })
+
+    attachAssociationListWrapperResolvers(schema, { B2MTag })
+
+    const result = await graphql({
+      schema,
+      source: `{ parent { tags { count items { id label } } } }`,
+    })
+
+    expect(result.errors).toBeUndefined()
+    const payload = result.data as {
+      parent: { tags: { count: number; items: { id: number; label: string | null }[] } }
+    }
+    expect(payload.parent.tags.count).toBe(2)
+    expect(payload.parent.tags.items).toHaveLength(2)
+    expect(payload.parent.tags.items.map(row => row.label).sort()).toEqual(['alpha', 'beta'])
+  })
+})

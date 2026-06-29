@@ -1,6 +1,5 @@
 import type { GeneAssociationList, PrototypeOrNot } from 'graphql-gene'
 import type { InferAttributes, Model } from 'sequelize'
-import type { GeneBelongsToManyAssociationFields } from './belongsToManyAssociationFields'
 
 type ModelProto<M> = PrototypeOrNot<M>
 type ModelInstance<M> = ModelProto<M> & Model
@@ -17,27 +16,13 @@ type CapitalizeFirst<S extends string> = S extends `${infer Head}${infer Tail}`
   ? `${Uppercase<Head>}${Tail}`
   : S
 
-type IsBelongsToManyAssociationField<
-  TTypeName extends string,
-  TField extends string,
-> = TTypeName extends keyof GeneBelongsToManyAssociationFields
-  ? TField extends GeneBelongsToManyAssociationFields[TTypeName]
-    ? true
-    : false
-  : false
-
 /**
- * True when `TField` on parent `TTypeName` is a HasMany association exposed as a Gene list
- * wrapper (`*GeneAssociationListResult`), not a BelongsToMany array.
+ * True when `TField` on parent `TTypeName` is a multi association exposed as a Gene list
+ * wrapper (`*GeneAssociationListResult`) — HasMany and BelongsToMany.
  */
-type IsGeneAssociationListWrapperField<
-  TTypeName extends string,
-  TField extends string,
-> = string extends TTypeName
+type IsGeneAssociationListWrapperField<TTypeName extends string> = string extends TTypeName
   ? false
-  : IsBelongsToManyAssociationField<TTypeName, TField> extends true
-    ? false
-    : true
+  : true
 
 type IsModelAssociationValue<V> = [NonNullable<V>] extends [readonly (infer E)[]]
   ? IsSequelizeModel<E> extends true
@@ -59,10 +44,9 @@ type GqlSourceModelKey<M> = AttributeKeys<M> | AssociationKeys<M>
 type ToGqlSourceValueCore<
   V,
   TTypeName extends string,
-  K extends string,
 > = [V] extends [readonly (infer E)[]]
   ? IsSequelizeModel<E> extends true
-    ? IsGeneAssociationListWrapperField<TTypeName, K> extends true
+    ? IsGeneAssociationListWrapperField<TTypeName> extends true
       ? GeneAssociationList<ToGqlSource<E>>
       : ToGqlSource<E>[]
     : V
@@ -70,33 +54,29 @@ type ToGqlSourceValueCore<
     ? ToGqlSource<V>
     : V
 
-type ToGqlSourceValue<
-  V,
-  TTypeName extends string,
-  K extends string,
-> = null extends V
+type ToGqlSourceValue<V, TTypeName extends string> = null extends V
   ? undefined extends V
-    ? ToGqlSourceValueCore<NonNullable<V>, TTypeName, K> | null | undefined
-    : ToGqlSourceValueCore<NonNullable<V>, TTypeName, K> | null
+    ? ToGqlSourceValueCore<NonNullable<V>, TTypeName> | null | undefined
+    : ToGqlSourceValueCore<NonNullable<V>, TTypeName> | null
   : undefined extends V
-    ? ToGqlSourceValueCore<NonNullable<V>, TTypeName, K> | undefined
-    : ToGqlSourceValueCore<NonNullable<V>, TTypeName, K>
+    ? ToGqlSourceValueCore<NonNullable<V>, TTypeName> | undefined
+    : ToGqlSourceValueCore<NonNullable<V>, TTypeName>
 
 type ToGqlSourceField<
   M,
   TTypeName extends string,
   K extends GqlSourceModelKey<M> & string,
 > = K extends keyof ModelProto<M>
-  ? ToGqlSourceValue<ModelProto<M>[K], TTypeName, K>
+  ? ToGqlSourceValue<ModelProto<M>[K], TTypeName>
   : never
 
 /**
  * Maps a Sequelize model type to the GraphQL object shape passed as resolver `source`.
  *
  * Starts from Sequelize column + association fields (not GraphQL-only `extendTypes` outputs).
- * HasMany associations exposed as `*GeneAssociationListResult` in GraphQL are rewritten to
- * {@link GeneAssociationList}; BelongsTo / HasOne become nested `ToGqlSource`; BelongsToMany
- * arrays keep their ORM shape until wrappers exist.
+ * Multi associations exposed as `*GeneAssociationListResult` in GraphQL (HasMany and
+ * BelongsToMany) are rewritten to {@link GeneAssociationList}; BelongsTo / HasOne become nested
+ * `ToGqlSource`.
  */
 export type ToGqlSource<M, TTypeName extends string = string> = {
   [K in GqlSourceModelKey<M> & string]: ToGqlSourceField<M, TTypeName, K>

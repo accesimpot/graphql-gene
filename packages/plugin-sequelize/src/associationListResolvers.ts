@@ -7,7 +7,7 @@ import {
   type GraphQLResolveInfo,
   type GraphQLSchema,
 } from 'graphql'
-import type { Association, ModelStatic } from 'sequelize'
+import type { Association, ModelStatic, WhereOptions } from 'sequelize'
 import { Model } from 'sequelize-typescript'
 import {
   getGloballyExtendedTypes,
@@ -115,6 +115,96 @@ function assertAssociation(parent: unknown, associationField: string): Associati
   return getAssociationOrThrow(expectModelInstance(parent), associationField)
 }
 
+function isBelongsToManyAssociation(assoc: Association): boolean {
+  return assoc.associationType === 'BelongsToMany'
+}
+
+type AssociationFacetFindOptions = {
+  where?: WhereOptions
+  order?: DefaultResolverIncludeOptions['order']
+  offset?: number
+  limit?: number
+  include?: DefaultResolverIncludeOptions['include']
+}
+
+function callAssociationAccessor(
+  parent: ModelInstanceWithClass,
+  accessorName: unknown,
+  label: string,
+  options: AssociationFacetFindOptions
+) {
+  if (typeof accessorName !== 'string') {
+    throw new GraphQLError(`Association is missing a ${label} accessor.`)
+  }
+
+  const accessor = Reflect.get(parent, accessorName)
+  if (typeof accessor !== 'function') {
+    throw new GraphQLError(`Association ${label} accessor "${accessorName}" is not callable.`)
+  }
+
+  return accessor.call(parent, options)
+}
+
+function getAssociationAccessor(assoc: Association, kind: 'get' | 'count'): unknown {
+  const accessors = Reflect.get(assoc, 'accessors')
+  if (!isPlainRecord(accessors)) return undefined
+  return accessors[kind]
+}
+
+async function findAssociationFacetRows(
+  parent: ModelInstanceWithClass,
+  associationField: string,
+  options: AssociationFacetFindOptions
+): Promise<Model[]> {
+  const assoc = getAssociationOrThrow(parent, associationField)
+
+  if (isBelongsToManyAssociation(assoc)) {
+    return (await callAssociationAccessor(
+      parent,
+      getAssociationAccessor(assoc, 'get'),
+      'get',
+      options
+    )) as Model[]
+  }
+
+  const TargetModel = targetModelFromAssociation(parent, associationField)
+  const fkWhere = foreignKeyWhere(parent, associationField)
+
+  return TargetModel.findAll({
+    where: { ...fkWhere, ...options.where },
+    order: options.order,
+    offset: options.offset,
+    limit: options.limit,
+    include: options.include,
+  })
+}
+
+async function countAssociationFacetRows(
+  parent: ModelInstanceWithClass,
+  associationField: string,
+  options: Pick<AssociationFacetFindOptions, 'where' | 'include'>
+): Promise<number> {
+  const assoc = getAssociationOrThrow(parent, associationField)
+
+  if (isBelongsToManyAssociation(assoc)) {
+    return (await callAssociationAccessor(
+      parent,
+      getAssociationAccessor(assoc, 'count'),
+      'count',
+      options
+    )) as number
+  }
+
+  const TargetModel = targetModelFromAssociation(parent, associationField)
+  const fkWhere = foreignKeyWhere(parent, associationField)
+
+  return TargetModel.count({
+    where: { ...fkWhere, ...options.where },
+    include: options.include,
+    distinct: true,
+  })
+}
+
 function foreignKeyWhere(parent: unknown, associationField: string): Record<string, unknown> {
   const modelParent = expectModelInstance(parent)
   const assoc = assertAssociationJoinColumns(getAssociationOrThrow(modelParent, associationField))
@@ -149,36 +239,39 @@ async function ensureAssociationItemsFacetLoaded(
   }
 
   const facetArgs = payload.facetArgs ?? {}
-  const { parent, associationField } = payload
-  const TargetModel = targetModelFromAssociation(parent, associationField)
-  const fkWhere = foreignKeyWhere(parent, associationField)
-
+  const { associationField } = payload
+  const modelParent = expectModelInstance(payload.parent)
   const columnOpts = getFieldIncludeOptions({
     args: facetArgs,
     isList: true,
     omitAssociation: true,
     filterContext: {
-      ownerGraphqlType: TargetModel.name,
+      ownerGraphqlType: targetModelFromAssociation(modelParent, associationField).name,
       includes: [],
     },
   })
 
   const nestedInclude = getQueryInclude(info)
   const mergedFind: DefaultResolverIncludeOptions = { ...(nestedInclude || {}) }
-  applyGeneConfigRootFindOptions(TargetModel, mergedFind)
+  applyGeneConfigRootFindOptions(
+    targetModelFromAssociation(modelParent, associationField),
+    mergedFind
+  )
 
   const mergedInclude = [...(columnOpts.include || []), ...(mergedFind.include || [])]
   if (mergedInclude.length) {
-    mergedFind.include = mergedInclude
-    stripAssociationListWrapperIncludes(TargetModel, mergedFind.include)
+    stripAssociationListWrapperIncludes(
+      targetModelFromAssociation(modelParent, associationField),
+      mergedInclude
+    )
   }
 
-  const rows = await TargetModel.findAll({
-    where: { ...fkWhere, ...columnOpts.where },
+  const rows = await findAssociationFacetRows(modelParent, associationField, {
+    where: columnOpts.where,
     order: columnOpts.order,
     offset: columnOpts.offset,
     limit: columnOpts.limit,
-    include: mergedFind.include,
+    include: mergedInclude.length ? mergedInclude : undefined,
   })
 
   wrapperRoot.items = resolvePolymorphicHubLoadedRows(rows)
@@ -273,23 +366,24 @@ export function attachAssociationListWrapperResolvers(schema: GraphQLSchema, typ
         }
 
         const facetArgs = payload.facetArgs ?? {}
+        const modelParent = expectModelInstance(payload.parent)
 
-        const TargetModel = targetModelFromAssociation(payload.parent, payload.associationField)
-        const fkWhere = foreignKeyWhere(payload.parent, payload.associationField)
         const filterOpts = getFieldIncludeOptions({
           args: facetArgs,
           isList: false,
           omitAssociation: true,
           filterContext: {
-            ownerGraphqlType: TargetModel.name,
+            ownerGraphqlType: targetModelFromAssociation(
+              modelParent,
+              payload.associationField
+            ).name,
             includes: [],
           },
         })
 
-        return TargetModel.count({
-          where: { ...fkWhere, ...filterOpts.where },
+        return countAssociationFacetRows(modelParent, payload.associationField, {
+          where: filterOpts.where,
           include: filterOpts.include,
-          distinct: true,
         })
       }
     }
