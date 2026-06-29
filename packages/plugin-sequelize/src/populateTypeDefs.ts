@@ -129,7 +129,7 @@ function generateAssociationFields(
         targetGraphqlType: associationModelName,
       })
 
-      returnType = `${associationWrapperTypeName}!`
+      returnType = associationWrapperTypeName
       isList = true
     }
 

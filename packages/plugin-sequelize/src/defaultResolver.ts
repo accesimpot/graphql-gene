@@ -8,7 +8,7 @@ import {
 import type { GeneContext } from 'graphql-gene/context'
 import type { Model as SequelizeModel, ModelStatic } from 'sequelize'
 import { getQueryInclude, getFieldFindOptions } from './utils'
-import { stripAssociationListWrapperIncludes } from './utils/includePostProcess'
+import { stripAssociationListWrapperIncludes, shallowGeneHydrationIncludes } from './utils/includePostProcess'
 
 export async function defaultResolver<
   M,
@@ -42,6 +42,7 @@ export async function defaultResolver<
 
   if (mergedInclude.length) {
     stripAssociationListWrapperIncludes(model, mergedInclude)
+    shallowGeneHydrationIncludes(mergedInclude)
   }
 
   const { include: _discardedTopInclude, ...restTopLevelFindOptions } = topLevelFindOptions

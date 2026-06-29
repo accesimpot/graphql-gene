@@ -99,23 +99,24 @@ Keep Sequelize model types available internally for the plugin (e.g. `Model.find
 
 ---
 
-### Part 2 — Runtime hydration
+### Part 2 — Runtime hydration ✅
 
 Types alone are not enough: without hydration, `source` is a Sequelize instance and `source.questions` is `ExamQuestion[] | undefined`, not `{ count, items }`.
 
-**Implement runtime hydration** so that when resolving fields on a GraphQL object backed by a Sequelize model, the parent passed to custom resolvers (and default resolvers where applicable) exposes association-list fields as `GeneAssociationList<T>`:
+**Implemented:**
 
-- `items` — from data loaded via lookahead-generated includes on the parent fetch
-- `count` — consistent with `items` (or a dedicated count query when only `count` is selected)
+- `hydrateGqlSource` / `toResolverSource` — Proxy over Sequelize rows: wrapper association fields become `GeneAssociationList<T>` when preloaded, otherwise `null` on `source` (sibling resolvers).
+- `attachGqlSourceHydrationResolvers` — wraps non-wrapper field resolvers on Sequelize-backed types so `extendTypes` / custom resolvers receive hydrated `source`. Wrapper association field resolvers still receive the raw `Model` parent.
+- Lookahead / `findOptions` — `GENE_HYDRATION_INCLUDE_KEY` marks parent-fetch includes when the `items` facet is selected; `stripAssociationListWrapperIncludes` preserves hydration-marked includes (facet-only wrapper includes are still stripped).
+- Wrapper GraphQL fields on parent types are **nullable** (`populateTypeDefs`) so a missing preload can surface as `null` at the GraphQL layer when appropriate.
 
-Requirements:
+**Design notes:**
 
-1. Hydration must align with lookahead-driven includes: when `questions` (or any wrapper association) is in the operation, the parent Sequelize fetch must carry that association; facet resolvers must not contradict that by returning fake empty lists or re-querying unnecessarily.
-2. When an association is **not** in the operation’s include tree, the GraphQL field resolves to **`null`**, not an empty wrapper.
-3. Sibling resolvers (e.g. `totalDuration` reading `source.questions.items`) must work without integrator-side reload hacks.
-4. `findOptions` on computed fields must merge includes into the correct nested frame so sibling associations are present on the hydrated `source`.
+1. GraphQL wrapper facet resolvers still load via accessors when the client selects `items { … }` without a parent preload (integration queries keep working).
+2. `source.items` on sibling resolvers is `null` when the association was not included on the parent Sequelize fetch — not a fake `{ count: 0, items: [] }`.
+3. Sibling resolvers (e.g. `itemCountViaHydratedSource` reading `source.items.items`) work when the parent fetch carries hydration-marked includes from lookahead.
 
-Add/update tests in `packages/plugin-sequelize/src/associationListResolvers.spec.ts` and dev-playground integration tests.
+**Tests:** `hydrateGqlSource.spec.ts`, `includePostProcess.spec.ts`, `associationListResolvers.spec.ts` (hydration siblings), `defaultResolver.spec.ts` (hydration include preservation), dev-playground `orderHydratedSource.gql` integration test.
 
 ---
 

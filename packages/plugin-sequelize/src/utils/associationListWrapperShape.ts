@@ -4,6 +4,7 @@ import {
   GraphQLObjectType,
   type SelectionSetNode,
   getNamedType,
+  getNullableType,
   isListType,
 } from 'graphql'
 import { lookDeeper } from 'graphql-lookahead'
@@ -15,7 +16,12 @@ export function isAssociationListWrapperOutputType(type: GraphQLOutputType): boo
   if (!(named instanceof GraphQLObjectType)) return false
 
   const fields = named.getFields()
-  return !!(fields.count && fields.items && isListType(fields.items.type))
+  const itemsField = fields.items
+  return !!(
+    fields.count &&
+    itemsField &&
+    isListType(getNullableType(itemsField.type))
+  )
 }
 
 export function scanAssociationWrapperFacets(

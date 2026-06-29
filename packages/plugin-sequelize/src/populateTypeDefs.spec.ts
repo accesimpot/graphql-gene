@@ -66,7 +66,7 @@ describe('populateTypeDefs BelongsToMany associations', () => {
     })
 
     const wrapperName = getGeneAssociationListWrapperTypeName('B2MParent', 'tags')
-    expect(typeDefLines.B2MParent.lines.tags?.typeDef).toBe(`${wrapperName}!`)
+    expect(typeDefLines.B2MParent.lines.tags?.typeDef).toBe(wrapperName)
     expect(typeDefLines[wrapperName]?.lines.count?.typeDef).toBe('Int!')
     expect(typeDefLines[wrapperName]?.lines.items?.typeDef).toBe('[B2MTag!]!')
   })

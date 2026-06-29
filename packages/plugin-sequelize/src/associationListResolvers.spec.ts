@@ -431,3 +431,107 @@ describe('attachAssociationListWrapperResolvers (BelongsToMany)', () => {
     expect(payload.parent.tags.items.map(row => row.label).sort()).toEqual(['alpha', 'beta'])
   })
 })
+
+describe('attachGqlSourceHydrationResolvers', () => {
+  let sequelize: Awaited<ReturnType<typeof createUnitAssocSqlite>>['sequelize'] | undefined
+  let UnitParent: Awaited<ReturnType<typeof createUnitAssocSqlite>>['UnitParent']
+  let UnitChild: Awaited<ReturnType<typeof createUnitAssocSqlite>>['UnitChild']
+
+  beforeAll(async () => {
+    const ctx = await createUnitAssocSqlite()
+    sequelize = ctx.sequelize
+    UnitParent = ctx.UnitParent
+    UnitChild = ctx.UnitChild
+  })
+
+  afterAll(async () => {
+    await sequelize?.close()
+  })
+
+  it('passes hydrated association lists to sibling extendTypes-style resolvers', async () => {
+    const { GraphQLSchema, GraphQLObjectType, GraphQLInt, GraphQLNonNull, GraphQLList, GraphQLString, graphql } =
+      await import('graphql')
+
+    const parent = await UnitParent.create({})
+    await UnitChild.create({ parentId: parent.id, id: 11 })
+    await UnitChild.create({ parentId: parent.id, id: 12 })
+    const parentLoaded = await UnitParent.findByPk(parent.id, {
+      include: [{ association: 'items' }],
+    })
+    if (!parentLoaded) throw new Error('missing parent')
+
+    const { markFieldAsAssociation } = await import('./utils/associationMap')
+    const { registerGeneAssociationListWrapper, getGeneAssociationListWrapperTypeName } =
+      await import('./utils/associationListRegistry')
+    const { attachAssociationListWrapperResolvers } = await import('./associationListResolvers')
+    const { attachGqlSourceHydrationResolvers } = await import('./attachGqlSourceHydration')
+
+    const wrapperName = getGeneAssociationListWrapperTypeName('HydrationParent', 'items')
+    registerGeneAssociationListWrapper(wrapperName, {
+      parentGraphqlType: 'HydrationParent',
+      associationField: 'items',
+      targetGraphqlType: 'UnitChild',
+    })
+    markFieldAsAssociation('HydrationParent', 'items')
+
+    const childGraphQLType = new GraphQLObjectType({
+      name: 'UnitChild',
+      fields: {
+        id: { type: new GraphQLNonNull(GraphQLInt) },
+        parentId: { type: GraphQLInt },
+      },
+    })
+
+    const wrapperType = new GraphQLObjectType({
+      name: wrapperName,
+      fields: {
+        count: { type: new GraphQLNonNull(GraphQLInt) },
+        items: {
+          type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(childGraphQLType))),
+        },
+      },
+    })
+
+    const parentGraphQLType = new GraphQLObjectType({
+      name: 'HydrationParent',
+      fields: {
+        items: { type: wrapperType },
+        itemCountViaSource: {
+          type: new GraphQLNonNull(GraphQLInt),
+          resolve: (source: { items?: { items?: { id: number }[] } | null }) =>
+            source.items?.items?.length ?? -1,
+        },
+        itemIdsViaSource: {
+          type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLInt))),
+          resolve: (source: { items?: { items?: { id: number }[] } | null }) =>
+            source.items?.items?.map(row => row.id) ?? [],
+        },
+      },
+    })
+
+    const schema = new GraphQLSchema({
+      query: new GraphQLObjectType({
+        name: 'Query',
+        fields: {
+          parent: {
+            type: parentGraphQLType,
+            resolve: () => parentLoaded,
+          },
+        },
+      }),
+    })
+
+    attachAssociationListWrapperResolvers(schema, { UnitChild })
+    attachGqlSourceHydrationResolvers(schema, { HydrationParent: UnitParent })
+
+    const result = await graphql({
+      schema,
+      source: `{ parent { itemCountViaSource itemIdsViaSource } }`,
+    })
+
+    expect(result.errors).toBeUndefined()
+    expect(result.data).toEqual({
+      parent: { itemCountViaSource: 2, itemIdsViaSource: [11, 12] },
+    })
+  })
+})

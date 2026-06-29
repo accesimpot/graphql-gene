@@ -136,5 +136,11 @@ extendTypes({
       resolver: ({ source, args }) => !!(source?.status && args.input),
       returnType: 'Boolean!',
     }),
+
+    itemCountViaHydratedSource: {
+      returnType: 'Int!',
+      resolver: ({ source }) =>
+        (source.items as { items?: unknown[] } | null | undefined)?.items?.length ?? -1,
+    },
   },
 })

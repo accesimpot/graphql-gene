@@ -2,6 +2,7 @@ import type { GenePlugin, PluginSettings, PrototypeOrNot, TypeDefLines } from 'g
 import type { InferAttributes } from 'sequelize'
 import { Model } from 'sequelize-typescript'
 import { attachAssociationListWrapperResolvers } from './associationListResolvers'
+import { attachGqlSourceHydrationResolvers } from './attachGqlSourceHydration'
 import { defaultResolver } from './defaultResolver'
 import { populateTypeDefs } from './populateTypeDefs'
 import type { GeneModel } from './constants'
@@ -39,6 +40,7 @@ export const plugin = (): GenePlugin<typeof GeneModel> => {
 
     attachSchemaResolvers({ schema, types }) {
       attachAssociationListWrapperResolvers(schema, types)
+      attachGqlSourceHydrationResolvers(schema, types)
     },
   }
 }

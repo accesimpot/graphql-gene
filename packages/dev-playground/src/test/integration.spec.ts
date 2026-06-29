@@ -396,6 +396,25 @@ describe('integration', () => {
     })
   })
 
+  describe('hydrated resolver source', () => {
+    it('exposes preloaded association lists on extendTypes source', async () => {
+      const result = await execute({
+        document: getFixtureQuery('queries/orderHydratedSource.gql'),
+        variables: { id: '397' },
+      })
+
+      expect(result.errors).toBeUndefined()
+
+      const order = result.data?.order as {
+        itemCountViaHydratedSource?: number
+        items?: GqlAssociationList<{ id?: number }>
+      }
+
+      expect(order?.items?.items?.length).toBeGreaterThan(0)
+      expect(order?.itemCountViaHydratedSource).toBe(order?.items?.items?.length)
+    })
+  })
+
   describe('association list wrapper (multiple lists per GraphQL type)', () => {
     const testCases = [{ notesLimit: 10 }, { notesLimit: 1 }]
 

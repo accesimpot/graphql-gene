@@ -205,6 +205,35 @@ async function countAssociationFacetRows(
   })
 }
 
+function targetModelHasTypeFindOptions(parent: Model, associationField: string): boolean {
+  const TargetModel = targetModelFromAssociation(parent, associationField)
+  const geneConfig =
+    getGloballyExtendedTypes().geneConfig[
+      TargetModel.name as keyof ReturnType<typeof getGloballyExtendedTypes>['geneConfig']
+    ]
+  return !!geneConfig?.findOptions
+}
+
+function associationTargetIsPolymorphicHub(parent: Model, associationField: string): boolean {
+  const TargetModel = targetModelFromAssociation(parent, associationField) as ModelStatic<Model> & {
+    geneConfig?: { __polymorphicJunction?: unknown }
+  }
+  return !!TargetModel.geneConfig?.__polymorphicJunction
+}
+
+function shouldStageParentPreload(
+  parent: Model,
+  associationField: string,
+  preload: unknown,
+  facetArgs: Record<string, unknown>
+): boolean {
+  return (
+    isSafeArray(preload) &&
+    !isAssociationFacetRequiringFreshQuery(facetArgs) &&
+    !targetModelHasTypeFindOptions(parent, associationField) &&
+    !associationTargetIsPolymorphicHub(parent, associationField)
+  )
+}
 function foreignKeyWhere(parent: unknown, associationField: string): Record<string, unknown> {
   const modelParent = expectModelInstance(parent)
   const assoc = assertAssociationJoinColumns(getAssociationOrThrow(modelParent, associationField))
@@ -319,7 +348,7 @@ export function attachAssociationListWrapperResolvers(schema: GraphQLSchema, typ
         const wrapperRoot: Record<string, unknown> = {}
         const preload = isSafeArray(prior) ? prior : Reflect.get(parent, fieldName)
 
-        if (isSafeArray(preload) && !isAssociationFacetRequiringFreshQuery(facetArgs)) {
+        if (shouldStageParentPreload(parent, fieldName, preload, facetArgs)) {
           // Staged copy: type-level directives filter `source[field]` (`items`) in-place before the
           // facet resolver runs; Sequelize's preload array must stay untouched.
           wrapperRoot.items = resolvePolymorphicHubLoadedRows(preload.slice())
