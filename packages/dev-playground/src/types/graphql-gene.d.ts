@@ -13,3 +13,10 @@ declare module 'graphql-gene/schema' {
     Mutation: object
   }
 }
+
+declare module '@graphql-gene/plugin-sequelize' {
+  interface GeneBelongsToManyAssociationFields {
+    ProductGroup: 'categories'
+    ProductCategory: 'groups'
+  }
+}

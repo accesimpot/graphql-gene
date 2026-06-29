@@ -1,12 +1,32 @@
 import './augmentGqlSource'
-import type { CreationOptional, InferAttributes, InferCreationAttributes } from 'sequelize'
-import { BelongsTo, Column, DataType, ForeignKey, HasMany, Model, Table } from 'sequelize-typescript'
+import type {
+  CreationOptional,
+  HasManyAddAssociationMixin,
+  InferAttributes,
+  InferCreationAttributes,
+} from 'sequelize'
+import {
+  BelongsTo,
+  BelongsToMany,
+  Column,
+  DataType,
+  ForeignKey,
+  HasMany,
+  Model,
+  Table,
+} from 'sequelize-typescript'
 import type { GeneAssociationList, ResolveGqlSource } from 'graphql-gene'
-import type { ToGqlSource } from './toGqlSource'
+import type { GeneAssociationListWrapperGqlType, ToGqlSource } from './toGqlSource'
 
 type Assert<T extends true> = T
 
 type Equal<A, B> = (<G>() => G extends A ? 1 : 2) extends <G>() => G extends B ? 1 : 2 ? true : false
+
+declare module '@graphql-gene/plugin-sequelize' {
+  interface GeneBelongsToManyAssociationFields {
+    ToGqlSourceBelongsToManyParent: 'tags'
+  }
+}
 
 @Table
 class ToGqlSourceParent extends Model<
@@ -51,17 +71,48 @@ class ToGqlSourceAddress extends Model<
   declare city: string | null
 }
 
+@Table
+class ToGqlSourceTag extends Model {
+  @Column({ type: DataType.INTEGER, primaryKey: true, autoIncrement: true })
+  declare id: number
+
+  @Column(DataType.STRING)
+  declare label: string | null
+}
+
+@Table
+class ToGqlSourceBelongsToManyParent extends Model {
+  @Column({ type: DataType.INTEGER, primaryKey: true, autoIncrement: true })
+  declare id: number
+
+  @BelongsToMany(() => ToGqlSourceTag, { through: 'ToGqlSourceParentTags' })
+  declare tags: CreationOptional<ToGqlSourceTag[]>
+  declare addTag: HasManyAddAssociationMixin<ToGqlSourceTag, number>
+}
+
 declare module 'graphql-gene/schema' {
   export interface GeneSchema {
     ToGqlSourceParent: typeof ToGqlSourceParent
     ToGqlSourceChild: typeof ToGqlSourceChild
     ToGqlSourceAddress: typeof ToGqlSourceAddress
+    ToGqlSourceBelongsToManyParent: typeof ToGqlSourceBelongsToManyParent
+    ToGqlSourceTag: typeof ToGqlSourceTag
   }
 }
 
 type ParentSource = ToGqlSource<typeof ToGqlSourceParent, 'ToGqlSourceParent'>
 type ChildSource = ToGqlSource<typeof ToGqlSourceChild, 'ToGqlSourceChild'>
+type BelongsToManyParentSource = ToGqlSource<
+  typeof ToGqlSourceBelongsToManyParent,
+  'ToGqlSourceBelongsToManyParent'
+>
 
+type _wrapperGqlTypeName = Assert<
+  Equal<
+    GeneAssociationListWrapperGqlType<'ToGqlSourceParent', 'questions'>,
+    'ToGqlSourceParentQuestionsGeneAssociationListResult'
+  >
+>
 type _scalarFields = Assert<Equal<Pick<ParentSource, 'id' | 'title'>, Pick<ToGqlSourceParent, 'id' | 'title'>>>
 type _hasManyField = Assert<
   ParentSource['questions'] extends GeneAssociationList<ChildSource> | null ? true : false
@@ -69,7 +120,16 @@ type _hasManyField = Assert<
 type _belongsToField = Assert<
   ParentSource['address'] extends ToGqlSource<typeof ToGqlSourceAddress> | null ? true : false
 >
-type _extendTypesSource = Assert<Equal<ResolveGqlSource<typeof ToGqlSourceParent, 'ToGqlSourceParent'>, ParentSource>>
+type _belongsToManyField = Assert<
+  BelongsToManyParentSource['tags'] extends ToGqlSourceTag[] ? true : false
+>
+type _belongsToManyNotWrapper = Assert<
+  BelongsToManyParentSource['tags'] extends GeneAssociationList<ToGqlSourceTag> ? false : true
+>
+type _mixinExcluded = Assert<'addTag' extends keyof ParentSource ? false : true>
+type _extendTypesSource = Assert<
+  Equal<ResolveGqlSource<typeof ToGqlSourceParent, 'ToGqlSourceParent'>, ParentSource>
+>
 
 describe('ToGqlSource', () => {
   it('exports GeneAssociationList-compatible HasMany and BelongsTo shapes', () => {
@@ -91,5 +151,15 @@ describe('ToGqlSource', () => {
 
     expect(totalDuration).toBe(30)
     expect(parent.address?.city).toBe('Paris')
+  })
+
+  it('keeps BelongsToMany arrays as ORM rows, not GeneAssociationList wrappers', () => {
+    const parent: BelongsToManyParentSource = {
+      id: 1,
+      tags: [{ id: 1, label: 'alpha' }],
+    }
+
+    expect(parent.tags).toHaveLength(1)
+    expect(parent.tags[0]?.label).toBe('alpha')
   })
 })
