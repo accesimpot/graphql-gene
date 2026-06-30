@@ -116,6 +116,10 @@ function assertAssociation(parent: unknown, associationField: string): Associati
   return getAssociationOrThrow(expectModelInstance(parent), associationField)
 }
 
+/**
+ * BelongsToMany links parent and target through a junction table. Unlike HasMany, there is no
+ * foreign-key column on the target model that {@link foreignKeyWhere} can filter on.
+ */
 function isBelongsToManyAssociation(assoc: Association): boolean {
   return assoc.associationType === 'BelongsToMany'
 }
@@ -128,6 +132,12 @@ type AssociationFacetFindOptions = {
   include?: DefaultResolverIncludeOptions['include']
 }
 
+/**
+ * Invokes Sequelize's generated association mixin on the parent instance (`getTags`, `countTags`,
+ * …). Required for BelongsToMany because facet queries must join the through table; calling
+ * `TargetModel.findAll` with {@link foreignKeyWhere} would filter on a junction FK that does not
+ * exist on the target model.
+ */
 function callAssociationAccessor(
   parent: ModelInstanceWithClass,
   accessorName: unknown,
@@ -146,12 +156,18 @@ function callAssociationAccessor(
   return accessor.call(parent, options)
 }
 
+/** Sequelize stores mixin names on `association.accessors` (`get`, `count`, …). */
 function getAssociationAccessor(assoc: Association, kind: 'get' | 'count'): unknown {
   const accessors = Reflect.get(assoc, 'accessors')
   if (!isPlainRecord(accessors)) return undefined
   return accessors[kind]
 }
 
+/**
+ * Loads rows for an association-list `items` facet. HasMany queries the target model with
+ * {@link foreignKeyWhere}; BelongsToMany delegates to the parent's `get*` mixin so Sequelize
+ * applies the through-table join.
+ */
 async function findAssociationFacetRows(
   parent: ModelInstanceWithClass,
   associationField: string,
@@ -180,6 +196,11 @@ async function findAssociationFacetRows(
   })
 }
 
+/**
+ * Counts rows for an association-list `count` facet. HasMany uses `TargetModel.count` with
+ * {@link foreignKeyWhere}; BelongsToMany uses the parent's `count*` mixin for the same
+ * through-table semantics.
+ */
 async function countAssociationFacetRows(
   parent: ModelInstanceWithClass,
   associationField: string,
@@ -206,6 +227,7 @@ async function countAssociationFacetRows(
   })
 }
 
+/** Target model `geneConfig.findOptions` may reshape the facet query; skip parent preload staging. */
 function targetModelHasTypeFindOptions(parent: Model, associationField: string): boolean {
   const TargetModel = targetModelFromAssociation(parent, associationField)
   const geneConfig =
@@ -222,6 +244,11 @@ function associationTargetIsPolymorphicHub(parent: Model, associationField: stri
   return !!TargetModel.geneConfig?.__polymorphicJunction
 }
 
+/**
+ * Whether a parent Sequelize preload can seed the wrapper without a fresh facet query.
+ * Unrelated to BelongsToMany; guards hydration when filters, target `findOptions`, or
+ * polymorphic hubs require `ensureAssociationItemsFacetLoaded` to run instead.
+ */
 function shouldStageParentPreload(
   parent: Model,
   associationField: string,
@@ -235,6 +262,7 @@ function shouldStageParentPreload(
     !associationTargetIsPolymorphicHub(parent, associationField)
   )
 }
+
 function foreignKeyWhere(parent: unknown, associationField: string): Record<string, unknown> {
   const modelParent = expectModelInstance(parent)
   const assoc = assertAssociationJoinColumns(getAssociationOrThrow(modelParent, associationField))
