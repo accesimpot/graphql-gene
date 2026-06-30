@@ -140,6 +140,10 @@ extendTypes({
     itemTotalQuantity: {
       returnType: 'Int!',
 
+      /**
+       * Since `itemTotalQuantity` depends on the `items` association, we need to ensure it is
+       * included in the findOptions even if the client doesn't select it.
+       */
       findOptions({ findOptions }) {
         findOptions.include = findOptions.include || []
         if (!findOptions.include.some(opt => opt.association === 'items')) {
