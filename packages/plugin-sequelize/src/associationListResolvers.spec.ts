@@ -466,14 +466,8 @@ describe('attachGqlSourceHydrationResolvers', () => {
   })
 
   it('passes hydrated association lists to sibling extendTypes-style resolvers', async () => {
-    const {
-      GraphQLSchema,
-      GraphQLObjectType,
-      GraphQLInt,
-      GraphQLNonNull,
-      GraphQLList,
-      graphql,
-    } = await import('graphql')
+    const { GraphQLSchema, GraphQLObjectType, GraphQLInt, GraphQLNonNull, GraphQLList, graphql } =
+      await import('graphql')
 
     const parent = await UnitParent.create({})
     await UnitChild.create({ parentId: parent.id, id: 11 })
