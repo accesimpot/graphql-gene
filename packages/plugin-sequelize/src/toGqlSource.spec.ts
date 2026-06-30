@@ -75,7 +75,7 @@ class ToGqlSourceTag extends Model {
 }
 
 @Table
-class ToGqlSourceBelongsToManyParent extends Model {
+class _ToGqlSourceBelongsToManyParent extends Model {
   @Column({ type: DataType.INTEGER, primaryKey: true, autoIncrement: true })
   declare id: number
 
@@ -89,7 +89,7 @@ declare module 'graphql-gene/schema' {
     ToGqlSourceParent: typeof ToGqlSourceParent
     ToGqlSourceChild: typeof ToGqlSourceChild
     ToGqlSourceAddress: typeof ToGqlSourceAddress
-    ToGqlSourceBelongsToManyParent: typeof ToGqlSourceBelongsToManyParent
+    ToGqlSourceBelongsToManyParent: typeof _ToGqlSourceBelongsToManyParent
     ToGqlSourceTag: typeof ToGqlSourceTag
   }
 }
@@ -98,7 +98,7 @@ type ParentSource = ToGqlSource<typeof ToGqlSourceParent, 'ToGqlSourceParent'>
 type ChildSource = ToGqlSource<typeof ToGqlSourceChild, 'ToGqlSourceChild'>
 type TagSource = ToGqlSource<typeof ToGqlSourceTag, 'ToGqlSourceTag'>
 type BelongsToManyParentSource = ToGqlSource<
-  typeof ToGqlSourceBelongsToManyParent,
+  typeof _ToGqlSourceBelongsToManyParent,
   'ToGqlSourceBelongsToManyParent'
 >
 

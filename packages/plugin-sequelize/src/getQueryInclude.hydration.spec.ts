@@ -20,7 +20,7 @@ import { isGeneHydrationInclude } from './utils/includePostProcess'
 
 describe('getQueryInclude hydration includes', () => {
   it('adds hydration-marked includes when wrapper items facet is selected', async () => {
-    const { sequelize, UnitParent, UnitChild } = await createUnitAssocSqlite()
+    const { sequelize } = await createUnitAssocSqlite()
 
     try {
       const wrapperName = getGeneAssociationListWrapperTypeName('Order', 'items')

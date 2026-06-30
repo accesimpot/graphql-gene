@@ -472,7 +472,6 @@ describe('attachGqlSourceHydrationResolvers', () => {
       GraphQLInt,
       GraphQLNonNull,
       GraphQLList,
-      GraphQLString,
       graphql,
     } = await import('graphql')
 

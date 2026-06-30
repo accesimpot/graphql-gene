@@ -1,5 +1,5 @@
 import { Column, DataType, Model, Sequelize, Table } from 'sequelize-typescript'
-import { getDefaultFieldLinesObject, getDefaultTypeDefLinesObject } from 'graphql-gene'
+import { getDefaultTypeDefLinesObject } from 'graphql-gene'
 import { populateTypeDefs } from './populateTypeDefs'
 import { getGeneAssociationListWrapperTypeName } from './utils/associationListRegistry'
 

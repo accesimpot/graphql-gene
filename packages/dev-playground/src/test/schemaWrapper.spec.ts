@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { GraphQLObjectType, getNamedType, isListType } from 'graphql'
+import { GraphQLObjectType, getNamedType } from 'graphql'
 import { schema } from '../server/schema'
 import { isAssociationListWrapperOutputType } from '../../../plugin-sequelize/src/utils/associationListWrapperShape'
 
