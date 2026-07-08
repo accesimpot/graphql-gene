@@ -7,7 +7,7 @@ import {
   type GraphQLResolveInfo,
   type GraphQLSchema,
 } from 'graphql'
-import type { Association, ModelStatic } from 'sequelize'
+import type { Association, ModelStatic, WhereOptions } from 'sequelize'
 import { Model } from 'sequelize-typescript'
 import {
   getGloballyExtendedTypes,
@@ -22,6 +22,7 @@ import { resolvePolymorphicHubLoadedRows } from './utils/polymorphic'
 import { getGeneAssociationListWrapperMeta } from './utils/associationListRegistry'
 import {
   hasAssociationJoinColumns,
+  isInternalGraphqlType,
   isModel,
   isPlainRecord,
   isSafeArray,
@@ -115,6 +116,153 @@ function assertAssociation(parent: unknown, associationField: string): Associati
   return getAssociationOrThrow(expectModelInstance(parent), associationField)
 }
 
+/**
+ * BelongsToMany links parent and target through a junction table. Unlike HasMany, there is no
+ * foreign-key column on the target model that {@link foreignKeyWhere} can filter on.
+ */
+function isBelongsToManyAssociation(assoc: Association): boolean {
+  return assoc.associationType === 'BelongsToMany'
+}
+
+type AssociationFacetFindOptions = {
+  where?: WhereOptions
+  order?: DefaultResolverIncludeOptions['order']
+  offset?: number
+  limit?: number
+  include?: DefaultResolverIncludeOptions['include']
+}
+
+/**
+ * Invokes Sequelize's generated association mixin on the parent instance (`getTags`, `countTags`,
+ * …). Required for BelongsToMany because facet queries must join the through table; calling
+ * `TargetModel.findAll` with {@link foreignKeyWhere} would filter on a junction FK that does not
+ * exist on the target model.
+ */
+function callAssociationAccessor(
+  parent: ModelInstanceWithClass,
+  accessorName: unknown,
+  label: string,
+  options: AssociationFacetFindOptions
+) {
+  if (typeof accessorName !== 'string') {
+    throw new GraphQLError(`Association is missing a ${label} accessor.`)
+  }
+
+  const accessor = Reflect.get(parent, accessorName)
+  if (typeof accessor !== 'function') {
+    throw new GraphQLError(`Association ${label} accessor "${accessorName}" is not callable.`)
+  }
+
+  return accessor.call(parent, options)
+}
+
+/** Sequelize stores mixin names on `association.accessors` (`get`, `count`, …). */
+function getAssociationAccessor(assoc: Association, kind: 'get' | 'count'): unknown {
+  const accessors = Reflect.get(assoc, 'accessors')
+  if (!isPlainRecord(accessors)) return undefined
+  return accessors[kind]
+}
+
+/**
+ * Loads rows for an association-list `items` facet. HasMany queries the target model with
+ * {@link foreignKeyWhere}; BelongsToMany delegates to the parent's `get*` mixin so Sequelize
+ * applies the through-table join.
+ */
+async function findAssociationFacetRows(
+  parent: ModelInstanceWithClass,
+  associationField: string,
+  options: AssociationFacetFindOptions
+): Promise<Model[]> {
+  const assoc = getAssociationOrThrow(parent, associationField)
+
+  if (isBelongsToManyAssociation(assoc)) {
+    return (await callAssociationAccessor(
+      parent,
+      getAssociationAccessor(assoc, 'get'),
+      'get',
+      options
+    )) as Model[]
+  }
+
+  const TargetModel = targetModelFromAssociation(parent, associationField)
+  const fkWhere = foreignKeyWhere(parent, associationField)
+
+  return TargetModel.findAll({
+    where: { ...fkWhere, ...options.where },
+    order: options.order,
+    offset: options.offset,
+    limit: options.limit,
+    include: options.include,
+  })
+}
+
+/**
+ * Counts rows for an association-list `count` facet. HasMany uses `TargetModel.count` with
+ * {@link foreignKeyWhere}; BelongsToMany uses the parent's `count*` mixin for the same
+ * through-table semantics.
+ */
+async function countAssociationFacetRows(
+  parent: ModelInstanceWithClass,
+  associationField: string,
+  options: Pick<AssociationFacetFindOptions, 'where' | 'include'>
+): Promise<number> {
+  const assoc = getAssociationOrThrow(parent, associationField)
+
+  if (isBelongsToManyAssociation(assoc)) {
+    return (await callAssociationAccessor(
+      parent,
+      getAssociationAccessor(assoc, 'count'),
+      'count',
+      options
+    )) as number
+  }
+
+  const TargetModel = targetModelFromAssociation(parent, associationField)
+  const fkWhere = foreignKeyWhere(parent, associationField)
+
+  return TargetModel.count({
+    where: { ...fkWhere, ...options.where },
+    include: options.include,
+    distinct: true,
+  })
+}
+
+/** Target model `geneConfig.findOptions` may reshape the facet query; skip parent preload staging. */
+function targetModelHasTypeFindOptions(parent: Model, associationField: string): boolean {
+  const TargetModel = targetModelFromAssociation(parent, associationField)
+  const geneConfig =
+    getGloballyExtendedTypes().geneConfig[
+      TargetModel.name as keyof ReturnType<typeof getGloballyExtendedTypes>['geneConfig']
+    ]
+  return !!geneConfig?.findOptions
+}
+
+function associationTargetIsPolymorphicHub(parent: Model, associationField: string): boolean {
+  const TargetModel = targetModelFromAssociation(parent, associationField) as ModelStatic<Model> & {
+    geneConfig?: { __polymorphicJunction?: unknown }
+  }
+  return !!TargetModel.geneConfig?.__polymorphicJunction
+}
+
+/**
+ * Whether a parent Sequelize preload can seed the wrapper without a fresh facet query.
+ * Unrelated to BelongsToMany; guards hydration when filters, target `findOptions`, or
+ * polymorphic hubs require `ensureAssociationItemsFacetLoaded` to run instead.
+ */
+function shouldStageParentPreload(
+  parent: Model,
+  associationField: string,
+  preload: unknown,
+  facetArgs: Record<string, unknown>
+): boolean {
+  return (
+    isSafeArray(preload) &&
+    !isAssociationFacetRequiringFreshQuery(facetArgs) &&
+    !targetModelHasTypeFindOptions(parent, associationField) &&
+    !associationTargetIsPolymorphicHub(parent, associationField)
+  )
+}
+
 function foreignKeyWhere(parent: unknown, associationField: string): Record<string, unknown> {
   const modelParent = expectModelInstance(parent)
   const assoc = assertAssociationJoinColumns(getAssociationOrThrow(modelParent, associationField))
@@ -149,36 +297,39 @@ async function ensureAssociationItemsFacetLoaded(
   }
 
   const facetArgs = payload.facetArgs ?? {}
-  const { parent, associationField } = payload
-  const TargetModel = targetModelFromAssociation(parent, associationField)
-  const fkWhere = foreignKeyWhere(parent, associationField)
-
+  const { associationField } = payload
+  const modelParent = expectModelInstance(payload.parent)
   const columnOpts = getFieldIncludeOptions({
     args: facetArgs,
     isList: true,
     omitAssociation: true,
     filterContext: {
-      ownerGraphqlType: TargetModel.name,
+      ownerGraphqlType: targetModelFromAssociation(modelParent, associationField).name,
       includes: [],
     },
   })
 
   const nestedInclude = getQueryInclude(info)
   const mergedFind: DefaultResolverIncludeOptions = { ...(nestedInclude || {}) }
-  applyGeneConfigRootFindOptions(TargetModel, mergedFind)
+  applyGeneConfigRootFindOptions(
+    targetModelFromAssociation(modelParent, associationField),
+    mergedFind
+  )
 
   const mergedInclude = [...(columnOpts.include || []), ...(mergedFind.include || [])]
   if (mergedInclude.length) {
-    mergedFind.include = mergedInclude
-    stripAssociationListWrapperIncludes(TargetModel, mergedFind.include)
+    stripAssociationListWrapperIncludes(
+      targetModelFromAssociation(modelParent, associationField),
+      mergedInclude
+    )
   }
 
-  const rows = await TargetModel.findAll({
-    where: { ...fkWhere, ...columnOpts.where },
+  const rows = await findAssociationFacetRows(modelParent, associationField, {
+    where: columnOpts.where,
     order: columnOpts.order,
     offset: columnOpts.offset,
     limit: columnOpts.limit,
-    include: mergedFind.include,
+    include: mergedInclude.length ? mergedInclude : undefined,
   })
 
   wrapperRoot.items = resolvePolymorphicHubLoadedRows(rows)
@@ -189,7 +340,7 @@ export function attachAssociationListWrapperResolvers(schema: GraphQLSchema, typ
 
   for (const schemaType of Object.values(schema.getTypeMap())) {
     if (!(schemaType instanceof GraphQLObjectType)) continue
-    if (schemaType.name.startsWith('__')) continue
+    if (isInternalGraphqlType(schemaType.name)) continue
 
     const parentGraphqlTypeName = schemaType.name
 
@@ -226,7 +377,7 @@ export function attachAssociationListWrapperResolvers(schema: GraphQLSchema, typ
         const wrapperRoot: Record<string, unknown> = {}
         const preload = isSafeArray(prior) ? prior : Reflect.get(parent, fieldName)
 
-        if (isSafeArray(preload) && !isAssociationFacetRequiringFreshQuery(facetArgs)) {
+        if (shouldStageParentPreload(parent, fieldName, preload, facetArgs)) {
           // Staged copy: type-level directives filter `source[field]` (`items`) in-place before the
           // facet resolver runs; Sequelize's preload array must stay untouched.
           wrapperRoot.items = resolvePolymorphicHubLoadedRows(preload.slice())
@@ -273,23 +424,22 @@ export function attachAssociationListWrapperResolvers(schema: GraphQLSchema, typ
         }
 
         const facetArgs = payload.facetArgs ?? {}
+        const modelParent = expectModelInstance(payload.parent)
 
-        const TargetModel = targetModelFromAssociation(payload.parent, payload.associationField)
-        const fkWhere = foreignKeyWhere(payload.parent, payload.associationField)
         const filterOpts = getFieldIncludeOptions({
           args: facetArgs,
           isList: false,
           omitAssociation: true,
           filterContext: {
-            ownerGraphqlType: TargetModel.name,
+            ownerGraphqlType: targetModelFromAssociation(modelParent, payload.associationField)
+              .name,
             includes: [],
           },
         })
 
-        return TargetModel.count({
-          where: { ...fkWhere, ...filterOpts.where },
+        return countAssociationFacetRows(modelParent, payload.associationField, {
+          where: filterOpts.where,
           include: filterOpts.include,
-          distinct: true,
         })
       }
     }

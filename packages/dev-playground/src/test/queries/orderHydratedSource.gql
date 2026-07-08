@@ -1,0 +1,5 @@
+query orderHydratedSource($id: String!) {
+  order(id: $id) {
+    itemTotalQuantity
+  }
+}

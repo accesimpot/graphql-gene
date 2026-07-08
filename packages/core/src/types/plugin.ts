@@ -10,6 +10,8 @@ export type PluginSettings<
     isMatching: boolean
     fieldName: TField extends string ? string : never
     findOptionsState: object
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    modelClassOf: abstract new (...args: any) => any
   },
   TField extends string | number | symbol = string,
 > = T

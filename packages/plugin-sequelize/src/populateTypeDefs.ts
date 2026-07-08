@@ -21,8 +21,6 @@ import {
   registerGeneAssociationListWrapper,
 } from './utils/associationListRegistry'
 
-const BELONGS_TO_MANY = 'BelongsToMany'
-
 type PopulateTypeDefs = GenePlugin<typeof GeneModel>['populateTypeDefs']
 type PopulateTypeDefsOptions = Parameters<PopulateTypeDefs>[0]
 
@@ -110,11 +108,7 @@ function generateAssociationFields(
   const afterTypeDefHooks: (() => void)[] = []
 
   Object.entries(options.model.associations).forEach(([attributeKey, association]) => {
-    if (
-      !options.isFieldIncluded(attributeKey) ||
-      // Eager loading doesn't support BelongsToMany associations
-      association.associationType === BELONGS_TO_MANY
-    ) {
+    if (!options.isFieldIncluded(attributeKey)) {
       return
     }
 
@@ -135,7 +129,7 @@ function generateAssociationFields(
         targetGraphqlType: associationModelName,
       })
 
-      returnType = `${associationWrapperTypeName}!`
+      returnType = associationWrapperTypeName
       isList = true
     }
 

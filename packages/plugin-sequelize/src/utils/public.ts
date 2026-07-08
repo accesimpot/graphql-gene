@@ -30,6 +30,7 @@ import {
   scanAssociationWrapperFacets,
 } from './associationListWrapperShape'
 import { isMarkedAsAssociation } from './associationMap'
+import { markGeneHydrationInclude } from './includePostProcess'
 import { getAttributeByModelName } from './polymorphic'
 import { isSafeArray } from './guards'
 
@@ -119,7 +120,7 @@ function handleUntilFindOptions(options: UntilHandlerDetails<DefaultResolverIncl
         if (typeConfig?.findOptions) {
           rootState.include = rootState.include || []
           const possibleState = rootState.include?.find(opt => opt.association === field)
-          const nestedState = possibleState || { association: field }
+          const nestedState = possibleState || markGeneHydrationInclude({ association: field })
           if (!possibleState) rootState.include.push(nestedState)
 
           typeConfig?.findOptions?.(Object.assign(options, { findOptions: nestedState }))
@@ -159,8 +160,14 @@ function handleNextIncludeOptions(details: NextHandlerDetails<DefaultResolverInc
     const { hasItems } = scanAssociationWrapperFacets(info, namedReturn.name, nextSelectionSet)
     if (!hasItems) return {}
 
-    // Wrapper HasMany associations load via facet resolvers, not parent eager includes.
-    return frameAssociationInclude(state)
+    state.include = state.include || []
+    let hydrationInclude = state.include.find(opt => opt.association === field)
+    if (!hydrationInclude) {
+      hydrationInclude = markGeneHydrationInclude({ association: field })
+      state.include.push(hydrationInclude)
+    }
+
+    return hydrationInclude
   }
 
   const include = getFieldIncludeOptions({
@@ -190,6 +197,15 @@ function handleNextFragmentIncludeOptions(
   return include
 }
 
+function resolveIncludeOptionsFromLookahead(
+  includeOptions: DefaultResolverIncludeOptions
+): Required<Pick<DefaultResolverIncludeOptions, 'include'>> | undefined {
+  const resolved = unwrapAssociationIncludeFrame(includeOptions)
+  return isEmptyObject(resolved) || !resolved.include?.length
+    ? undefined
+    : (resolved as Required<Pick<DefaultResolverIncludeOptions, 'include'>>)
+}
+
 export function getQueryInclude(info: GraphQLResolveInfo) {
   const includeOptions: DefaultResolverIncludeOptions = {}
 
@@ -201,9 +217,7 @@ export function getQueryInclude(info: GraphQLResolveInfo) {
     nextFragment: handleNextFragmentIncludeOptions,
   })
 
-  return isEmptyObject(includeOptions)
-    ? undefined
-    : (includeOptions as Required<Pick<typeof includeOptions, 'include'>>)
+  return resolveIncludeOptionsFromLookahead(includeOptions)
 }
 
 export function getQueryIncludeOf(
@@ -249,9 +263,7 @@ export function getQueryIncludeOf(
     lookahead(lookDeeperOptions)
   }
 
-  return isEmptyObject(includeOptions)
-    ? undefined
-    : (includeOptions as Required<Pick<typeof includeOptions, 'include'>>)
+  return resolveIncludeOptionsFromLookahead(includeOptions)
 }
 
 export function getFieldFindOptions(options: {

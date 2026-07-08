@@ -3,21 +3,14 @@ import { Op } from 'sequelize'
 import type { GraphQLResolveInfo } from 'graphql'
 import type { DefaultResolverIncludeOptions } from './types'
 
-const { getFieldFindOptions, getQueryInclude, stripAssociationListWrapperIncludes } = vi.hoisted(
-  () => ({
-    getFieldFindOptions: vi.fn(),
-    getQueryInclude: vi.fn(),
-    stripAssociationListWrapperIncludes: vi.fn(),
-  })
-)
+const { getFieldFindOptions, getQueryInclude } = vi.hoisted(() => ({
+  getFieldFindOptions: vi.fn(),
+  getQueryInclude: vi.fn(),
+}))
 
 vi.mock('./utils', () => ({
   getFieldFindOptions,
   getQueryInclude,
-}))
-
-vi.mock('./utils/includePostProcess', () => ({
-  stripAssociationListWrapperIncludes,
 }))
 
 describe('defaultResolver', () => {
@@ -27,6 +20,10 @@ describe('defaultResolver', () => {
 
   it('merges deep-filter includes with lookahead includes for root list queries', async () => {
     const { defaultResolver } = await import('./defaultResolver')
+    const stripSpy = vi.spyOn(
+      await import('./utils/includePostProcess'),
+      'stripAssociationListWrapperIncludes'
+    )
 
     const deepFilterInclude: DefaultResolverIncludeOptions = {
       association: 'product',
@@ -64,7 +61,8 @@ describe('defaultResolver', () => {
     const findOptions = findAll.mock.calls[0]?.[0] as { include: DefaultResolverIncludeOptions[] }
 
     expect(findOptions.include).toEqual([deepFilterInclude, lookaheadInclude])
-    expect(stripAssociationListWrapperIncludes).toHaveBeenCalledWith(model, findOptions.include)
+    expect(stripSpy).toHaveBeenCalledWith(model, findOptions.include)
+    stripSpy.mockRestore()
   })
 
   it('keeps lookahead-only includes when deep filters do not add any', async () => {
@@ -96,8 +94,17 @@ describe('defaultResolver', () => {
     expect(findOptions.include).toEqual([lookaheadInclude])
   })
 
-  it('does not pass unstripped lookahead includes after wrapper stripping empties the merge', async () => {
+  it('drops unstripped wrapper lookahead includes that are not hydration-marked', async () => {
     const { defaultResolver } = await import('./defaultResolver')
+    const { registerGeneAssociationListWrapper } = await import('./utils/associationListRegistry')
+    const { markFieldAsAssociation } = await import('./utils/associationMap')
+
+    registerGeneAssociationListWrapper('OrderItemsGeneAssociationListResult', {
+      parentGraphqlType: 'Order',
+      associationField: 'items',
+      targetGraphqlType: 'OrderItem',
+    })
+    markFieldAsAssociation('Order', 'items')
 
     const wrapperInclude: DefaultResolverIncludeOptions = {
       association: 'items',
@@ -107,14 +114,10 @@ describe('defaultResolver', () => {
     getFieldFindOptions.mockReturnValue({ where: { status: { [Op.eq]: 'paid' } } })
     getQueryInclude.mockReturnValue({ include: [wrapperInclude] })
 
-    stripAssociationListWrapperIncludes.mockImplementation((_model, includes) => {
-      includes.splice(0, includes.length)
-    })
-
     const findOne = vi.fn().mockResolvedValue(null)
     const model = {
       name: 'Order',
-      associations: {},
+      associations: { items: { target: { name: 'OrderItem' } } },
       findOne,
     }
 
@@ -128,5 +131,42 @@ describe('defaultResolver', () => {
 
     const findOptions = findOne.mock.calls[0]?.[0] as { include?: DefaultResolverIncludeOptions[] }
     expect(findOptions.include).toBeUndefined()
+  })
+
+  it('keeps hydration-marked wrapper includes after stripping', async () => {
+    const { defaultResolver } = await import('./defaultResolver')
+    const { markGeneHydrationInclude } = await import('./utils/includePostProcess')
+    const { registerGeneAssociationListWrapper } = await import('./utils/associationListRegistry')
+    const { markFieldAsAssociation } = await import('./utils/associationMap')
+
+    registerGeneAssociationListWrapper('OrderItemsGeneAssociationListResult', {
+      parentGraphqlType: 'Order',
+      associationField: 'items',
+      targetGraphqlType: 'OrderItem',
+    })
+    markFieldAsAssociation('Order', 'items')
+
+    const hydrationInclude = markGeneHydrationInclude({ association: 'items' })
+
+    getFieldFindOptions.mockReturnValue({ where: { status: { [Op.eq]: 'paid' } } })
+    getQueryInclude.mockReturnValue({ include: [hydrationInclude] })
+
+    const findOne = vi.fn().mockResolvedValue(null)
+    const model = {
+      name: 'Order',
+      associations: { items: { target: { name: 'OrderItem' } } },
+      findOne,
+    }
+
+    await defaultResolver({
+      model,
+      modelKey: 'Order',
+      config: { returnType: 'Order' },
+      args: { where: { status: { eq: 'paid' } } },
+      info: {} as GraphQLResolveInfo,
+    })
+
+    const findOptions = findOne.mock.calls[0]?.[0] as { include: DefaultResolverIncludeOptions[] }
+    expect(findOptions.include).toEqual([hydrationInclude])
   })
 })

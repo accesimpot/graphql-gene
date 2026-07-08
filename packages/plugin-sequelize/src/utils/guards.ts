@@ -57,3 +57,8 @@ export function hasAssociationJoinColumns(assoc: Association): assoc is Associat
 
   return typeof foreignKey === 'string' && typeof sourceKey === 'string'
 }
+
+/** GraphQL introspection types and other schema internals use a `__` name prefix. */
+export function isInternalGraphqlType(typeName: string): boolean {
+  return typeName.startsWith('__')
+}

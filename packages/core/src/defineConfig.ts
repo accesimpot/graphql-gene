@@ -14,10 +14,14 @@ import type {
   OperatorInputs,
   Prop,
   PrototypeOrNot,
+  ResolveGqlSource,
+  ModelClassByPluginModel,
   SomeRequired,
   TypeOrFunction,
   ValidGraphqlType,
 } from './types'
+import type { GraphqlTypes } from './types/graphql'
+import type { HasPluginMatching } from './types/graphqlToTypescript'
 import type { GENE_RESOLVER_TEMPLATES, QUERY_ORDER_ENUM } from './constants'
 
 type ArgsDefinition<V = string> = Record<string, V> | `${GENE_RESOLVER_TEMPLATES}` | undefined
@@ -49,9 +53,21 @@ type AccurateTypeSource<
   TFallbackSource = Record<string, unknown> | undefined,
 > = TTypeName extends 'Query' | 'Mutation'
   ? undefined
-  : TTypeName extends string
-    ? FallbackIfInvalid<NonNullable<GraphqlToTypescript<TTypeName>>, TFallbackSource>
-    : TFallbackSource
+  : TTypeName extends keyof GraphqlTypes
+    ? HasPluginMatching<GraphqlTypes[TTypeName]> extends true
+      ? FallbackIfInvalid<
+          NonNullable<
+            ResolveGqlSource<
+              ModelClassByPluginModel<NonNullable<GraphqlTypes[TTypeName]>>,
+              TTypeName & string
+            >
+          >,
+          TFallbackSource
+        >
+      : FallbackIfInvalid<NonNullable<GraphqlToTypescript<TTypeName>>, TFallbackSource>
+    : TTypeName extends string
+      ? FallbackIfInvalid<NonNullable<GraphqlToTypescript<TTypeName>>, TFallbackSource>
+      : TFallbackSource
 
 export type ExtendedTypes<
   TSource = Record<string, unknown> | undefined,

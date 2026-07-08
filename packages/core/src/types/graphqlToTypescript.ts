@@ -114,6 +114,12 @@ export type FindOptionsStateByModel<M, TFallback = never> = {
     : TFallback
 }[keyof GenePluginSettings<M>]
 
+export type ModelClassByPluginModel<M, TFallback = never> = {
+  [k in keyof GenePluginSettings<M>]: GenePluginSettings<M>[k]['isMatching'] extends true
+    ? GenePluginSettings<M>[k]['modelClassOf']
+    : TFallback
+}[keyof GenePluginSettings<M>]
+
 export type FindOptionsHandler<TState> = (
   details: UntilHandlerDetails<TState> & { findOptions: UntilHandlerDetails<TState>['state'] }
 ) => void

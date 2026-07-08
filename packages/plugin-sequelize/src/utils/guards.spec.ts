@@ -3,6 +3,7 @@ import type { Association } from 'sequelize'
 import { Model } from 'sequelize-typescript'
 import {
   hasAssociationJoinColumns,
+  isInternalGraphqlType,
   isModel,
   isModelStatic,
   isModelStaticWithAssociations,
@@ -75,6 +76,13 @@ describe('guards', () => {
     it('is true only for arrays', () => {
       expect(isSafeArray([])).toBe(true)
       expect(isSafeArray({})).toBe(false)
+    })
+  })
+
+  describe('isInternalGraphqlType', () => {
+    it('is true for introspection schema type names', () => {
+      expect(isInternalGraphqlType('__Schema')).toBe(true)
+      expect(isInternalGraphqlType('Order')).toBe(false)
     })
   })
 

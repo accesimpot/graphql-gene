@@ -2,6 +2,7 @@ import type { GenePlugin, PluginSettings, PrototypeOrNot, TypeDefLines } from 'g
 import type { InferAttributes } from 'sequelize'
 import { Model } from 'sequelize-typescript'
 import { attachAssociationListWrapperResolvers } from './associationListResolvers'
+import { attachGqlSourceHydrationResolvers } from './attachGqlSourceHydration'
 import { defaultResolver } from './defaultResolver'
 import { populateTypeDefs } from './populateTypeDefs'
 import type { GeneModel } from './constants'
@@ -17,6 +18,10 @@ declare module 'graphql-gene/plugin-settings' {
           : 'id'
         : 'id'
       findOptionsState: DefaultResolverIncludeOptions
+      modelClassOf: PrototypeOrNot<M> extends Model
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          abstract new (...args: any) => PrototypeOrNot<M>
+        : never
     }>
   }
 }
@@ -39,6 +44,7 @@ export const plugin = (): GenePlugin<typeof GeneModel> => {
 
     attachSchemaResolvers({ schema, types }) {
       attachAssociationListWrapperResolvers(schema, types)
+      attachGqlSourceHydrationResolvers(schema, types)
     },
   }
 }
