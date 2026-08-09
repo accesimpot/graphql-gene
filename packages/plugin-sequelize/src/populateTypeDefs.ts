@@ -17,6 +17,7 @@ import {
 } from './constants'
 import { isMarkedAsAssociation, markFieldAsAssociation } from './utils/associationMap'
 import {
+  getGeneAssociationListWrapperMeta,
   getGeneAssociationListWrapperTypeName,
   registerGeneAssociationListWrapper,
 } from './utils/associationListRegistry'
@@ -173,6 +174,8 @@ function generateAssociationFields(
           fieldType: associationModelName,
           associationFilterDepth: 1,
           isAssociationField: (ownerType, fieldName) => isMarkedAsAssociation(ownerType, fieldName),
+          resolveListWrapperTargetType: graphqlTypeName =>
+            getGeneAssociationListWrapperMeta(graphqlTypeName)?.targetGraphqlType,
         })
       })
     }
