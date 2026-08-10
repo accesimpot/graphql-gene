@@ -15,6 +15,33 @@ import {
 import { populateTypeDefs } from './populateTypeDefs'
 import { getGeneAssociationListWrapperTypeName } from './utils/associationListRegistry'
 
+describe('populateTypeDefs initialization', () => {
+  it('throws when the model is not registered with a Sequelize instance', () => {
+    @Table
+    class UninitializedModel extends Model {
+      @Column({ type: DataType.INTEGER, primaryKey: true, autoIncrement: true })
+      declare id: number
+    }
+
+    const typeDefLines: TypeDefLines = {
+      UninitializedModel: {
+        ...getDefaultTypeDefLinesObject(),
+        lines: {},
+      },
+    }
+
+    expect(() =>
+      populateTypeDefs({
+        typeDefLines,
+        model: UninitializedModel,
+        typeName: 'UninitializedModel',
+        isFieldIncluded: () => true,
+        schemaOptions: { types: {} },
+      })
+    ).toThrow(/not initialized/)
+  })
+})
+
 describe('populateTypeDefs BelongsToMany associations', () => {
   let sequelize: Sequelize
 
