@@ -1,5 +1,5 @@
 import type { GenePlugin, PluginSettings, PrototypeOrNot, TypeDefLines } from 'graphql-gene'
-import type { InferAttributes } from 'sequelize'
+import type { InferAttributes, Sequelize } from 'sequelize'
 import { Model } from 'sequelize-typescript'
 import { attachAssociationListWrapperResolvers } from './associationListResolvers'
 import { attachGqlSourceHydrationResolvers } from './attachGqlSourceHydration'
@@ -7,6 +7,7 @@ import { defaultResolver } from './defaultResolver'
 import { populateTypeDefs } from './populateTypeDefs'
 import type { GeneModel } from './constants'
 import type { DefaultResolverIncludeOptions } from './types'
+import { isSequelizeFieldConfig } from './utils/public'
 
 declare module 'graphql-gene/plugin-settings' {
   export interface GenePluginSettings<M> {
@@ -26,7 +27,22 @@ declare module 'graphql-gene/plugin-settings' {
   }
 }
 
-export const plugin = (): GenePlugin<typeof GeneModel> => {
+export type SequelizePluginOptions = {
+  /**
+   * The Sequelize instance your models are registered with. Passing it guarantees the models
+   * are initialized (attributes and associations) before the schema is generated, instead of
+   * relying on the module evaluation order of the file defining the instance.
+   */
+  sequelize?: Sequelize
+}
+
+export const plugin = (options: SequelizePluginOptions = {}): GenePlugin<typeof GeneModel> => {
+  if (options.sequelize && !Object.keys(options.sequelize.models).length) {
+    throw new Error(
+      'The Sequelize instance given to "pluginSequelize" has no registered model. Pass your models to `new Sequelize({ models })` or `sequelize.addModels`.'
+    )
+  }
+
   return {
     isMatching: model => isSequelizeFieldConfig(model),
 
@@ -47,14 +63,4 @@ export const plugin = (): GenePlugin<typeof GeneModel> => {
       attachGqlSourceHydrationResolvers(schema, types)
     },
   }
-}
-
-function isSequelizeFieldConfig<T>(
-  fieldConfigs: T
-): fieldConfigs is T extends typeof Model ? T & Model : T {
-  return (
-    fieldConfigs &&
-    (typeof fieldConfigs === 'object' || typeof fieldConfigs === 'function') &&
-    'sequelize' in fieldConfigs
-  )
 }

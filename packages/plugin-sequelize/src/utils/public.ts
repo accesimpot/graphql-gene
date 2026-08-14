@@ -32,7 +32,7 @@ import {
 import { isMarkedAsAssociation } from './associationMap'
 import { markGeneHydrationInclude } from './includePostProcess'
 import { getAttributeByModelName } from './polymorphic'
-import { isSafeArray } from './guards'
+import { isModelStatic, isSafeArray } from './guards'
 
 export * from './polymorphic'
 export { markFieldAsAssociation, isMarkedAsAssociation } from './associationMap'
@@ -67,14 +67,14 @@ function frameAssociationInclude(
 const QUERY_TYPE = 'Query'
 const MUTATION_TYPE = 'Mutation'
 
+/**
+ * True for sequelize-typescript model classes, whether or not they are registered
+ * with a Sequelize instance yet. Registration is validated in `populateTypeDefs`.
+ */
 export function isSequelizeFieldConfig<T>(
   fieldConfigs: T
 ): fieldConfigs is T extends typeof Model ? T & Model : T {
-  return (
-    fieldConfigs &&
-    (typeof fieldConfigs === 'object' || typeof fieldConfigs === 'function') &&
-    'sequelize' in fieldConfigs
-  )
+  return isModelStatic(fieldConfigs)
 }
 
 function getTypeConfig(type: string) {

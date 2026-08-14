@@ -1,4 +1,4 @@
-export { plugin as pluginSequelize } from './plugin'
+export { plugin as pluginSequelize, type SequelizePluginOptions } from './plugin'
 export * from './constants'
 export * from './types'
 export * from './toGqlSource'

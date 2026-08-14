@@ -30,6 +30,12 @@ function hasScalarInSchema(schema: GraphQLSchema | undefined, scalar: string) {
 }
 
 export const populateTypeDefs: PopulateTypeDefs = options => {
+  if (!('sequelize' in options.model) || options.model.sequelize == null) {
+    throw new Error(
+      `Sequelize model "${options.typeName}" is not initialized. Pass it to \`new Sequelize({ models })\` (or \`sequelize.addModels\`) before calling generateSchema.`
+    )
+  }
+
   options.typeDefLines[options.typeName] = {
     ...getDefaultTypeDefLinesObject(),
     ...options.typeDefLines[options.typeName],
@@ -108,7 +114,14 @@ function generateAssociationFields(
   const lines = options.typeDefLines[options.typeName].lines
   const afterTypeDefHooks: (() => void)[] = []
 
-  Object.entries(options.model.associations).forEach(([attributeKey, association]) => {
+  const associations = options.model.associations
+  if (associations == null || typeof associations !== 'object') {
+    throw new Error(
+      `Sequelize model "${options.typeName}" has no associations bag. Ensure it is registered with a Sequelize instance before calling generateSchema.`
+    )
+  }
+
+  Object.entries(associations).forEach(([attributeKey, association]) => {
     if (!options.isFieldIncluded(attributeKey)) {
       return
     }

@@ -131,12 +131,15 @@ You can use the `resolvers` option to provide the scalars as it accepts both res
 
 If you follow the example below, you will also need to install `graphql-scalars`.
 
+Your models must be registered with Sequelize before the schema is generated, otherwise their attributes and associations are not populated yet. Pass your Sequelize instance to `pluginSequelize` so the order does not depend on which file happens to be imported first.
+
 #### *src/server/schema.ts*
 
 ```ts
 import { DateResolver, DateTimeResolver, JSONResolver } from 'graphql-scalars'
 import { generateSchema } from 'graphql-gene'
 import { pluginSequelize } from '@graphql-gene/plugin-sequelize'
+import { sequelize } from '../models/sequelize'
 import * as graphqlTypes from '../models/graphqlTypes'
 
 const {
@@ -151,7 +154,7 @@ const {
     DateTime: DateTimeResolver,
     JSON: JSONResolver,
   },
-  plugins: [pluginSequelize()],
+  plugins: [pluginSequelize({ sequelize })],
   types: graphqlTypes,
 })
 
