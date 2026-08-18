@@ -185,10 +185,14 @@ function handleNextIncludeOptions(details: NextHandlerDetails<DefaultResolverInc
 function handleNextFragmentIncludeOptions(
   details: NextFragmentHandlerDetails<DefaultResolverIncludeOptions>
 ) {
-  const state = unwrapAssociationIncludeFrame(details.state)
   const { type, sourceType } = details
-  if (!isRegisteredPolymorphicAbstractType(sourceType)) return {}
 
+  // Spreading a fragment on a concrete type stays on the same object, so its fields have to keep
+  // filling the state they were spread into. Handing back a new one would send every include
+  // found inside the fragment to an object nothing ever reads.
+  if (!isRegisteredPolymorphicAbstractType(sourceType)) return details.state
+
+  const state = unwrapAssociationIncludeFrame(details.state)
   const include: DefaultResolverIncludeOptions = { association: getAttributeByModelName(type) }
 
   state.include = state.include || []
