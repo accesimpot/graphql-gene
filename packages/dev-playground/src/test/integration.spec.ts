@@ -118,6 +118,9 @@ describe('integration', () => {
                   },
                   categories: ['shoes', 'urban'],
                 },
+                restrictedGroup: {
+                  name: 'StreetStyle',
+                },
               },
             },
           ],

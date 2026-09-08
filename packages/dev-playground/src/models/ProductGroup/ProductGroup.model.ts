@@ -33,6 +33,11 @@ class ProductGroup extends Model<
 
   static readonly geneConfig = defineGraphqlGeneConfig(ProductGroup, {
     exclude: ['categories', 'groupCategories'],
+    aliases: {
+      ProductGroupNameOnly: {
+        include: ['name'],
+      },
+    },
   })
 }
 

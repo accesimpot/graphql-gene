@@ -40,10 +40,14 @@ class Product extends Model<InferAttributes<Product>, InferCreationAttributes<Pr
   @BelongsTo(() => ProductGroup)
   declare group: ProductGroup | null
 
+  @BelongsTo(() => ProductGroup, { foreignKey: 'groupId', as: 'restrictedGroup' })
+  declare restrictedGroup: ProductGroup | null
+
   @HasMany(() => ProductVariant)
   declare variants: ProductVariant[] | null
 
   static readonly geneConfig = defineGraphqlGeneConfig(Product, {
+    exclude: ['restrictedGroup'],
     aliases: {
       ProductNameOnly: {
         include: ['name'],
@@ -71,6 +75,10 @@ extendTypes({
       // Test case: ensure that directives can be provided as a function to avoid potential issues
       // with circular dependencies
       directives: () => [sanitizeColorDirective({ exclude: [] })],
+    },
+
+    restrictedGroup: {
+      returnType: 'ProductGroupNameOnly',
     },
 
     /**
