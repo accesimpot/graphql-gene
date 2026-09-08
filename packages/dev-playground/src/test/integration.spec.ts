@@ -67,6 +67,17 @@ describe('integration', () => {
 
   vi.spyOn(console, 'error').mockImplementation(() => undefined) // Prevent logging errors
 
+  describe('when a model is exported under an alias with an include list', () => {
+    it('generates only the fields selected by the alias config', () => {
+      const aliasType = schema.getType('ProductNameOnly')
+      if (!aliasType || !('getFields' in aliasType)) {
+        throw new Error('Expected ProductNameOnly to be an object type')
+      }
+
+      expect(Object.keys(aliasType.getFields())).toEqual(['name'])
+    })
+  })
+
   describe('when sending query with filters for default resolver returning single entry', () => {
     let result: ExecutionResult
 

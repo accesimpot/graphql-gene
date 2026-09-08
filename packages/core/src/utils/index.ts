@@ -293,6 +293,18 @@ export function getGeneConfigFromOptions<M>(options: {
   )
 }
 
+/**
+ * Resolve the config for an exported GraphQL type. Aliases are exported as the same model class,
+ * so processing that export with the model's base config would add all base fields to the alias.
+ */
+export function getGeneConfigForGraphqlType<M>(options: {
+  model: M
+  modelKey: string
+}): GeneConfig<M> | undefined {
+  const geneConfig = getGeneConfigFromOptions(options)
+  return geneConfig?.aliases?.[options.modelKey as keyof typeof geneConfig.aliases] ?? geneConfig
+}
+
 export function parseGetterConfig<T>(config: TypeOrFunction<T>): T {
   return config instanceof Function ? config() : config
 }

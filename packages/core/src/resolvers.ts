@@ -11,6 +11,7 @@ import {
   normalizeFieldConfig,
   isArrayFieldConfig,
   getGeneConfigFromOptions,
+  getGeneConfigForGraphqlType,
   getGloballyExtendedTypes,
   getReturnTypeName,
   parseGetterConfig,
@@ -25,13 +26,15 @@ export function addResolversToSchema<SchemaTypes extends AnyObject>(options: {
 }) {
   let schema = options.schema
 
-  Object.entries(options.types).forEach(([, model]) => {
+  Object.entries(options.types).forEach(([modelKey, model]) => {
+    const geneConfig = getGeneConfigForGraphqlType({ model, modelKey })
     const modifiedSchema = forEachModel({
       typeDefLines: options.typeDefLines,
       schema,
       types: options.types,
       plugins: options.plugins,
       model,
+      geneConfig,
     })
     if (modifiedSchema) schema = modifiedSchema
   })
