@@ -3,6 +3,9 @@ import {
   getDefaultTypeDefLinesObject,
   getDefaultFieldLinesObject,
   generateDefaultQueryFilterTypeDefs,
+  getGloballyExtendedTypes,
+  getReturnTypeName,
+  normalizeFieldConfig,
   populateArgsDefForDefaultResolver,
   type GenePlugin,
   type TypeDefLines,
@@ -95,6 +98,7 @@ export const populateTypeDefs: PopulateTypeDefs = options => {
     model: options.model,
     isFieldIncluded: options.isFieldIncluded,
     typeName: options.typeName,
+    schemaOptions: options.schemaOptions,
   })
 
   const modelGeneConfigVarType = options.model.geneConfig?.varType
@@ -107,7 +111,10 @@ export const populateTypeDefs: PopulateTypeDefs = options => {
 }
 
 function generateAssociationFields(
-  options: Pick<PopulateTypeDefsOptions, 'model' | 'isFieldIncluded' | 'typeName'> & {
+  options: Pick<
+    PopulateTypeDefsOptions,
+    'model' | 'isFieldIncluded' | 'typeName' | 'schemaOptions'
+  > & {
     typeDefLines: TypeDefLines
   }
 ) {
@@ -123,6 +130,21 @@ function generateAssociationFields(
 
   Object.entries(associations).forEach(([attributeKey, association]) => {
     if (!options.isFieldIncluded(attributeKey)) {
+      const extendedTypes = getGloballyExtendedTypes().config
+      if (!(options.typeName in extendedTypes)) return
+
+      const typeConfig = extendedTypes[options.typeName as keyof typeof extendedTypes]
+      const extendedFieldConfig = (
+        typeConfig as Record<string, Parameters<typeof normalizeFieldConfig>[0]> | undefined
+      )?.[attributeKey]
+      if (!extendedFieldConfig) return
+
+      const extendedReturnType = getReturnTypeName(
+        normalizeFieldConfig(extendedFieldConfig).returnType
+      )
+      if (options.schemaOptions.types[extendedReturnType] !== association.target) return
+
+      markFieldAsAssociation(options.typeName, attributeKey)
       return
     }
 

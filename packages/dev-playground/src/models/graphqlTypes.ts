@@ -5,6 +5,7 @@ export {
   ProductReviewAverage,
   IntegrationDemoUnion,
 } from './Product/Product.model'
+export { ProductGroup as ProductGroupNameOnly } from './ProductGroup/ProductGroup.model'
 export {
   UpdateOrderStatusOutput,
   OrderStatusEnum,
