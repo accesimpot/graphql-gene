@@ -9,12 +9,7 @@ import {
   Table,
 } from 'sequelize-typescript'
 import type { CreationOptional, InferAttributes, InferCreationAttributes } from 'sequelize'
-import {
-  defineGraphqlGeneConfig,
-  defineType,
-  defineUnion,
-  extendTypes,
-} from 'graphql-gene'
+import { defineGraphqlGeneConfig, defineType, defineUnion, extendTypes } from 'graphql-gene'
 import { authorizationDirective } from '../../directives/authorization.directive'
 import { ProductGroup } from '../ProductGroup/ProductGroup.model'
 import { ProductVariant } from '../ProductVariant/ProductVariant.model'
