@@ -9,7 +9,7 @@ import {
   Table,
 } from 'sequelize-typescript'
 import type { CreationOptional, InferAttributes, InferCreationAttributes } from 'sequelize'
-import { defineType, defineUnion, extendTypes } from 'graphql-gene'
+import { defineGraphqlGeneConfig, defineType, defineUnion, extendTypes } from 'graphql-gene'
 import { authorizationDirective } from '../../directives/authorization.directive'
 import { ProductGroup } from '../ProductGroup/ProductGroup.model'
 import { ProductVariant } from '../ProductVariant/ProductVariant.model'
@@ -42,6 +42,14 @@ class Product extends Model<InferAttributes<Product>, InferCreationAttributes<Pr
 
   @HasMany(() => ProductVariant)
   declare variants: ProductVariant[] | null
+
+  static readonly geneConfig = defineGraphqlGeneConfig(Product, {
+    aliases: {
+      ProductNameOnly: {
+        include: ['name'],
+      },
+    },
+  })
 }
 
 export const ProductReviewAverage = defineType({

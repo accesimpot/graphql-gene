@@ -23,6 +23,7 @@ import {
   getDefaultTypeDefLinesObject,
   getDefaultFieldLinesObject,
   getGeneConfigFromOptions,
+  getGeneConfigForGraphqlType,
   isFieldIncluded,
   isObject,
   getGloballyExtendedTypes,
@@ -176,6 +177,10 @@ function generateGeneTypeDefs<SchemaTypes extends AnyObject, DataTypes extends A
     for (const plugin of options.plugins || []) {
       const isMatching = plugin.isMatching(fieldConfigs)
       if (!isMatching) continue
+      const geneConfig = getGeneConfigForGraphqlType({
+        model: fieldConfigs,
+        modelKey: graphqlType,
+      })
 
       const { afterTypeDefHooks: hooks } = forEachModel({
         directiveDefs,
@@ -186,6 +191,7 @@ function generateGeneTypeDefs<SchemaTypes extends AnyObject, DataTypes extends A
         plugin,
         modelKey: graphqlType,
         model: fieldConfigs,
+        geneConfig,
         dataTypeMap: options.dataTypeMap,
       })
       afterTypeDefHooks.push(...hooks)
@@ -194,6 +200,7 @@ function generateGeneTypeDefs<SchemaTypes extends AnyObject, DataTypes extends A
         typeDefLines,
         modelKey: graphqlType,
         model: fieldConfigs,
+        geneConfig,
       })
 
       hasUsedPlugin = true
@@ -285,6 +292,7 @@ function forEachModel<M, SchemaTypes extends AnyObject>(options: {
   plugin: GenePlugin<M>
   modelKey: string
   model: M
+  geneConfig?: GeneConfig<M>
   dataTypeMap?: { [k: string | symbol]: BasicGraphqlType }
 }) {
   const afterTypeDefHooks: (() => void)[] = []
@@ -313,6 +321,7 @@ function forEachModelOnTypeDefCompleted<M>(options: {
   typeDefLines: TypeDefLines
   modelKey: string
   model: M
+  geneConfig?: GeneConfig<M>
 }) {
   generateQueryFilterTypeDefs(options)
 
