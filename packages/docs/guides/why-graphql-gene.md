@@ -1,0 +1,262 @@
+# Why GraphQL Gene?
+
+GraphQL Gene is an open-source library built by [Elio Tax](https://www.elio-tax.com)'s engineering team—originally to power our own production API while filing sensitive Canadian tax returns online. We needed a **GraphQL-first**, **self-hosted** stack where the schema stays honest with our **Sequelize** models, **TypeScript** catches breaking changes before deploy, and **access control** can go far beyond a single `isAdmin` flag: gating fields by nested data loaded on `Query.me` (for example, only cases assigned to the current user).
+
+This guide explains the problems we kept hitting elsewhere, how graphql-gene addresses them today, and how it fits next to other tools you may already know.
+
+---
+
+## What we needed
+
+| Requirement                          | Why it mattered at Elio Tax                                                                                                                                                                                                                                                                                          |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **GraphQL-first API**                | Clients (web, mobile, internal tools) share one graph; operations and variables are the contract, not ad hoc REST shapes.                                                                                                                                                                                            |
+| **One source of truth**              | ORM models should drive both the database and the GraphQL schema so renames and new fields do not drift silently.                                                                                                                                                                                                    |
+| **Deep TypeScript safety**           | Resolver `args`, return values, and context should be inferred—not maintained in parallel with hand-written types.                                                                                                                                                                                                   |
+| **Association-aware filtering**      | `where`-style filters on nested associations (Sequelize operators), not only top-level list fields.                                                                                                                                                                                                                  |
+| **Field-level authorization**        | Sensitive tax data requires rules on **fields and types**, including scopes derived from **`me`** and nested associations (e.g. assigned cases), not only global roles.                                                                                                                                              |
+| **Performance by default**           | Load nested relations only when the client selects them (lookahead), without boilerplate in every resolver.                                                                                                                                                                                                          |
+| **Library first, CMS backend later** | Fit existing Node services today—no CMS admin DB that must be synced before a new route goes live. A **typed `cms` GraphQL module** (lists, CRUD, metadata) is on the [v2 roadmap](../../../PLAN_V2.md#4-admin-crud-cms-backend-module) so consumers can plug in their own UI without Strapi-style platform lock-in. |
+
+GraphQL Gene is the combination of those requirements: a small core plus plugins (today [`@graphql-gene/plugin-sequelize`](https://github.com/accesimpot/graphql-gene/tree/main/packages/plugin-sequelize)) that generate an executable schema from your models.
+
+---
+
+## How graphql-gene delivers (in practice)
+
+Below are representative shapes from a Gene + Sequelize app: the **operations** clients send, and the **JSON** they get back. Setup (`generateSchema`, `geneConfig`, typing) is in the [main README](../../../README.md); conventions for `me`, mutations, and security are in [Schema design](./schema-design.md).
+
+### Define models once; types follow
+
+You export ORM models (and optional `defineType` / `defineEnum` helpers) from one module; Gene emits SDL and resolvers from that source. `geneConfig` controls which fields appear on each GraphQL type, **aliases** (e.g. `User` vs `AuthenticatedUser`), and **directives**—no parallel schema to maintain.
+
+### Scoped types: `me`, aliases, and directives
+
+The same Sequelize model can surface as different GraphQL types with different fields and auth. A public lookup stays narrow; `me` can load nested associations only when selected (lookahead).
+
+```graphql
+query PublicUser($id: ID!) {
+  user(id: $id) {
+    id
+    username
+  }
+}
+
+query MeForAccount {
+  me {
+    id
+    email
+    orders {
+      id
+      status
+    }
+  }
+}
+```
+
+Invalid or missing auth on `me` resolves to **`null` on the field**, not a hollow object:
+
+```json
+{
+  "data": {
+    "me": null
+  }
+}
+```
+
+Define a directive once with **`defineDirective`** (for example `userAuthDirective({ roles: ['superAdmin'] })`) and reuse it in **`geneConfig`**: attach it on a **type** so every resolver that returns that type runs through the same middleware, or on a **field** when only that surface needs the rule. Role checks, session loading, and lookahead-friendly includes stay in one factory—not copy-pasted per resolver. See [Gene directives](./directives.md) and the [@userAuth example](../../../README.md#example-user-authentication-directive).
+
+### Generated queries, filters, and association lists
+
+Default Query resolvers and association fields get `where`, `order`, `skip`, and `limit` from your models—**including nested associations**. List associations return a **`count` + `items`** wrapper (dev-playground; [PLAN_V2 §2](../../../PLAN_V2.md#2-association-fields-from-flat-lists-to-a-standard-result-shape)).
+
+```graphql
+query OrderByStatus($status: String!) {
+  order(where: { status: { eq: $status } }, order: [updatedAt_DESC]) {
+    id
+    status
+    items {
+      count
+      items {
+        id
+        product {
+          name
+          color
+          group {
+            products(where: { color: { eq: "Blue Thunder" } }, limit: 5) {
+              count
+              items {
+                id
+                name
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+```json
+{
+  "data": {
+    "order": {
+      "id": "117",
+      "status": "paid",
+      "items": {
+        "count": 1,
+        "items": [
+          {
+            "id": "976",
+            "product": {
+              "name": "StreetStyle - Slate Thunder",
+              "color": "Slate Thunder",
+              "group": {
+                "products": {
+                  "count": 2,
+                  "items": [
+                    { "id": "116", "name": "StreetStyle - Blue Thunder" },
+                    { "id": "117", "name": "StreetStyle - Slate Thunder" }
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+Filters and pagination on the same association field (aliases optional):
+
+```graphql
+query OrderLists($id: String!) {
+  order(id: $id) {
+    filtered: items(where: { quantity: { eq: 3 } }) {
+      count
+      items {
+        id
+        quantity
+      }
+    }
+    notesFacet: notes(limit: 1) {
+      count
+      items {
+        id
+        body
+      }
+    }
+  }
+}
+```
+
+```json
+{
+  "data": {
+    "order": {
+      "filtered": { "count": 1, "items": [{ "id": "976", "quantity": 3 }] },
+      "notesFacet": {
+        "count": 2,
+        "items": [{ "id": "1", "body": "Called client" }]
+      }
+    }
+  }
+}
+```
+
+Polymorphic CMS-style blocks (union + fragments) are in [Polymorphic page blocks](./polymorphic-blocks.md)—with a full query/response example there.
+
+### Resolver TypeScript inference
+
+Resolvers colocated on models return typed payloads for both queries and mutations—`args` and return shapes are inferred from the GraphQL definition (`extendTypes`, `defineType`), so enums and fields fail at compile time if they drift.
+
+```ts
+export const OrderStatusEnum = defineEnum(['cart', 'payment', 'paid', 'shipped'])
+
+export const UpdateOrderStatusOutput = defineType({
+  message: 'String!',
+  order: 'Order',
+})
+
+extendTypes({
+  Mutation: {
+    updateOrderStatus: {
+      args: { id: 'String!', status: 'OrderStatusEnum!' },
+      returnType: 'UpdateOrderStatusOutput!',
+
+      async resolver({ args }) {
+        // args is inferred as:
+        // { id: string; status: 'cart' | 'payment' | 'paid' | 'shipped' }
+        const order = await Order.findByPk(args.id)
+
+        // Dummy mutation
+        order?.setDataValue('status', args.status)
+
+        // The return value is checked against UpdateOrderStatusOutput.
+        // e.g. TS error if we return undefined or an object with `message` only
+        return {
+          message: 'Status updated successfully.',
+          order,
+        }
+      },
+    },
+  },
+})
+```
+
+### Extensible without forking
+
+New ORMs or data sources plug in via the plugin API—see [Writing a plugin](./writing-a-plugin.md). The core stays server- and ORM-agnostic.
+
+---
+
+## Comparison with other approaches
+
+The table below is opinionated and based on real production experience (especially Strapi and Contentful). It is meant to highlight **fit for a custom product API on your own database**, not to claim graphql-gene replaces every CMS or BaaS.
+
+| Capability / concern                                | GraphQL Gene                                                                                                                                                                            | Strapi                                                                                                           | Contentful                                                                                        | Storyblok                                                                                       | Plain GraphQL server                  |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------- |
+| **Self-hosted; you own the database**               | Yes — your Postgres (or other DB) and models                                                                                                                                            | Yes                                                                                                              | No — SaaS                                                                                         | No — SaaS                                                                                       | Yes                                   |
+| **Schema generated from your app models**           | Yes — Sequelize (via plugin)                                                                                                                                                            | Yes — content-types                                                                                              | Their content model in their cloud                                                                | Their component model                                                                           | No — you write SDL/resolvers          |
+| **End-to-end TypeScript inference from schema**     | Strong — `GeneTypesToTypescript`, inferred resolver types                                                                                                                               | Weak — easy to break types across admin UI, controllers, and plugins                                             | Client SDK types; API schema is external                                                          | SDK / generated types; not your DB schema                                                       | You choose (Pothos, codegen, etc.)    |
+| **`where`-style filters on associations**           | Yes — nested filters on association fields                                                                                                                                              | Yes — similar ergonomics                                                                                         | Yes — nested `where` on collections and linked entries; filters follow the content types          | Filtered relations in GraphQL, content-centric                                                  | Manual in each resolver               |
+| **Field-level auth declared on the graph**          | Yes — directives + aliases; declare on a **type** and Gene wraps every field that returns it (schema-wide middleware)                                                                   | Role policies; public routes must be **enabled explicitly**                                                      | Space/environment roles                                                                           | Space / token roles                                                                             | Manual per field                      |
+| **Auth scoped via nested `me` / user associations** | First-class — directives + context + lookahead includes                                                                                                                                 | Possible but not the default product model                                                                       | Not supported                                                                                     | Not supported                                                                                   | You implement entirely                |
+| **GraphQL as the primary API**                      | Yes                                                                                                                                                                                     | GraphQL plugin exists; much ecosystem is REST/admin-centric                                                      | Yes — mature GraphQL API                                                                          | Yes — GraphQL (+ Management API)                                                                | Yes                                   |
+| **Fetch only what the operation selects**           | Lookahead maps the selection set → Sequelize `include`s (load only the relations the operation asked for)                                                                               | Varies by version/config                                                                                         | CDN-oriented delivery: field selection trims the response. Not optimized for user-specific data   | CDN-oriented delivery: field selection trims the response. Not optimized for user-specific data | Manual `graphql-parse` / includes     |
+| **Schema/content changes and production safety**    | DB migrations + TypeScript; GraphQL follows models                                                                                                                                      | Hand-written TS types for controllers/clients drifts from the generated schema—breaks at runtime, not build time | **Runtime** content model changes (renames) can break live clients without a strict sync workflow | Similar SaaS model versioning concerns                                                          | Full control; all discipline is yours |
+| **Deploying new public endpoints**                  | Ship code — schema reflects repo (rollout can still be gated with **feature flags** in app code)                                                                                        | Often **DB-synced** “public route” flags; easy to miss in deploy pipelines                                       | N/A (hosted API)                                                                                  | N/A                                                                                             | Ship code                             |
+| **Built-in admin / CMS UI**                         | **Coming soon** — v2 `cms` GraphQL backend (CRUD + `*Meta`); hosted admin UI planned ([§4](../../../PLAN_V2.md#4-admin-crud-cms-backend-module), free tier for your API, no rate limit) | Yes — admin panel                                                                                                | Yes — Contentful web app                                                                          | Yes — Storyblok UI                                                                              | No                                    |
+| **Operational surface**                             | Library + your app (CMS module planned)                                                                                                                                                 | Full backend framework with a broad scope (cron, overrides, admin UI, heavy dependency footprint)                | Hosted platform + rate limits                                                                     | Hosted platform                                                                                 | Minimal dependencies                  |
+| **Open source**                                     | Yes                                                                                                                                                                                     | Yes                                                                                                              | No                                                                                                | Partial / proprietary hosting                                                                   | N/A                                   |
+
+### Strapi
+
+We ran **Strapi in production for roughly four years**—it was our main “auto GraphQL from models” stack before graphql-gene. It delivers a real admin UI, filters on relations, and generated APIs, and we benefited from that for a long time. Over time, though, it behaved less like a library and more like a full framework: a large dependency tree, many extension points, and patterns that are easy to misuse (overwriting core files, cron defined inside Strapi or the Node process—so with multiple app instances the same schedule runs once per server, unlike a single job in GitHub Actions, weak typing across boundaries).
+
+What eventually drove us to replace it was operational: making a route publicly available is tied to configuration that lives in the database, not only in git. New routes often need a pre-deploy step or a careful post-deploy ritual so production matches what the code expects. We hit incidents when that step was missed. GraphQL Gene keeps “what is public and how it resolves” in version-controlled `geneConfig`, directives, and SDL—while still letting you toggle exposure in production via normal application feature flags when you need a gradual rollout.
+
+### Contentful
+
+Contentful’s GraphQL API is polished and pleasant to query—including **nested filters** on collections and linked content ([filtering guide](https://www.contentful.com/blog/mastering-graphql-filters/)). The blockers for us were **ownership and change management** (data and schema on their platform, rate limits, runtime content-model changes that can break live clients without a strict sync workflow) and **no fit for user-scoped access**—we needed CRM-style rules (e.g. an admin sees only entries for cases they are assigned to), not shared editorial content roles. That combination is a poor match for a regulated product API on our own relational data.
+
+### Storyblok
+
+Storyblok fits the same broad category as Contentful: excellent **headless CMS** GraphQL for marketing and editorial content, not for replacing a transactional Sequelize domain model. Useful for pages and components; not a substitute when the graph must mirror tax cases, filings, and assignments in **your** database with custom authorization.
+
+### Directus
+
+Directus is closer to Strapi than to graphql-gene: a self-hosted platform with a CMS interface, database-mirrored collections, and generated REST/GraphQL APIs. Its source of truth is the database plus Directus metadata; graphql-gene treats the schema more like **schema as code**, with Sequelize models, SDL, directives, and resolver extensions moving through the normal development process: mandatory code review, CI checks for breaking changes, and blue-green deployments. Directus is attractive when you want a full admin platform, but it carries similar Strapi-like tradeoffs: broad framework surface, runtime configuration to manage, and less natural resolver-level application code around individual GraphQL fields.
+
+### Plain GraphQL server (Yoga, Apollo, etc.)
+
+Maximum control and minimal magic—and maximum **boilerplate**: every Query field, filter input, include strategy, and auth check must be written and kept consistent with TypeScript types. Teams that outgrow hand-rolled resolvers often adopt codegen or schema builders (Pothos, TypeGraphQL); graphql-gene targets the case where the **ORM is already the source of truth** and you want generated filters and default resolvers with escape hatches (`extendTypes`, custom resolvers, plugins).
+
+---
+
+## Summary
+
+We built GraphQL Gene because no existing option combined **GraphQL-first** ergonomics, **schema as application code**, **deep TypeScript inference**, and **type or field-level authorization** tied to real user context—without publishing schema changes through a CMS platform or depending on a SaaS content model we do not own. It is the API layer Elio Tax runs in production today; we open-sourced it so teams with similar constraints can adopt the same patterns without reimplementing filters, lookahead, and directive middleware from scratch.
