@@ -19,4 +19,4 @@ Working design / implementation notes (not product docs):
 | ---- | ----------- |
 | [PLAN_V2.md](./plans/PLAN_V2.md) | graphql-gene v2 roadmap |
 | [plan_resolver-source-fix.md](./plans/plan_resolver-source-fix.md) | Resolver source typing, hydration, default order |
-| [plan_find-options-include-utility.md](./plans/plan_find-options-include-utility.md) | `ensureInclude` helper + `findOptions` typing |
+| [plan_find-options-include-utility.md](./plans/plan_find-options-include-utility.md) | `ensureInclude` / `ensureIncludeBehind` + `findOptions` typing |
