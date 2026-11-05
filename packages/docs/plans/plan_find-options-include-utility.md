@@ -47,7 +47,7 @@ Two real use cases show up in practice:
 
 ```ts
 findOptions(details) {
-  ensureInclude(details, 'items', { hydrate: true })
+  ensureInclude(details, 'items')
 }
 ```
 
@@ -55,13 +55,14 @@ Equivalent to today’s manual push + `markGeneHydrationInclude`, but:
 
 - Initializes `include` if missing
 - Skips if the association is already present
+- **Auto-marks hydration** (`markGeneHydrationInclude`) so list-wrapper associations survive `stripAssociationListWrapperIncludes` — callers can pass `{ hydrate: false }` only when they need a plain include
 - Returns the existing or newly created include row so callers can still set `where` / `required` (see `OrderItem.geneConfig.findOptions`)
 
 ### Options to support (v1)
 
 | Option | Purpose |
 |--------|---------|
-| `hydrate?: boolean` | Wrap with `markGeneHydrationInclude` (list-wrapper sibling reads) |
+| `hydrate?: boolean` | Default **`true`**. Pass `false` to skip the hydration marker |
 | `required?: boolean` | Sequelize INNER JOIN (optional sugar) |
 | Nested path? | Defer deep trees to use case 2 / follow-up unless cheap |
 
@@ -103,24 +104,24 @@ Drop directive-specific `include` options. Prefer `findOptions` so dependencies 
 If auth always does `User.findOne({ ...getQueryIncludeOf(...) })` and the include bag is already the **User** root include state when the mutation field’s `findOptions` runs, then:
 
 ```ts
-// on Mutation.createOrganizationRole
+// on Mutation.createOrganizationRole — target is explicit (auth model is consumer-defined)
 findOptions(details) {
-  ensureInclude(details, 'adminAccount') // association of User / AuthenticatedUser
+  ensureInclude(details, 'adminAccount', { target: 'AuthenticatedUser' })
 }
 ```
 
 **Gap today:** `getQueryIncludeOf(info, 'AuthenticatedUser', { lookFromOperationRoot: true })` only runs `handleUntilFindOptions` **after** matching `AuthenticatedUser` in the selection set. A flat mutation that does not select `me` / `AuthenticatedUser` never visits that type, so the mutation field’s `findOptions` may **never run** during that call.
 
-So A alone needs a small companion change (B or C).
+So A alone needs a small companion change (B or C). The **`target`** argument makes the include bag unambiguous when auth loads a consumer-defined type (`AuthenticatedUser`, etc.) rather than assuming a conventional User frame.
 
 #### B. Root walk that always applies field `findOptions` (recommended companion)
 
 Extend `getQueryIncludeOf` / a new helper (e.g. `getQueryIncludeOf` option or `collectFindOptionDependencies(info)`) so that when looking from the operation root, **every visited field’s** `findOptions` runs (via existing `handleUntilFindOptions`), not only fields under the matched target type.
 
-Then a mutation field can push User-level associations onto the root include state before/while auth loads the user.
+Then a mutation field can push associations onto the **explicit `target`** include frame before/while auth loads that model.
 
-**Pros:** Fits current mental model; no lookbehind required for the flat-mutation case.  
-**Cons:** Root include state must be interpreted as associations of the **model being loaded** (User); document that clearly. Fields that push wrong association names fail at runtime (Sequelize).
+**Pros:** Fits current mental model; no lookbehind required for the flat-mutation case; works with whatever type the consumer’s auth directive loads.  
+**Cons:** Call sites must pass `target` (or equivalent) when the include is not for the current frame’s model; wrong association names still fail at Sequelize runtime.
 
 #### C. Lookbehind-assisted ancestor targeting (uses graphql-lookahead#158)
 
@@ -144,12 +145,12 @@ findOptions(details) {
 **API sketch:**
 
 ```ts
-ensureAncestorInclude(details, {
-  until: ({ field, type, sourceType }) => field === 'me' || type === 'AuthenticatedUser',
-  association: 'adminAccount',
-  hydrate?: boolean,
+ensureInclude(details, 'adminAccount', {
+  target: 'AuthenticatedUser', // or until: ({ field, type }) => …
 })
 ```
+
+(Ancestor / lookbehind mode can share the `ensureInclude` name with a `target` / `until` option rather than a second export, unless implementation clarity favors `ensureAncestorInclude` as a thin wrapper.)
 
 Implementation notes:
 
@@ -158,15 +159,15 @@ Implementation notes:
 
 #### D. Hybrid (likely landing shape)
 
-1. Ship **`ensureInclude`** for siblings (use case 1) immediately.  
-2. Bump **graphql-lookahead** and add **`ensureAncestorInclude`** (or `ensureInclude` + `ancestor: …`) for nested cases.  
-3. Adjust **`getQueryIncludeOf`** (or add `includeFindOptionDependencies: true`) so flat mutation fields’ `findOptions` participate when auth loads User without selecting `me`.  
-4. Document the auth pattern: directive calls the updated helper; fields declare dependencies via `findOptions`; no directive `include` option.
+1. Ship **`ensureInclude`** for siblings (use case 1) immediately — default **`hydrate: true`**.  
+2. Bump **graphql-lookahead** and extend **`ensureInclude`** with explicit **`target` / `until`** for ancestor cases.  
+3. Adjust **`getQueryIncludeOf`** (or add `includeFindOptionDependencies: true`) so flat mutation fields’ `findOptions` participate when auth loads the target type without selecting `me`.  
+4. Document the auth pattern: directive calls the updated helper; fields declare dependencies via `findOptions` with an **explicit target** matching whatever type that directive loads; no directive `include` option.
 
 ### Recommendation
 
-- Implement **A + B** for the app’s flat-mutation auth story (primary).  
-- Add **C** as a typed helper once lookbehind is on npm, aimed at nested-under-`me` operations and future patterns — but do not require nesting mutations under models (already rejected).  
+- Implement **A + B** for the app’s flat-mutation auth story (primary), with **explicit `target`**.  
+- Add **C** once lookbehind is on npm, aimed at nested-under-`me` operations and future patterns — but do not require nesting mutations under models (already rejected).  
 - Prefer **include path helpers** (`['adminAccount']`) over pretending to inject GraphQL selections.
 
 ---
@@ -215,7 +216,7 @@ Resolver `source` already resolves via `AccurateTypeSource` → `ResolveGqlSourc
 
 4. **`GeneTypeConfig.findOptions`:** stop using bare `object`. For `extendTypes`, keep/fix `FindOptionsHandlerByType<TypeName>` so the parent GraphQL type drives state (same parent as `source`). For `defineGraphqlGeneConfig(Model, { findOptions })`, state should be `FindOptionsStateByModel<M>`.
 
-5. **Ancestor helper typing:** `association` typed against the **ancestor** model when `until` is a string type name (`'AuthenticatedUser'`) that maps through `GraphqlTypes`; if `until` is a custom predicate, fall back to `string` (document the escape hatch).
+5. **`target` / ancestor typing:** when `options.target` is a GraphQL type name (`'AuthenticatedUser'`), type `association` against that model via `GraphqlTypes`; if only a custom `until` predicate is provided, fall back to `string` (document the escape hatch).
 
 ### Typing risks
 
@@ -246,7 +247,7 @@ If #158 is not on npm yet when implementation starts: land **use case 1 + typing
 ### Phase 0 — plan / branch (this doc)
 
 - [x] Branch `feat/find-options-include-utility` from `beta`  
-- [x] This plan file  
+- [x] This plan file (`packages/docs/plans/plan_find-options-include-utility.md`)  
 
 ### Phase 1 — `ensureInclude` (sibling)
 
@@ -270,18 +271,18 @@ If #158 is not on npm yet when implementation starts: land **use case 1 + typing
 ### Phase 4 — lookbehind ancestor helper (after npm release)
 
 - [ ] Bump `graphql-lookahead`  
-- [ ] `ensureAncestorInclude` / path-based ensure  
+- [ ] `ensureInclude` with `target` / lookbehind `until` (+ path-based ensure if needed)  
 - [ ] Tests with nested `me → … → field` paths and list indices  
-- [ ] Document when to use sibling vs ancestor helper  
+- [ ] Document when sibling-only vs `target` / ancestor options are required  
 
 ---
 
-## Open questions
+## Decisions
 
-1. **Should root-level mutation `findOptions` push onto a User include bag by convention**, or require an explicit `target: 'AuthenticatedUser'` argument to the helper so the include isn’t ambiguous when multiple models could be loaded?  
-2. **Hydration default:** for HasMany/BelongsToMany names, should `ensureInclude` auto-set `hydrate: true`, or keep it opt-in (safer, current playground is explicit)? Prefer **opt-in** for v1.  
-3. **Naming:** `ensureInclude` vs `ensureAssociationInclude` vs `addFindOptionsInclude` — pick one and use it in docs/examples only.  
-4. **Core vs plugin:** association-name typing needs the Sequelize plugin model; keep runtime helper in plugin-sequelize; only loosen/tighten `FindOptionsHandler` generics in core as required.
+1. **Explicit target** — Do not assume a conventional User include bag. Call sites pass an explicit `target` (e.g. `'AuthenticatedUser'`) matching whatever model/type the consumer’s auth directive loads with `getQueryIncludeOf`. Keeps the helper usable across apps with different auth shapes.  
+2. **Hydration default `true`** — `ensureInclude` auto-applies `markGeneHydrationInclude`. Opt out with `{ hydrate: false }` when a plain include is required.  
+3. **Name: `ensureInclude`** — Single public helper name in docs and exports.  
+4. **Core vs plugin** — Runtime helper and association-key typing live in `@graphql-gene/plugin-sequelize`; core only adjusts `FindOptionsHandler` / `GeneTypeConfig` generics as needed for parent-aware state.
 
 ---
 

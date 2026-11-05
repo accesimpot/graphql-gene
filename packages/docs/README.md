@@ -1,6 +1,6 @@
 # graphql-gene documentation
 
-Prose-first documentation for graphql-gene. These files are readable in the GitHub UI and can later be wired to a static docs tool (for example VitePress or Docusaurus) pointed at this package—see **`PLAN_V2.md`** §11.
+Prose-first documentation for graphql-gene. These files are readable in the GitHub UI and can later be wired to a static docs tool (for example VitePress or Docusaurus) pointed at this package—see [PLAN_V2.md](./plans/PLAN_V2.md) §11.
 
 ## Guides
 
@@ -10,3 +10,13 @@ Prose-first documentation for graphql-gene. These files are readable in the GitH
 | [Directives](./guides/directives.md) | Type/field middleware, `GeneDirectiveConfig`, empty `name` vs printed `schemaString` |
 | [Polymorphic page blocks](./guides/polymorphic-blocks.md) | `@Polymorphic` hub model, GraphQL interface + fragments, example query and response |
 | [Writing a plugin](./guides/writing-a-plugin.md) | How to learn from `@graphql-gene/plugin-sequelize` when writing a new plugin |
+
+## Plans
+
+Working design / implementation notes (not product docs):
+
+| Plan | Description |
+| ---- | ----------- |
+| [PLAN_V2.md](./plans/PLAN_V2.md) | graphql-gene v2 roadmap |
+| [plan_resolver-source-fix.md](./plans/plan_resolver-source-fix.md) | Resolver source typing, hydration, default order |
+| [plan_find-options-include-utility.md](./plans/plan_find-options-include-utility.md) | `ensureInclude` helper + `findOptions` typing |

@@ -527,4 +527,4 @@ This file is safe to commit and discuss in **public pull requests**: it contains
 
 **Out of scope (initially):** A **full static documentation website** (generated HTML, search, versioned microsites) is **not** required for the first v2 documentation milestone. Revisit **Docusaurus, VitePress, Nextra**, or similar **after** the Markdown corpus stabilizes.
 
-**In scope:** Root `README` links into `packages/docs/`, migration guides next to `PLAN_V2.md` or under `packages/docs/migration/`, and ongoing PRs that extend `.md` files like any other source.
+**In scope:** Root `README` links into `packages/docs/`, migration guides under `packages/docs/migration/` (plans live in `packages/docs/plans/`), and ongoing PRs that extend `.md` files like any other source.
