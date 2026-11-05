@@ -185,7 +185,7 @@ Shape only; numeric `id`s are illustrative.
 }
 ```
 
-> **Note:** Has-many fields such as `blocks` use Gene’s association-list wrapper (`count` plus `items` for filters and pagination on `items`). See [PLAN_V2.md §2.4–§2.5](../../../PLAN_V2.md) for the broader collection pattern.
+> **Note:** Has-many fields such as `blocks` use Gene’s association-list wrapper (`count` plus `items` for filters and pagination on `items`). See [PLAN_V2.md §2.4–§2.5](../plans/PLAN_V2.md) for the broader collection pattern.
 
 ## What graphql-gene does
 
