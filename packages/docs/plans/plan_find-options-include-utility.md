@@ -30,15 +30,16 @@ Two real use cases show up in practice:
 
 ## Goals
 
-| Goal                                                                    | Notes                                                           |
-| ----------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `ensureInclude` for same-frame / sibling (and nested path) associations | Idempotent; hydration on by default                             |
-| `ensureIncludeBehind` for ancestor frames via `lookbehind`              | Mirrors graphql-lookahead’s stateful `lookahead` README pattern |
-| Dot-separated association paths (`'adminAccount.roles'`)                | Same nesting direction for both helpers                         |
-| Better TS for association names vs GraphQL / model type                 | 3rd arg type (or current type) drives allowed associations      |
-| Bump `graphql-lookahead` after #158 release                             | No vendored lookbehind                                          |
+| Goal                                                                    | Notes                                                                   |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `ensureInclude` for same-frame / sibling (and nested path) associations | Idempotent; hydration on by default                                     |
+| `ensureIncludeBehind` for ancestor frames via `lookbehind`              | Mirrors graphql-lookahead’s stateful `lookahead` README pattern         |
+| Dot-separated association paths (`'adminAccount.roles'`)                | Same nesting direction for both helpers                                 |
+| `findOptions` on `GeneDirectiveConfig`                                  | Same as field-level `findOptions` whenever that directive is on a field |
+| Better TS for association names vs GraphQL / model type                 | 3rd arg type (or current type) drives allowed associations              |
+| Bump `graphql-lookahead` after #158 release                             | No vendored lookbehind                                                  |
 
-**Non-goals (this PR):** nested `__mutation` schema patterns; changing auth directive APIs in consumer apps; auto-mirroring Query fields onto Mutation.
+**Non-goals (this PR):** nested `__mutation` schema patterns; rewriting consumer auth directive APIs beyond adopting directive-level `findOptions`; auto-mirroring Query fields onto Mutation.
 
 ---
 
@@ -164,6 +165,8 @@ findOptions(details) {
 
 If the third argument is omitted, treat the “current” GraphQL type as the stop target (see typing — prefer documenting `details.type` vs `sourceType` carefully in implementation).
 
+For auth, prefer declaring that handler on the **directive** (next section) so every `@userAuth`-protected field gets the include dependency without repeating `findOptions` on each mutation/query field.
+
 ### Shared include state (how `getQueryInclude` connects)
 
 `lookbehind` alone only knows `info.path`. The Sequelize include **tree** lives in the object built by `getQueryInclude` / `getQueryIncludeOf`. `ensureIncludeBehind` needs that root (or the correct ancestor frame) while `findOptions` runs inside that walk.
@@ -190,8 +193,58 @@ Alternatives if ALS/`info` keys prove awkward: pass the root on an augmented `de
 
 1. Ship **`ensureInclude`** (+ dot paths, hydrate default) first.
 2. Bump **graphql-lookahead**; ship **`ensureIncludeBehind`** with shared include-root registration and README-style `state` / `next` / `until`.
-3. Adjust include collection for auth (**B**) so flat mutations can declare behind-includes.
-4. Do **not** require nested mutations under models.
+3. Add **`GeneDirectiveConfig.findOptions`** so auth (and similar) directives bundle include dependencies with the directive itself.
+4. Adjust include collection for auth (**B**) so those handlers run when building User includes.
+5. Do **not** require nested mutations under models.
+
+---
+
+## `findOptions` on `GeneDirectiveConfig`
+
+Today `GeneDirectiveConfig` (`packages/core/src/defineConfig.ts`) only has `name`, `args`, and `handler`. Field/type config already supports `findOptions?: FindOptionsHandler<…>`, which `handleUntilFindOptions` invokes during `getQueryInclude*`.
+
+**Add optional `findOptions` on `GeneDirectiveConfig`**, typed as a `FindOptionsHandler` (same contract as field/type `findOptions`). Semantics:
+
+> Applying a directive that declares `findOptions` is equivalent to also attaching that `FindOptionsHandler` on every GraphQL field (or type) that uses the directive.
+
+That is ideal for authentication: the directive already decides who the viewer is and typically loads `AuthenticatedUser` via `getQueryIncludeOf`. Bundling `ensureIncludeBehind(…, 'adminAccount', 'AuthenticatedUser')` (or similar) on the directive means every protected field contributes those include deps without duplicating field-level `findOptions`.
+
+### Sketch
+
+```ts
+export const userAuthDirective = defineDirective<{ roles: string[] }>(args => ({
+  name: 'userAuth',
+  args,
+  findOptions(details) {
+    ensureIncludeBehind(details, 'adminAccount', 'AuthenticatedUser')
+  },
+  async handler({ context, info /* … */ }) {
+    const includeOptions = getQueryIncludeOf(info, 'AuthenticatedUser', {
+      lookFromOperationRoot: true,
+    })
+    // User.findOne({ …includeOptions })
+  },
+}))
+```
+
+### Runtime wiring
+
+During `handleUntilFindOptions` (or a shared helper it calls), when visiting a field:
+
+1. Resolve field-level `findOptions` as today (`getFieldConfig` / type `geneConfig`).
+2. Also resolve directives attached to that field (and type-level directives if we decide they apply the same way — **default: field-level directives for v1**; type-level can follow if cheap).
+3. Invoke each directive’s `findOptions` with the same `details` / `findOptions` state bag as a field handler would receive.
+
+Order: document a stable order (e.g. type `findOptions` → field `findOptions` → directive `findOptions` in schema attachment order, or the reverse). Prefer **field then directives** or **directives then field** explicitly in tests so apps can reason about merges.
+
+### Typing
+
+- Extend both branches of `GeneDirectiveConfig` (`args` optional vs required) with `findOptions?: FindOptionsHandler<…>`.
+- Improve generics over time with the same association-aware state as field handlers; v1 may start with the same looseness as `GeneTypeConfig.findOptions` then tighten in the typing phase.
+
+### Docs
+
+- Update `packages/docs/guides/directives.md` and the README auth example: prefer directive `findOptions` + `ensureIncludeBehind` over a custom `include` option on the directive factory.
 
 ---
 
@@ -202,6 +255,7 @@ Alternatives if ALS/`info` keys prove awkward: pass the root on an augmented `de
 | Location                                                   | Issue                                                                                       |
 | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `GeneTypeConfig.findOptions`                               | `FindOptionsHandler<object>` — no model awareness                                           |
+| `GeneDirectiveConfig`                                      | No `findOptions` today — auth must invent parallel `include` options or repeat field hooks  |
 | `ExtendedTypeField` → `FindOptionsHandlerByType<TypeName>` | Parent `TypeName` is good for siblings, but `include[].association` is still loose `string` |
 | `GeneConfig.findOptions`                                   | `FindOptionsStateByModel<M, any>` — untyped `association`                                   |
 | Plugin `findOptionsState`                                  | Flat `DefaultResolverIncludeOptions`; no association-key generic                            |
@@ -261,25 +315,27 @@ If #158 is not on npm yet: land **`ensureInclude` + typing + shared-state hooks 
 - [ ] Migrate playground `Order.itemTotalQuantity`
 - [ ] Docs snippet (`schema-design.md` / plugin README)
 
-### Phase 2 — typing
+### Phase 2 — typing + directive `findOptions`
 
 - [ ] Shared association-key type
 - [ ] Typed `findOptionsState` / `GeneTypeConfig.findOptions`
+- [ ] Add `findOptions?: FindOptionsHandler<…>` to `GeneDirectiveConfig` (core)
+- [ ] Invoke directive `findOptions` from include collection (`handleUntilFindOptions` / equivalent)
 - [ ] Typed overloads for `ensureInclude` / (later) `ensureIncludeBehind`
-- [ ] Type tests
+- [ ] Type + unit tests (field vs directive handler equivalence)
 
 ### Phase 3 — shared include root + auth walk
 
 - [ ] Register active include root during `getQueryInclude` / `getQueryIncludeOf`
-- [ ] Ensure mutation (and other) field `findOptions` can run when auth collects includes without selecting `me`
-- [ ] Document migration off directive `include` options
+- [ ] Ensure mutation (and other) field / directive `findOptions` can run when auth collects includes without selecting `me`
+- [ ] Document migration off directive factory `include` options → directive `findOptions` + `ensureIncludeBehind`
 
 ### Phase 4 — `ensureIncludeBehind` (after npm release)
 
 - [ ] Bump `graphql-lookahead`
 - [ ] Implement `ensureIncludeBehind` with lookbehind `state` / `next` / `until`
 - [ ] Tests: nested `me → … → field` paths, list indices, dot paths from ancestor
-- [ ] Docs: when to use `ensureInclude` vs `ensureIncludeBehind`
+- [ ] Docs: `ensureInclude` vs `ensureIncludeBehind`; auth directive example with `findOptions`
 
 ---
 
@@ -289,15 +345,17 @@ If #158 is not on npm yet: land **`ensureInclude` + typing + shared-state hooks 
 2. **Hydration default `true`** — both helpers auto-apply `markGeneHydrationInclude`; opt out with `{ hydrate: false }`.
 3. **Two names** — `ensureInclude` (current frame) and `ensureIncludeBehind` (lookbehind); the “Behind” suffix reflects graphql-lookahead’s `lookbehind`.
 4. **Dot paths** — supported on both; nesting is always forward from the attachment frame.
-5. **Core vs plugin** — runtime helpers and association-key typing live in `@graphql-gene/plugin-sequelize`; core only adjusts `FindOptionsHandler` / `GeneTypeConfig` generics as needed.
+5. **Core vs plugin** — runtime helpers and association-key typing live in `@graphql-gene/plugin-sequelize`; core owns `GeneDirectiveConfig.findOptions` and `FindOptionsHandler` / `GeneTypeConfig` generics.
 6. **State** — reuse the include tree from `getQueryInclude*` via a short-lived active root (ALS / `info` map / details augmentation), not a second ad hoc tree at the call site.
+7. **Directive `findOptions`** — equivalent to attaching the same handler on every field that uses the directive; primary place for auth include deps (e.g. `adminAccount` on `AuthenticatedUser`).
 
 ---
 
 ## Success criteria
 
 - Playground sibling case is one `ensureInclude` call with a typed association (or path).
-- App can declare ancestor deps with `ensureIncludeBehind(details, 'adminAccount', 'AuthenticatedUser')` without a custom directive `include` list.
+- App can declare ancestor deps with `ensureIncludeBehind` (on a field or, preferably, on the auth **directive**’s `findOptions`) without a custom directive `include` list.
 - Dot paths work the same for both helpers.
+- `GeneDirectiveConfig` supports `findOptions` and include collection invokes it like field-level handlers.
 - `findOptions` / helper args are parent- or target-type aware, closer to resolver `source` typing.
 - Depends only on a released `graphql-lookahead` that includes lookbehind — no copied lookbehind implementation in gene.
