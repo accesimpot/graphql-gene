@@ -38,6 +38,7 @@ import {
   createScratchFrame,
   getOccurrenceFrame,
   isBoundTargetOccurrence,
+  markBoundTargetOccurrence,
   rememberOccurrenceFrame,
   setFindOptionsHookContext,
   type CollectorFrame,
@@ -270,23 +271,21 @@ export function getQueryIncludeOf(
   const collector = createIncludeCollector(targetType ?? '', targetType)
 
   const until = (details: UntilHandlerDetails<CollectorFrame>) => {
-    if (!matchesTarget(details, isMatchingTarget)) return false
-
-    const { type, nextSelectionSet } = details
-    if (!nextSelectionSet) return false
-
-    collector.root.type = type
-    collector.targetType = collector.targetType ?? type
-    lookDeeperAndThrow({
-      info,
-      state: collector.root,
-      type,
-      until: handleUntilFindOptions,
-      selectionSet: nextSelectionSet,
-      next: handleNextIncludeOptions,
-      nextFragment: handleNextFragmentIncludeOptions,
-    })
-    return true
+    const frame = details.state
+    const withinDepth = options.depth == null || frame.depth <= options.depth
+    if (
+      !collector.isBound &&
+      frame.isScratch &&
+      details.nextSelectionSet &&
+      withinDepth &&
+      matchesTarget(details, isMatchingTarget)
+    ) {
+      collector.isBound = true
+      collector.root.type = details.type
+      collector.targetType = collector.targetType ?? details.type
+      markBoundTargetOccurrence(details)
+    }
+    return handleUntilFindOptions(details)
   }
 
   const scanType = options.lookFromOperationRoot
@@ -295,28 +294,19 @@ export function getQueryIncludeOf(
       : QUERY_TYPE
     : getNamedType(info.returnType).name
   const scanState = createScratchFrame(collector, scanType)
+  const traversal = {
+    info,
+    state: scanState,
+    until,
+    next: handleNextIncludeOptions,
+    nextFragment: handleNextFragmentIncludeOptions,
+  }
 
   if (options.lookFromOperationRoot) {
-    lookDeeperAndThrow({
-      info,
-      depth: options.depth,
-      until,
-      state: scanState,
-      type: scanType,
-      selectionSet: info.operation.selectionSet,
-    })
+    lookDeeperAndThrow({ ...traversal, type: scanType, selectionSet: info.operation.selectionSet })
   } else {
     const selectionSet = getResolverSelectionSet(info)
-    if (selectionSet) {
-      lookDeeperAndThrow({
-        info,
-        depth: options.depth,
-        until,
-        state: scanState,
-        type: scanType,
-        selectionSet,
-      })
-    }
+    if (selectionSet) lookDeeperAndThrow({ ...traversal, type: scanType, selectionSet })
   }
 
   return resolveCollectedInclude(collector)

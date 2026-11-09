@@ -1,5 +1,9 @@
 import type { DefaultResolverIncludeOptions } from '../types'
-import { getFindOptionsHookContext, type FindOptionsHookContext } from './includeCollector'
+import {
+  getFindOptionsHookContext,
+  type CollectorFrame,
+  type FindOptionsHookContext,
+} from './includeCollector'
 import { markGeneEnsuredInclude, markGeneHydrationInclude } from './includePostProcess'
 
 const ERROR_PREFIX = '[graphql-gene]'
@@ -75,4 +79,44 @@ export function ensureInclude(
 ): DefaultResolverIncludeOptions {
   const context = requireFindOptionsHookContext(details, 'ensureInclude')
   return ensureIncludePath(context.frame.include, path, options, context.label)
+}
+
+export type EnsureIncludeBehindOptions = EnsureIncludeOptions & {
+  /**
+   * `'nearest'` (default): closest selected ancestor of `ancestorType`, else the collector root
+   * when it targets `ancestorType`. `'root'`: only the collector root.
+   */
+  at?: 'nearest' | 'root'
+}
+
+function findAnchorFrame(
+  context: FindOptionsHookContext,
+  ancestorType: string,
+  at: 'nearest' | 'root'
+): CollectorFrame | undefined {
+  const { collector } = context.frame
+  const rootMatches = collector.targetType === ancestorType
+
+  if (at === 'root') return rootMatches ? collector.root : undefined
+
+  for (let frame: CollectorFrame | undefined = context.ancestryStart; frame; frame = frame.parent) {
+    if (frame.type === ancestorType) return frame.isScratch ? undefined : frame
+  }
+  return rootMatches ? collector.root : undefined
+}
+
+/**
+ * Ensures `path` under an ancestor include of `ancestorType`. Returns `undefined` when the active
+ * collector does not load that ancestor (another collector owns the dependency).
+ */
+export function ensureIncludeBehind(
+  details: object,
+  path: string,
+  ancestorType: string,
+  options: EnsureIncludeBehindOptions = {}
+): DefaultResolverIncludeOptions | undefined {
+  const context = requireFindOptionsHookContext(details, 'ensureIncludeBehind')
+  const anchor = findAnchorFrame(context, ancestorType, options.at ?? 'nearest')
+  if (!anchor) return undefined
+  return ensureIncludePath(anchor.include, path, options, context.label)
 }
