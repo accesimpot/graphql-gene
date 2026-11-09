@@ -1,4 +1,6 @@
+import type { GraphqlTypes } from 'graphql-gene'
 import type { DefaultResolverIncludeOptions } from '../types'
+import type { AssociationPathOf } from '../toGqlSource'
 import {
   getFindOptionsHookContext,
   type CollectorFrame,
@@ -109,10 +111,10 @@ function findAnchorFrame(
  * Ensures `path` under an ancestor include of `ancestorType`. Returns `undefined` when the active
  * collector does not load that ancestor (another collector owns the dependency).
  */
-export function ensureIncludeBehind(
+export function ensureIncludeBehind<TType extends string>(
   details: object,
-  path: string,
-  ancestorType: string,
+  path: TType extends keyof GraphqlTypes ? AssociationPathOf<GraphqlTypes[TType]> : string,
+  ancestorType: TType,
   options: EnsureIncludeBehindOptions = {}
 ): DefaultResolverIncludeOptions | undefined {
   const context = requireFindOptionsHookContext(details, 'ensureIncludeBehind')
