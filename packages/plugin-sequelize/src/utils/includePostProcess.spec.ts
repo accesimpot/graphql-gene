@@ -6,6 +6,7 @@ import {
   shallowGeneHydrationIncludes,
   stripAssociationListWrapperIncludes,
 } from './includePostProcess'
+import { ensureIncludePath } from './ensureInclude'
 import { registerGeneAssociationListWrapper } from './associationListRegistry'
 import { markFieldAsAssociation } from './associationMap'
 
@@ -59,5 +60,36 @@ describe('shallowGeneHydrationIncludes', () => {
 
     expect(includes[0]).toEqual({ association: 'items', [GENE_HYDRATION_INCLUDE_KEY]: true })
     expect(includes[1]?.include).toEqual([{ association: 'country' }])
+  })
+
+  it('keeps ensured nested includes and drops GraphQL-derived ones', () => {
+    const items = markGeneHydrationInclude({
+      association: 'items',
+      include: [{ association: 'fromClient' }],
+    })
+    const root = { include: [items] }
+    ensureIncludePath(root, 'items.product', {}, 'Order.itemTotalQuantity')
+
+    shallowGeneHydrationIncludes(root.include)
+
+    expect(items.include).toEqual([expect.objectContaining({ association: 'product' })])
+  })
+
+  it('keeps the whole ensured path through an include selected by the client', () => {
+    const items = markGeneHydrationInclude({
+      association: 'items',
+      include: [{ association: 'product' }],
+    })
+    const root = { include: [items] }
+    ensureIncludePath(root, 'items.product.group', {}, 'Order.itemTotalQuantity')
+
+    shallowGeneHydrationIncludes(root.include)
+
+    expect(items.include).toEqual([
+      expect.objectContaining({
+        association: 'product',
+        include: [expect.objectContaining({ association: 'group' })],
+      }),
+    ])
   })
 })

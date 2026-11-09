@@ -95,6 +95,7 @@ const operations = {
   'reversed order': `query { secondProtectedField { id } firstProtectedField { id } }`,
   aliases: `query { a: firstProtectedField { id } b: secondProtectedField { id } }`,
   fragments: `query { ...P } fragment P on Query { firstProtectedField { id } secondProtectedField { id } }`,
+  'viewer selected last': `query { firstProtectedField { id } secondProtectedField { id } viewer { id } }`,
   'viewer selected first': `query { viewer { id } firstProtectedField { id } secondProtectedField { id } }`,
 }
 

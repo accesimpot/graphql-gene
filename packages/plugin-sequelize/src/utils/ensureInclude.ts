@@ -6,7 +6,11 @@ import {
   type CollectorFrame,
   type FindOptionsHookContext,
 } from './includeCollector'
-import { markGeneEnsuredInclude, markGeneHydrationInclude } from './includePostProcess'
+import {
+  isGeneEnsuredInclude,
+  markGeneEnsuredInclude,
+  markGeneHydrationInclude,
+} from './includePostProcess'
 
 const ERROR_PREFIX = '[graphql-gene]'
 
@@ -21,6 +25,31 @@ function hasRowFilter(include: DefaultResolverIncludeOptions) {
   return include.where !== undefined || include.limit !== undefined || include.offset !== undefined
 }
 
+function createRowFilterConflictError(association: string, path: string, label: string) {
+  return new Error(
+    `${ERROR_PREFIX} Cannot ensure include "${path}" in ${label}: ` +
+      `"${association}" is already included with where/limit/offset.`
+  )
+}
+
+/**
+ * An ensured include is shared and unfiltered, so a selection that filters the same association
+ * has to fail whichever of the two is collected first.
+ */
+export function assertNoEnsuredRowFilterConflict(
+  siblings: DefaultResolverIncludeOptions[],
+  association: string,
+  include: DefaultResolverIncludeOptions,
+  label: string
+) {
+  if (
+    hasRowFilter(include) &&
+    siblings.some(sibling => sibling.association === association && isGeneEnsuredInclude(sibling))
+  ) {
+    throw createRowFilterConflictError(association, association, label)
+  }
+}
+
 export function ensureIncludePath(
   root: DefaultResolverIncludeOptions,
   path: string,
@@ -31,7 +60,6 @@ export function ensureIncludePath(
   if (segments.some(segment => !segment)) {
     throw new Error(`${ERROR_PREFIX} Invalid include path "${path}" in ${label}.`)
   }
-  const hydrate = options.hydrate !== false
 
   let parent = root
   segments.forEach((segment, index) => {
@@ -39,31 +67,23 @@ export function ensureIncludePath(
     const existing = parent.include.find(include => include.association === segment)
 
     if (existing && hasRowFilter(existing)) {
-      throw new Error(
-        `${ERROR_PREFIX} Cannot ensure include "${segment}" (path "${path}") in ${label}: ` +
-          `the same association is already included with where/limit/offset.`
-      )
+      throw createRowFilterConflictError(segment, path, label)
     }
-    const include = existing || markGeneEnsuredInclude({ association: segment })
+    const include = existing || { association: segment }
     if (!existing) {
       parent.include.push(include)
-      if (hydrate) markGeneHydrationInclude(include)
+      if (options.hydrate !== false) markGeneHydrationInclude(include)
     }
+    // Every segment is marked so hydration shallowing keeps the whole path.
+    markGeneEnsuredInclude(include)
 
-    const isLeaf = index === segments.length - 1
-    if (isLeaf) {
-      if (existing && hydrate && !existing.include?.length) markGeneHydrationInclude(existing)
-      if (options.required) include.required = true
-    }
+    if (index === segments.length - 1 && options.required) include.required = true
     parent = include
   })
   return parent
 }
 
-export function requireFindOptionsHookContext(
-  details: object,
-  helper: string
-): FindOptionsHookContext {
+function requireFindOptionsHookContext(details: object, helper: string): FindOptionsHookContext {
   const context = getFindOptionsHookContext(details)
   if (!context) {
     throw new Error(

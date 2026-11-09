@@ -18,6 +18,7 @@ import {
 } from 'graphql-gene'
 import { getFieldIncludeOptions, getQueryInclude } from './utils/public'
 import { stripAssociationListWrapperIncludes } from './utils/includePostProcess'
+import { createRootHookContext, setFindOptionsHookContext } from './utils/includeCollector'
 import { resolvePolymorphicHubLoadedRows } from './utils/polymorphic'
 import { getGeneAssociationListWrapperMeta } from './utils/associationListRegistry'
 import {
@@ -47,10 +48,9 @@ function applyGeneConfigRootFindOptions(
       : undefined
   if (typeof hook !== 'function') return
 
-  hook({
-    findOptions: findOptionsRoot,
-    state: findOptionsRoot,
-  })
+  const details = { findOptions: findOptionsRoot, state: findOptionsRoot }
+  setFindOptionsHookContext(details, createRootHookContext(ModelClass.name, findOptionsRoot))
+  hook(details)
 }
 
 export type GeneAssociationListWeakPayload = {

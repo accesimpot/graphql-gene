@@ -37,7 +37,10 @@ const viewerType: GraphQLObjectType = new GraphQLObjectType({
   name: VIEWER,
   fields: () => ({
     id: { type: GraphQLInt },
-    permissions: { type: permissionType },
+    permissions: {
+      type: new GraphQLList(permissionType),
+      args: { limit: { type: GraphQLInt } },
+    },
     friends: { type: new GraphQLList(viewerType) },
   }),
 })
@@ -165,7 +168,7 @@ describe('ensureIncludeBehind', () => {
     expect(include.some(row => row.association === 'settings')).toBe(false)
   })
 
-  it('does nothing for collectors of a different type', async () => {
+  it('ignores root-anchored dependencies when the collector targets another type', async () => {
     const info = await capture(`query { project { id owner { id } } }`, 'project')
     expect(getQueryInclude(info)!.include).toEqual([
       expect.objectContaining({
@@ -191,7 +194,43 @@ describe('ensureIncludeBehind', () => {
       `query { x: flatProtected ...V } fragment V on Query { me: viewer { id } }`,
       'viewer'
     )
-    expect(ofViewer(aliased)).toEqual(ofViewer(plain))
+    const expected = [
+      expect.objectContaining({
+        association: 'permissions',
+        include: [expect.objectContaining({ association: 'roles' })],
+      }),
+      expect.objectContaining({ association: 'settings' }),
+    ]
+    expect(ofViewer(plain)?.include).toEqual(expect.arrayContaining(expected))
+    expect(ofViewer(aliased)?.include).toEqual(expect.arrayContaining(expected))
+  })
+
+  it.each([
+    [
+      'dependency collected first',
+      `query { project { id } viewer { permissions(limit: 1) { id } } }`,
+    ],
+    [
+      'filtered selection collected first',
+      `query { viewer { permissions(limit: 1) { id } } project { id } }`,
+    ],
+  ])(
+    'throws when a filtered selection shares an association with a dependency (%s)',
+    async (_label, source) => {
+      const info = await capture(source, 'viewer')
+      expect(() => ofViewer(info)).toThrow(/"permissions" is already included/)
+    }
+  )
+
+  it('only binds a target selected within the requested depth', async () => {
+    const info = await capture(`query { project { owner { id } } }`, 'project')
+    const ofViewerAtDepth = (depth: number) =>
+      getQueryIncludeOf(info, VIEWER, { lookFromOperationRoot: true, depth })
+
+    expect(ofViewerAtDepth(1)).toBeUndefined()
+    expect(ofViewerAtDepth(2)?.include).toEqual([
+      expect.objectContaining({ association: 'settings' }),
+    ])
   })
 
   it('collects dependencies from mutations', async () => {

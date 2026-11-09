@@ -45,7 +45,7 @@ type IsModelAssociationValue<V> = [NonNullable<V>] extends [readonly (infer E)[]
 
 type AttributeKeys<M> = keyof InferAttributes<ModelInstance<M>>
 
-export type AssociationKeys<M> = {
+type AssociationKeys<M> = {
   [K in keyof ModelProto<M>]: IsModelAssociationValue<ModelProto<M>[K]> extends true ? K : never
 }[keyof ModelProto<M>]
 

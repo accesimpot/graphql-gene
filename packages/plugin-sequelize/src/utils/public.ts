@@ -8,6 +8,7 @@ import {
   LIMIT_ARG_DEFAULT,
   QUERY_ORDER_VALUES,
   SKIP_ARG_DEFAULT,
+  type FindOptionsHandler,
   type ValidGraphqlType,
 } from 'graphql-gene'
 import {
@@ -32,9 +33,10 @@ import { isMarkedAsAssociation } from './associationMap'
 import { markGeneHydrationInclude } from './includePostProcess'
 import { getAttributeByModelName } from './polymorphic'
 import { isModelStatic, isSafeArray } from './guards'
+import { assertNoEnsuredRowFilterConflict } from './ensureInclude'
 import {
+  IncludeCollector,
   createChildFrame,
-  createIncludeCollector,
   createScratchFrame,
   getOccurrenceFrame,
   isBoundTargetOccurrence,
@@ -77,13 +79,9 @@ function getFieldConfig(sourceType: string, field: string) {
   if (field in fieldConfigs) return normalizeFieldConfig(fieldConfigs[field])
 }
 
-type IncludeHook = (
-  details: UntilHandlerDetails<DefaultResolverIncludeOptions> & {
-    findOptions: DefaultResolverIncludeOptions
-  }
-) => void
+type IncludeHook = FindOptionsHandler<DefaultResolverIncludeOptions>
 
-const isIncludeHook = (hook: unknown): hook is IncludeHook => typeof hook === 'function'
+const isIncludeHook = (hook: IncludeHook | undefined): hook is IncludeHook => !!hook
 
 function isItemsFacet(sourceType: string, field: string) {
   return (
@@ -110,24 +108,17 @@ function collectFindOptionsHooks(details: UntilHandlerDetails<CollectorFrame>) {
   }
 }
 
+/** Frame holding the include of the rows the returned type's hooks edit. */
 function getTypeHookFrame(
   details: UntilHandlerDetails<CollectorFrame>,
   parent: CollectorFrame,
   occurrence: CollectorFrame | undefined
 ): CollectorFrame {
-  const { sourceType, type, field } = details
-  if (isItemsFacet(sourceType, field)) return parent
-  if (occurrence && (occurrence.association || occurrence === occurrence.collector.root)) {
-    return occurrence
-  }
-  if (isMarkedAsAssociation(sourceType, field)) {
-    parent.include.include = parent.include.include || []
-    const existing = parent.include.include.find(opt => opt.association === field)
-    const include = existing || markGeneHydrationInclude({ association: field })
-    if (!existing) parent.include.include.push(include)
-    return createChildFrame(parent, { type, field, include, association: field })
-  }
-  return createChildFrame(parent, { type, field, include: {}, isScratch: true })
+  if (isItemsFacet(details.sourceType, details.field)) return parent
+
+  return (
+    occurrence ?? createChildFrame(parent, { type: details.type, include: {}, isScratch: true })
+  )
 }
 
 function runFindOptionsHook(
@@ -141,8 +132,7 @@ function runFindOptionsHook(
     ancestryStart,
     label: `${details.sourceType}.${details.field}`,
   })
-  const hookDetails = details as unknown as UntilHandlerDetails<DefaultResolverIncludeOptions>
-  hook(Object.assign(hookDetails, { state: frame.include, findOptions: frame.include }))
+  hook(Object.assign(details, { state: frame.include, findOptions: frame.include }))
 }
 
 function handleUntilFindOptions(details: UntilHandlerDetails<CollectorFrame>) {
@@ -151,12 +141,15 @@ function handleUntilFindOptions(details: UntilHandlerDetails<CollectorFrame>) {
 
   return {
     afterAllSelections() {
+      // Hooks receive the plain include as `state`, so the frame is put back afterwards.
       const parent = details.state
       const occurrence = getOccurrenceFrame(details)
-      const typeFrame = getTypeHookFrame(details, parent, occurrence)
       const ancestryStart = occurrence ?? parent
 
-      typeHooks.forEach(hook => runFindOptionsHook(hook, details, typeFrame, ancestryStart))
+      if (typeHooks.length) {
+        const typeFrame = getTypeHookFrame(details, parent, occurrence)
+        typeHooks.forEach(hook => runFindOptionsHook(hook, details, typeFrame, ancestryStart))
+      }
       fieldHooks.forEach(hook => runFindOptionsHook(hook, details, parent, ancestryStart))
       details.state = parent
     },
@@ -177,17 +170,19 @@ function resolveNextFrame(details: NextHandlerDetails<CollectorFrame>): Collecto
   } = details
 
   if (isBoundTargetOccurrence(details)) return parent.collector.root
+
   if (isItemsFacet(sourceType, field)) {
-    return createChildFrame(parent, { type, field, include: parent.include })
+    return createChildFrame(parent, { type, include: parent.include })
   }
-  if (!isMarkedAsAssociation(sourceType, field)) {
-    return createChildFrame(parent, { type, field, include: {}, isScratch: true })
+  // Nothing collected below a scratch frame is returned, so skip building includes for it.
+  if (parent.isScratch || !isMarkedAsAssociation(sourceType, field)) {
+    return createChildFrame(parent, { type, include: {}, isScratch: true })
   }
 
   if (isAssociationListWrapperOutputType(fieldDef.type)) {
     const namedReturn = getNamedType(fieldDef.type)
     const { hasItems } = scanAssociationWrapperFacets(info, namedReturn.name, nextSelectionSet)
-    if (!hasItems) return createChildFrame(parent, { type, field, include: {}, isScratch: true })
+    if (!hasItems) return createChildFrame(parent, { type, include: {}, isScratch: true })
 
     parent.include.include = parent.include.include || []
     let hydrationInclude = parent.include.include.find(opt => opt.association === field)
@@ -195,13 +190,14 @@ function resolveNextFrame(details: NextHandlerDetails<CollectorFrame>): Collecto
       hydrationInclude = markGeneHydrationInclude({ association: field })
       parent.include.include.push(hydrationInclude)
     }
-    return createChildFrame(parent, { type, field, include: hydrationInclude, association: field })
+    return createChildFrame(parent, { type, include: hydrationInclude, association: field })
   }
 
   const include = getFieldIncludeOptions({ association: field, args, isList })
   parent.include.include = parent.include.include || []
+  assertNoEnsuredRowFilterConflict(parent.include.include, field, include, `${sourceType}.${field}`)
   parent.include.include.push(include)
-  return createChildFrame(parent, { type, field, include, association: field })
+  return createChildFrame(parent, { type, include, association: field })
 }
 
 function handleNextIncludeOptions(details: NextHandlerDetails<CollectorFrame>): CollectorFrame {
@@ -223,10 +219,10 @@ function handleNextFragmentIncludeOptions(
   const include: DefaultResolverIncludeOptions = { association }
   parent.include.include = parent.include.include || []
   parent.include.include.push(include)
-  return createChildFrame(parent, { type, field: `... on ${type}`, include, association })
+  return createChildFrame(parent, { type, include, association })
 }
 
-function resolveCollectedInclude(collector: ReturnType<typeof createIncludeCollector>) {
+function resolveCollectedInclude(collector: IncludeCollector) {
   const resolved = collector.root.include
   return resolved.include?.length
     ? (resolved as Required<Pick<DefaultResolverIncludeOptions, 'include'>>)
@@ -242,7 +238,7 @@ export function getQueryInclude(info: GraphQLResolveInfo) {
   if (!selectionSet) return undefined
 
   const rootType = getNamedType(info.returnType).name
-  const collector = createIncludeCollector(rootType, rootType)
+  const collector = new IncludeCollector(rootType, rootType)
 
   // `lookaheadAndThrow` delegates to swallowing `lookDeeper` in graphql-lookahead 1.4.0,
   // so include collection calls `lookDeeperAndThrow` directly.
@@ -268,21 +264,21 @@ export function getQueryIncludeOf(
   const targetType = typeof target === 'string' ? target : undefined
   const isMatchingTarget: Exclude<typeof target, string> =
     typeof target === 'string' ? ({ type }) => type === target : target
-  const collector = createIncludeCollector(targetType ?? '', targetType)
+  const collector = new IncludeCollector(targetType ?? '', targetType)
 
+  // Only the first selection matching the target is bound; the whole operation is still scanned
+  // so hooks outside of it can declare dependencies on it.
   const until = (details: UntilHandlerDetails<CollectorFrame>) => {
-    const frame = details.state
-    const withinDepth = options.depth == null || frame.depth <= options.depth
+    const withinDepth = options.depth == null || details.state.depth < options.depth
     if (
       !collector.isBound &&
-      frame.isScratch &&
       details.nextSelectionSet &&
       withinDepth &&
       matchesTarget(details, isMatchingTarget)
     ) {
       collector.isBound = true
       collector.root.type = details.type
-      collector.targetType = collector.targetType ?? details.type
+      collector.targetType ??= details.type
       markBoundTargetOccurrence(details)
     }
     return handleUntilFindOptions(details)
@@ -318,10 +314,8 @@ function matchesTarget(
   isMatchingTarget: (details: UntilHandlerDetails<DefaultResolverIncludeOptions>) => boolean
 ) {
   const frame = details.state
-  const publicDetails = details as unknown as UntilHandlerDetails<DefaultResolverIncludeOptions>
-  publicDetails.state = frame.include
   try {
-    return isMatchingTarget(publicDetails)
+    return isMatchingTarget(Object.assign(details, { state: frame.include }))
   } finally {
     details.state = frame
   }

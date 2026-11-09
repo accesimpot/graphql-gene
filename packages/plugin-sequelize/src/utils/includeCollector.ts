@@ -1,12 +1,5 @@
 import type { DefaultResolverIncludeOptions } from '../types'
 
-export type IncludeCollector = {
-  root: CollectorFrame
-  /** GraphQL type loaded with `root.include`. Unknown for unbound function targets. */
-  targetType?: string
-  isBound: boolean
-}
-
 export type CollectorFrame = {
   collector: IncludeCollector
   /** GraphQL type of the rows loaded by `include`. */
@@ -16,8 +9,7 @@ export type CollectorFrame = {
   association?: string
   /** Writes to scratch frames are never returned by the collector. */
   isScratch: boolean
-  /** Schema field names (alias-free), for error messages. */
-  path: string
+  /** Number of selection levels between the scan start and this frame. */
   depth: number
   parent?: CollectorFrame
 }
@@ -30,32 +22,32 @@ export type FindOptionsHookContext = {
   label: string
 }
 
-const FIND_OPTIONS_HOOK_CONTEXT = Symbol('geneFindOptionsHookContext')
-const OCCURRENCE_FRAME = Symbol('geneOccurrenceFrame')
-const BOUND_TARGET_OCCURRENCE = Symbol('geneBoundTargetOccurrence')
+export class IncludeCollector {
+  readonly root: CollectorFrame
+  /** GraphQL type loaded with `root.include`. Unknown for unbound function targets. */
+  targetType?: string
+  isBound = false
 
-export function createIncludeCollector(rootType: string, targetType?: string): IncludeCollector {
-  const collector = { targetType, isBound: false } as IncludeCollector
-  collector.root = {
-    collector,
-    type: rootType,
-    include: {},
-    isScratch: false,
-    path: rootType,
-    depth: 0,
+  constructor(rootType: string, targetType?: string, include: DefaultResolverIncludeOptions = {}) {
+    this.targetType = targetType
+    this.root = {
+      collector: this,
+      type: rootType,
+      include,
+      isScratch: false,
+      depth: 0,
+    }
   }
-  return collector
 }
 
 export function createScratchFrame(collector: IncludeCollector, type: string): CollectorFrame {
-  return { collector, type, include: {}, isScratch: true, path: type, depth: 0 }
+  return { collector, type, include: {}, isScratch: true, depth: 0 }
 }
 
 export function createChildFrame(
   parent: CollectorFrame,
   options: {
     type: string
-    field: string
     include: DefaultResolverIncludeOptions
     association?: string
     isScratch?: boolean
@@ -67,36 +59,41 @@ export function createChildFrame(
     include: options.include,
     association: options.association,
     isScratch: options.isScratch ?? parent.isScratch,
-    path: `${parent.path}.${options.field}`,
     depth: parent.depth + 1,
     parent,
   }
 }
 
-export function setFindOptionsHookContext(details: object, context: FindOptionsHookContext) {
-  Reflect.set(details, FIND_OPTIONS_HOOK_CONTEXT, context)
-}
-
-export function getFindOptionsHookContext(details: object): FindOptionsHookContext | undefined {
-  return Reflect.get(details, FIND_OPTIONS_HOOK_CONTEXT) as FindOptionsHookContext | undefined
-}
-
 /**
  * graphql-lookahead passes the same details object to `until`, `next` and `afterAllSelections`
- * for one selection; the include created in `next` is read back in `afterAllSelections`.
+ * for one selection, and hooks hand it back to `ensureInclude`, so it keys the per-selection data.
  */
-export function rememberOccurrenceFrame(details: object, frame: CollectorFrame) {
-  Reflect.set(details, OCCURRENCE_FRAME, frame)
-}
+const hookContexts = new WeakMap<object, FindOptionsHookContext>()
+const occurrenceFrames = new WeakMap<object, CollectorFrame>()
+const boundTargetOccurrences = new WeakSet<object>()
 
-export function getOccurrenceFrame(details: object): CollectorFrame | undefined {
-  return Reflect.get(details, OCCURRENCE_FRAME) as CollectorFrame | undefined
-}
+export const setFindOptionsHookContext = (details: object, context: FindOptionsHookContext) =>
+  hookContexts.set(details, context)
 
-export function markBoundTargetOccurrence(details: object) {
-  Reflect.set(details, BOUND_TARGET_OCCURRENCE, true)
-}
+export const getFindOptionsHookContext = (details: object) => hookContexts.get(details)
 
-export function isBoundTargetOccurrence(details: object): boolean {
-  return Reflect.get(details, BOUND_TARGET_OCCURRENCE) === true
+export const rememberOccurrenceFrame = (details: object, frame: CollectorFrame) =>
+  occurrenceFrames.set(details, frame)
+
+export const getOccurrenceFrame = (details: object) => occurrenceFrames.get(details)
+
+export const markBoundTargetOccurrence = (details: object) => boundTargetOccurrences.add(details)
+
+export const isBoundTargetOccurrence = (details: object) => boundTargetOccurrences.has(details)
+
+/**
+ * Context for hooks that run outside a collection (e.g. a type's `findOptions` applied to an
+ * association facet), where `include` is the root of the load.
+ */
+export function createRootHookContext(
+  type: string,
+  include: DefaultResolverIncludeOptions
+): FindOptionsHookContext {
+  const { root } = new IncludeCollector(type, type, include)
+  return { frame: root, ancestryStart: root, label: `${type}.findOptions` }
 }

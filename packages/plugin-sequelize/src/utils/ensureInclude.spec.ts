@@ -7,16 +7,11 @@ import {
   type GraphQLResolveInfo,
 } from 'graphql'
 import { getGloballyExtendedTypes } from 'graphql-gene'
-import { ensureInclude, ensureIncludePath } from './utils/ensureInclude'
-import {
-  isGeneEnsuredInclude,
-  isGeneHydrationInclude,
-  markGeneHydrationInclude,
-  shallowGeneHydrationIncludes,
-} from './utils/includePostProcess'
-import { getQueryInclude } from './utils/public'
-import { markFieldAsAssociation } from './utils/associationMap'
-import type { DefaultResolverIncludeOptions } from './types'
+import { ensureInclude, ensureIncludePath } from './ensureInclude'
+import { isGeneEnsuredInclude, isGeneHydrationInclude } from './includePostProcess'
+import { getQueryInclude } from './public'
+import { markFieldAsAssociation } from './associationMap'
+import type { DefaultResolverIncludeOptions } from '../types'
 
 describe('ensureIncludePath', () => {
   it('creates nested segments and returns the leaf', () => {
@@ -52,11 +47,14 @@ describe('ensureIncludePath', () => {
     expect(isGeneEnsuredInclude(auditEntries)).toBe(true)
   })
 
-  it('does not hydration-mark a reused leaf that already has nested includes', () => {
+  it('marks reused segments as ensured without making them hydration includes', () => {
     const root: DefaultResolverIncludeOptions = {
       include: [{ association: 'owner', include: [{ association: 'profile' }] }],
     }
-    const leaf = ensureIncludePath(root, 'owner', {}, 'Query.test')
+    const leaf = ensureIncludePath(root, 'owner.profile', {}, 'Query.test')
+    expect(isGeneEnsuredInclude(root.include![0])).toBe(true)
+    expect(isGeneEnsuredInclude(leaf)).toBe(true)
+    expect(isGeneHydrationInclude(root.include![0])).toBe(false)
     expect(isGeneHydrationInclude(leaf)).toBe(false)
   })
 
@@ -68,14 +66,17 @@ describe('ensureIncludePath', () => {
     expect(root.include![0].include![0].required).toBe(true)
   })
 
-  it('throws on an include with a row filter for the same association', () => {
-    const root: DefaultResolverIncludeOptions = {
-      include: [{ association: 'items', where: { id: 1 } }],
+  it.each([{ where: { id: 1 } }, { limit: 1 }, { offset: 1 }])(
+    'throws on an include with %j for the same association',
+    rowFilter => {
+      const root: DefaultResolverIncludeOptions = {
+        include: [{ association: 'items', ...rowFilter }],
+      }
+      expect(() => ensureIncludePath(root, 'items', {}, 'Order.itemTotalQuantity')).toThrow(
+        /\[graphql-gene\].*"items".*Order\.itemTotalQuantity/
+      )
     }
-    expect(() => ensureIncludePath(root, 'items', {}, 'Order.itemTotalQuantity')).toThrow(
-      /\[graphql-gene\].*"items".*Order\.itemTotalQuantity/
-    )
-  })
+  )
 
   it('throws on empty path segments', () => {
     expect(() => ensureIncludePath({}, 'permissions..roles', {}, 'Query.test')).toThrow(
@@ -85,15 +86,43 @@ describe('ensureIncludePath', () => {
 })
 
 describe('ensureInclude', () => {
+  const PARENT = 'EnsureParent'
+  const CHILD = 'EnsureChild'
+  markFieldAsAssociation(PARENT, 'items')
+
+  const childType = new GraphQLObjectType({ name: CHILD, fields: { id: { type: GraphQLInt } } })
+  const parentType = new GraphQLObjectType({
+    name: PARENT,
+    fields: { id: { type: GraphQLInt }, total: { type: GraphQLInt }, items: { type: childType } },
+  })
+  const schema = new GraphQLSchema({
+    query: new GraphQLObjectType({
+      name: 'Query',
+      fields: { ensureOrder: { type: parentType, resolve: () => ({}) } },
+    }),
+  })
+
+  async function captureInfo(source: string) {
+    let info: GraphQLResolveInfo | undefined
+    schema.getQueryType()!.getFields().ensureOrder.resolve = (
+      _parent,
+      _args,
+      _ctx,
+      resolverInfo
+    ) => {
+      info = info ?? resolverInfo
+      return {}
+    }
+    const result = await graphql({ schema, source })
+    expect(result.errors).toBeUndefined()
+    return info!
+  }
+
   it('throws outside a findOptions hook', () => {
     expect(() => ensureInclude({}, 'items')).toThrow(/must be called from a findOptions hook/)
   })
 
   it('adds a hydration include from a field hook during collection', async () => {
-    const PARENT = 'EnsureParent'
-    const CHILD = 'EnsureChild'
-    markFieldAsAssociation(PARENT, 'items')
-
     const extended = getGloballyExtendedTypes()
     const previous = extended.config[PARENT as never]
     extended.config[PARENT as never] = {
@@ -106,58 +135,12 @@ describe('ensureInclude', () => {
       },
     } as never
 
-    const childType = new GraphQLObjectType({ name: CHILD, fields: { id: { type: GraphQLInt } } })
-    const parentType = new GraphQLObjectType({
-      name: PARENT,
-      fields: { id: { type: GraphQLInt }, total: { type: GraphQLInt }, items: { type: childType } },
-    })
-    const schema = new GraphQLSchema({
-      query: new GraphQLObjectType({
-        name: 'Query',
-        fields: { ensureOrder: { type: parentType, resolve: () => ({}) } },
-      }),
-    })
-
     try {
-      let info: GraphQLResolveInfo | undefined
-      const field = schema.getQueryType()!.getFields().ensureOrder
-      field.resolve = (_parent, _args, _ctx, resolverInfo) => {
-        info = resolverInfo
-        return {}
-      }
-      const result = await graphql({ schema, source: `query { ensureOrder { total } }` })
-      expect(result.errors).toBeUndefined()
-      const include = getQueryInclude(info!)?.include
+      const include = getQueryInclude(await captureInfo(`query { ensureOrder { total } }`))?.include
       expect(include).toEqual([expect.objectContaining({ association: 'items' })])
       expect(isGeneHydrationInclude(include?.[0])).toBe(true)
     } finally {
       extended.config[PARENT as never] = previous
     }
-  })
-})
-
-describe('shallowGeneHydrationIncludes with ensured includes', () => {
-  it('keeps ensured nested includes and drops GraphQL-derived ones under hydration includes', () => {
-    const items = markGeneHydrationInclude({
-      association: 'items',
-      include: [{ association: 'fromClient' }],
-    })
-    const root: DefaultResolverIncludeOptions = { include: [items] }
-    ensureIncludePath(root, 'items.product', {}, 'Order.itemTotalQuantity')
-    ensureIncludePath(root, 'auditEntries.actor', {}, 'Query.test')
-
-    shallowGeneHydrationIncludes(root.include)
-
-    expect(items.include).toEqual([expect.objectContaining({ association: 'product' })])
-    expect(root.include![1].include).toEqual([expect.objectContaining({ association: 'actor' })])
-  })
-
-  it('still removes nested includes of hydration includes with no ensured children', () => {
-    const items = markGeneHydrationInclude({
-      association: 'items',
-      include: [{ association: 'fromClient' }],
-    })
-    shallowGeneHydrationIncludes([items])
-    expect(items.include).toBeUndefined()
   })
 })
