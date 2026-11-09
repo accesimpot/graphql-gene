@@ -480,6 +480,7 @@ export enum ADMIN_ROLES {
 declare module 'graphql-gene/context' {
   export interface GeneContext {
     authenticatedUser?: User | null
+    authenticatedUserPromise?: Promise<User | null>
   }
 }
 
@@ -527,7 +528,13 @@ export const userAuthDirective = defineDirective<{
     const { id, email } = getJwtTokenPayload(token) || {}
     if (!id && !email) return throwUnauthorized()
 
-    const user = await User.findOne({ where: { id, email }, ...includeOptions })
+    // Top-level fields resolve concurrently, so the in-flight lookup is cached. Assigning the user
+    // after `await` alone would leave it unset for the fields that resolve in the meantime.
+    context.authenticatedUserPromise ??= User.findOne({
+      where: { id, email },
+      ...includeOptions,
+    })
+    const user = await context.authenticatedUserPromise
     context.authenticatedUser = user
 
     if (!user || !isAuthorized(user)) throwUnauthorized()
