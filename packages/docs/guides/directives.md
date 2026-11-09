@@ -52,7 +52,7 @@ In short: **empty `name` means “run the handler, omit `@DirectiveName` from th
 
 ## `findOptions` during include collection
 
-`findOptions` is optional. The Sequelize plugin calls it while collecting includes, once per selected occurrence of each field the directive applies to: the fields it is declared on, and for a type-level directive every field returning that type (aliases and fragments included). A directive declared on both the type and the field runs twice.
+`findOptions` is optional. The Sequelize plugin calls it while collecting includes, once per selected occurrence of each field the directive applies to: the fields it is declared on, and for a type-level directive every selected field returning that type (aliases and fragments included). The field whose resolver collects the includes is not itself visited. A directive declared on both the type and the field runs twice.
 
 For each occurrence, once the selection set containing the field has been traversed:
 

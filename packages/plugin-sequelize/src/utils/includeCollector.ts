@@ -24,7 +24,7 @@ export type FindOptionsHookContext = {
   ancestryStart: CollectorFrame
   label: string
   /** Lets helpers reject type names that do not exist, which would otherwise under-load silently. */
-  schema?: GraphQLSchema
+  schema: GraphQLSchema
 }
 
 export type PendingRootInclude = {
@@ -127,7 +127,7 @@ export const getBoundOccurrenceFrame = (details: object) => boundOccurrenceFrame
 export function createRootHookContext(
   type: string,
   include: DefaultResolverIncludeOptions,
-  schema?: GraphQLSchema
+  schema: GraphQLSchema
 ): FindOptionsHookContext {
   const { root } = new IncludeCollector(type, type, include)
   return { frame: root, ancestryStart: root, label: `${type}.findOptions`, schema }

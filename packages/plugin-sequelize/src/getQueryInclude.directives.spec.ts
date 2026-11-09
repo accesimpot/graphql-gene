@@ -103,7 +103,7 @@ describe('directive findOptions during include collection', () => {
     expect(calls.filter(call => call.label === 'fieldDir')).toHaveLength(2)
   })
 
-  it('deduplicates ensured includes across occurrences without deduplicating hook calls', async () => {
+  it('ensures the path in every occurrence without deduplicating hook calls', async () => {
     const fieldDirectives = (
       extended.config[PROJECT as never] as { owner: { directives: { findOptions: unknown }[] } }
     ).owner.directives

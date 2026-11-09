@@ -117,8 +117,9 @@ async function captureInfo(
   return info!
 }
 
-const ofViewer = (info: GraphQLResolveInfo) =>
-  getQueryIncludeOf(info, VIEWER, { lookFromOperationRoot: true })
+const ofViewer = (info: GraphQLResolveInfo, options: { mergeOccurrences?: boolean } = {}) =>
+  getQueryIncludeOf(info, VIEWER, { lookFromOperationRoot: true, ...options })
+const mergeOccurrences = { mergeOccurrences: true }
 
 describe('ensureIncludeBehind and getQueryIncludeOf', () => {
   it('creates a virtual root when the target is not selected', async () => {
@@ -160,6 +161,17 @@ describe('ensureIncludeBehind and getQueryIncludeOf', () => {
     }
   })
 
+  it('reuses a dependency ensured before the same association is selected', async () => {
+    const info = await captureInfo(
+      `query { project { id } viewer { permissions { id } } }`,
+      'viewer'
+    )
+    const permissions = ofViewer(info)!.include!.filter(row => row.association === 'permissions')
+    expect(permissions).toEqual([
+      expect.objectContaining({ include: [expect.objectContaining({ association: 'roles' })] }),
+    ])
+  })
+
   it("attaches 'nearest' to a nested same-type ancestor", async () => {
     const info = await captureInfo(`query { viewer { friends { id } } }`, 'viewer')
     const include = ofViewer(info)!.include!
@@ -178,12 +190,20 @@ describe('ensureIncludeBehind and getQueryIncludeOf', () => {
     ])
   })
 
-  it('merges every selection of the target into one include', async () => {
+  it('loads only the first selection of the target by default', async () => {
     const info = await captureInfo(
       `query { a: viewer { permissions { id } } b: viewer { friends { id } } }`,
       'viewer'
     )
-    const include = ofViewer(info)!.include!
+    expect(ofViewer(info)!.include!.map(row => row.association)).toEqual(['permissions'])
+  })
+
+  it('merges every selection of the target with mergeOccurrences', async () => {
+    const info = await captureInfo(
+      `query { a: viewer { permissions { id } } b: viewer { friends { id } } }`,
+      'viewer'
+    )
+    const include = ofViewer(info, mergeOccurrences)!.include!
     expect(include.map(row => row.association).sort()).toEqual(['friends', 'permissions'])
   })
 
@@ -192,7 +212,9 @@ describe('ensureIncludeBehind and getQueryIncludeOf', () => {
       `query { a: viewer { permissions(limit: 1) { id } } b: viewer { permissions(limit: 1) { id } } }`,
       'viewer'
     )
-    const permissions = ofViewer(info)!.include!.filter(row => row.association === 'permissions')
+    const permissions = ofViewer(info, mergeOccurrences)!.include!.filter(
+      row => row.association === 'permissions'
+    )
     expect(permissions).toEqual([expect.objectContaining({ limit: 1 })])
   })
 
@@ -201,12 +223,16 @@ describe('ensureIncludeBehind and getQueryIncludeOf', () => {
       `query { a: viewer { permissions(limit: 1) { id } } b: viewer { permissions(limit: 2) { id } } }`,
       'viewer'
     )
-    expect(() => ofViewer(info)).toThrow(/"permissions" is selected with different arguments/)
+    expect(() => ofViewer(info, mergeOccurrences)).toThrow(
+      /"permissions" is selected with different arguments/
+    )
   })
 
   it('does not merge a target selected inside another target selection', async () => {
     const info = await captureInfo(`query { viewer { friends { id } } }`, 'viewer')
-    const friends = ofViewer(info)!.include!.find(row => row.association === 'friends')!
+    const friends = ofViewer(info, mergeOccurrences)!.include!.find(
+      row => row.association === 'friends'
+    )!
     expect(friends.include).toEqual([expect.objectContaining({ association: 'settings' })])
   })
 

@@ -134,7 +134,7 @@ It throws when the association is already included with `where`, `limit` or `off
 
 A field or directive can also depend on a record loaded elsewhere in the operation, such as a viewer loaded once per request. `ensureIncludeBehind(details, path, ancestorType, options)` adds the path under an include of that GraphQL type:
 
-- `at: 'nearest'` (default): the closest selected ancestor of `ancestorType`, otherwise the record `getQueryIncludeOf(info, ancestorType)` loads.
+- `at: 'nearest'` (default): the closest selected ancestor of `ancestorType`. When none is selected, the record `getQueryIncludeOf(info, ancestorType)` loads. When the closest one is not loaded by the current collection (for example it is reached through a field that is not an association), nothing is added.
 - `at: 'root'`: only the record `getQueryIncludeOf(info, ancestorType)` loads, even when the operation does not select that type.
 
 It returns `undefined` and does nothing when the current collection does not load `ancestorType`.
@@ -149,12 +149,12 @@ findOptions(details) {
 // concurrently, so a cache filled after `await` would still be empty for the others.
 context.viewerPromise ??= Viewer.findOne({
   where: { id: viewerId },
-  ...getQueryIncludeOf(info, 'Viewer', { lookFromOperationRoot: true }),
+  ...getQueryIncludeOf(info, 'Viewer', { lookFromOperationRoot: true, mergeOccurrences: true }),
 })
 const viewer = await context.viewerPromise
 ```
 
-With `lookFromOperationRoot`, hooks across the whole operation contribute before the first load. Every selection of the target type, such as aliases, is merged into the one load; selections of the same association with different arguments throw, because one load cannot return both. Selections nested inside another selection of the target are other records and are not merged. See [Directives](./directives.md#findoptions-during-include-collection) for when each hook runs.
+With `lookFromOperationRoot`, hooks across the whole operation contribute before the first load. By default only the first selection of the target type is loaded. `mergeOccurrences: true` merges every selection, such as aliases, into the one load, which suits a record loaded once per operation like the viewer; selections of the same association with different arguments then throw, because one load cannot return both. Leave it off for types an operation can select as different records, such as orders returned by two mutations. Selections nested inside another selection of the target are other records and are never merged. See [Directives](./directives.md#findoptions-during-include-collection) for when each hook runs.
 
 ---
 

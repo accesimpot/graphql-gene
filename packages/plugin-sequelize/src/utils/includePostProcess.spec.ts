@@ -127,6 +127,20 @@ describe('ensured includes through wrapper post-processing', () => {
     ])
   })
 
+  it('keeps a wrapper include created by ensureInclude with its ensured children', () => {
+    const root: { include?: DefaultResolverIncludeOptions[] } = {}
+    ensureIncludePath(root, 'items.product', {}, 'Order.itemTotalQuantity')
+
+    postProcess(root)
+
+    expect(root.include).toEqual([
+      expect.objectContaining({
+        association: 'items',
+        include: [expect.objectContaining({ association: 'product' })],
+      }),
+    ])
+  })
+
   it('still drops a wrapper include that was ensured with hydrate: false', () => {
     const root: { include?: DefaultResolverIncludeOptions[] } = {
       include: [{ association: 'items' }],

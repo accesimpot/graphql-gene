@@ -52,16 +52,17 @@ describe('ensureIncludePath', () => {
     expect(root.include![0].include).toHaveLength(1)
   })
 
-  it('marks created segments as hydration and ensured; hydrate:false skips hydration only', () => {
+  it('marks created segments as ensured and leaves hydration to wrapper post-processing', () => {
     const root: DefaultResolverIncludeOptions = {}
     ensureIncludePath(root, 'permissions.roles', {}, 'Query.test')
     ensureIncludePath(root, 'auditEntries', { hydrate: false }, 'Query.test')
     const [permissions, auditEntries] = root.include!
-    expect(isGeneHydrationInclude(permissions)).toBe(true)
-    expect(isGeneHydrationInclude(permissions.include![0])).toBe(true)
+    expect(isGeneEnsuredInclude(permissions)).toBe(true)
     expect(isGeneEnsuredInclude(permissions.include![0])).toBe(true)
-    expect(isGeneHydrationInclude(auditEntries)).toBe(false)
     expect(isGeneEnsuredInclude(auditEntries)).toBe(true)
+    expect([permissions, permissions.include![0], auditEntries].some(isGeneHydrationInclude)).toBe(
+      false
+    )
   })
 
   it('marks reused segments as ensured without making them hydration includes', () => {
@@ -86,7 +87,7 @@ describe('ensureIncludePath', () => {
   it('applies required to the leaf only and never resets it', () => {
     const root: DefaultResolverIncludeOptions = {}
     ensureIncludePath(root, 'permissions.roles', { required: true }, 'Query.test')
-    ensureIncludePath(root, 'permissions.roles', { required: false }, 'Query.test')
+    ensureIncludePath(root, 'permissions.roles', {}, 'Query.test')
     expect(root.include![0].required).toBeUndefined()
     expect(root.include![0].include![0].required).toBe(true)
   })
@@ -147,7 +148,7 @@ describe('ensureInclude', () => {
     expect(() => ensureInclude({}, 'items')).toThrow(/must be called from a findOptions hook/)
   })
 
-  it('adds a hydration include from a field hook during collection', async () => {
+  it('adds an ensured include from a field hook during collection', async () => {
     const extended = getGloballyExtendedTypes()
     const previous = extended.config[PARENT as never]
     extended.config[PARENT as never] = {
@@ -163,7 +164,7 @@ describe('ensureInclude', () => {
     try {
       const include = getQueryInclude(await captureInfo(`query { ensureOrder { total } }`))?.include
       expect(include).toEqual([expect.objectContaining({ association: 'items' })])
-      expect(isGeneHydrationInclude(include?.[0])).toBe(true)
+      expect(isGeneEnsuredInclude(include?.[0])).toBe(true)
     } finally {
       extended.config[PARENT as never] = previous
     }
@@ -171,7 +172,7 @@ describe('ensureInclude', () => {
 })
 
 describe('addSelectedInclude', () => {
-  const addFrom = (frames: CollectorFrame[], where: object) =>
+  const addFrom = (frames: CollectorFrame[], where: DefaultResolverIncludeOptions['where']) =>
     frames.map(frame =>
       addSelectedInclude(frame, 'orders', { association: 'orders', where }, 'Viewer.orders')
     )

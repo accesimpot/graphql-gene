@@ -55,9 +55,6 @@ import {
 export * from './polymorphic'
 export { markFieldAsAssociation, isMarkedAsAssociation } from './associationMap'
 
-const QUERY_TYPE = 'Query'
-const MUTATION_TYPE = 'Mutation'
-
 /**
  * True for sequelize-typescript model classes, whether or not they are registered
  * with a Sequelize instance yet. Registration is validated in `populateTypeDefs`.
@@ -95,8 +92,19 @@ function isItemsFacet(sourceType: string, field: string) {
   )
 }
 
+/** Hooks only come from gene configs, so other fields skip the directive lookup. */
+function hasHookConfig(type: string, sourceType: string, field: string) {
+  const { geneConfig, config } = getGloballyExtendedTypes()
+  if (type in geneConfig) return true
+
+  const fieldConfigs = sourceType in config ? config[sourceType as keyof typeof config] : undefined
+  return !!fieldConfigs && field in fieldConfigs
+}
+
 function collectFindOptionsHooks(details: UntilHandlerDetails<CollectorFrame>) {
   const { sourceType, type, field } = details
+  if (!hasHookConfig(type, sourceType, field)) return { typeHooks: [], fieldHooks: [] }
+
   const { typeDirectives, fieldDirectives } = getDirectiveConfigsOfField({
     type,
     parentType: sourceType,
@@ -120,6 +128,8 @@ function getTypeHookFrame(
   parent: CollectorFrame,
   occurrence: CollectorFrame | undefined
 ): CollectorFrame {
+  const boundOccurrence = getBoundOccurrenceFrame(details)
+  if (boundOccurrence) return boundOccurrence
   if (isItemsFacet(details.sourceType, details.field)) return parent
 
   return (
@@ -193,11 +203,13 @@ function resolveNextFrame(details: NextHandlerDetails<CollectorFrame>): Collecto
     if (!hasItems) return createChildFrame(parent, { type, include: {}, isScratch: true })
 
     parent.include.include = parent.include.include || []
+    // An ensured row may already be there; selecting the wrapper's items makes it a hydration row.
     let hydrationInclude = parent.include.include.find(opt => opt.association === field)
     if (!hydrationInclude) {
-      hydrationInclude = markGeneHydrationInclude({ association: field })
+      hydrationInclude = { association: field }
       parent.include.include.push(hydrationInclude)
     }
+    markGeneHydrationInclude(hydrationInclude)
     return createChildFrame(parent, { type, include: hydrationInclude, association: field })
   }
 
@@ -278,23 +290,35 @@ export function getQueryIncludeOf(
   target:
     | ValidGraphqlType
     | ((details: UntilHandlerDetails<DefaultResolverIncludeOptions>) => boolean),
-  options: { depth?: number; lookFromOperationRoot?: boolean } = {}
+  options: {
+    /** Selection levels from the scan start. Fragment spreads on the same type do not count. */
+    depth?: number
+    lookFromOperationRoot?: boolean
+    /**
+     * Merge every selection of the target into the returned include, instead of only the first.
+     * Use it for a record loaded once per operation (e.g. the viewer); with different arguments
+     * on one association, the selections cannot share a load and collection throws.
+     */
+    mergeOccurrences?: boolean
+  } = {}
 ) {
   const targetType = typeof target === 'string' ? target : undefined
   const isMatchingTarget: Exclude<typeof target, string> =
     typeof target === 'string' ? ({ type }) => type === target : target
   const collector = new IncludeCollector(targetType ?? '', targetType)
 
-  // Every selection matching the target is merged into one include. Selections nested in a bound
-  // one are other records, and the whole operation is still scanned so hooks outside of it can
-  // declare dependencies on it.
+  // The whole operation is scanned so hooks outside the target can declare dependencies on it.
+  // Selections nested in a bound one are other records.
+  const canBind = (type: string) =>
+    !collector.isBound || (!!options.mergeOccurrences && type === collector.targetType)
+
   const until = (details: UntilHandlerDetails<CollectorFrame>) => {
     const withinDepth = options.depth == null || details.state.depth < options.depth
     if (
       details.state.occurrence === undefined &&
       details.nextSelectionSet &&
       withinDepth &&
-      (!collector.isBound || details.type === collector.targetType) &&
+      canBind(details.type) &&
       matchesTarget(details, isMatchingTarget)
     ) {
       if (!collector.isBound) {
@@ -308,10 +332,10 @@ export function getQueryIncludeOf(
   }
 
   const scanType = options.lookFromOperationRoot
-    ? info.operation.operation === 'mutation'
-      ? MUTATION_TYPE
-      : QUERY_TYPE
+    ? info.schema.getRootType(info.operation.operation)?.name
     : getNamedType(info.returnType).name
+  if (!scanType) return undefined
+
   const scanState = createScratchFrame(collector, scanType)
   const traversal = {
     info,

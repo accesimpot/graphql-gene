@@ -32,7 +32,9 @@ let viewerPromise: ReturnType<typeof loadViewer> | undefined
  * after the load finishes would be empty for every field that resolves in the meantime.
  */
 function getViewer(info: GraphQLResolveInfo) {
-  viewerPromise ??= loadViewer(getQueryIncludeOf(info, VIEWER, { lookFromOperationRoot: true }))
+  viewerPromise ??= loadViewer(
+    getQueryIncludeOf(info, VIEWER, { lookFromOperationRoot: true, mergeOccurrences: true })
+  )
   return viewerPromise
 }
 

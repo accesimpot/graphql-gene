@@ -7,11 +7,7 @@ import {
   type FindOptionsHookContext,
   type IncludeCollector,
 } from './includeCollector'
-import {
-  isGeneEnsuredInclude,
-  markGeneEnsuredInclude,
-  markGeneHydrationInclude,
-} from './includePostProcess'
+import { isGeneEnsuredInclude, markGeneEnsuredInclude } from './includePostProcess'
 
 const ERROR_PREFIX = '[graphql-gene]'
 
@@ -71,9 +67,10 @@ function pickRowFilter({ where, limit, offset, order }: DefaultResolverIncludeOp
 }
 
 /**
- * Adds the include of a selected association. Selections made by different occurrences of the
- * target share one load: equal ones are merged, different ones would be combined by Sequelize into
- * rows that match neither selection, so they throw.
+ * Adds the include of a selected association. A selection without row filter reuses an ensured row
+ * of the same association, whichever was collected first. Selections made by different occurrences
+ * of the target share one load: equal ones are merged, different ones would be combined by
+ * Sequelize into rows that match neither selection, so they throw.
  */
 export function addSelectedInclude(
   parent: CollectorFrame,
@@ -84,6 +81,11 @@ export function addSelectedInclude(
   parent.include.include = parent.include.include || []
   const siblings = parent.include.include
   assertNoEnsuredRowFilterConflict(siblings, association, include, label)
+
+  const ensured = siblings.find(
+    sibling => sibling.association === association && isGeneEnsuredInclude(sibling)
+  )
+  if (ensured && isSameValue(pickRowFilter(ensured), pickRowFilter(include))) return ensured
 
   const { collector, occurrence } = parent
   if (occurrence !== undefined) {
@@ -143,19 +145,18 @@ function applyPath(
   if (!matches.length) {
     const created = { association: segment }
     parent.include.push(created)
-    if (options.hydrate !== false) markGeneHydrationInclude(created)
     matches.push(created)
   }
 
-  let firstLeaf: DefaultResolverIncludeOptions | undefined
-  for (const include of matches) {
-    // Every segment is marked so hydration shallowing keeps the whole path.
+  // Every segment is marked so hydration shallowing keeps the whole path. Wrapper rows become
+  // hydration rows in `stripAssociationListWrapperIncludes`, where the wrapper is known.
+  const leaves = matches.map(include => {
     markGeneEnsuredInclude(include, options.hydrate !== false)
-    const leaf = isLeaf ? include : applyPath(include, segments, index + 1, options, path, label)
-    if (isLeaf && options.required) include.required = true
-    firstLeaf ??= leaf
-  }
-  return firstLeaf!
+    if (!isLeaf) return applyPath(include, segments, index + 1, options, path, label)
+    if (options.required) include.required = true
+    return include
+  })
+  return leaves[0]
 }
 
 function requireFindOptionsHookContext(details: object, helper: string): FindOptionsHookContext {
@@ -193,7 +194,7 @@ const UNBOUND_TARGET = Symbol('unboundIncludeTarget')
  * that does not exist can never be found and would silently drop the dependency.
  */
 function assertAncestorTypeExists(context: FindOptionsHookContext, ancestorType: string) {
-  if (!context.schema || context.schema.getType(ancestorType)) return
+  if (context.schema.getType(ancestorType)) return
 
   const ancestry: string[] = []
   for (let frame: CollectorFrame | undefined = context.ancestryStart; frame; frame = frame.parent) {
