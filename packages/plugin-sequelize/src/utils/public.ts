@@ -1,5 +1,6 @@
 import { GraphQLError, getNamedType, type GraphQLResolveInfo } from 'graphql'
 import {
+  getFieldDirectiveConfigs,
   getGloballyExtendedTypes,
   isObject,
   isRegisteredPolymorphicAbstractType,
@@ -91,9 +92,20 @@ function isItemsFacet(sourceType: string, field: string) {
 
 function collectFindOptionsHooks(details: UntilHandlerDetails<CollectorFrame>) {
   const { sourceType, type, field } = details
+  const { typeDirectives, fieldDirectives } = getFieldDirectiveConfigs({
+    type,
+    parentType: sourceType,
+    field,
+  })
   return {
-    typeHooks: [getTypeConfig(type)?.findOptions].filter(isIncludeHook),
-    fieldHooks: [getFieldConfig(sourceType, field)?.findOptions].filter(isIncludeHook),
+    typeHooks: [
+      getTypeConfig(type)?.findOptions,
+      ...typeDirectives.map(directive => directive.findOptions),
+    ].filter(isIncludeHook),
+    fieldHooks: [
+      getFieldConfig(sourceType, field)?.findOptions,
+      ...fieldDirectives.map(directive => directive.findOptions),
+    ].filter(isIncludeHook),
   }
 }
 
