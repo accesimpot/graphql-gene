@@ -1,7 +1,6 @@
 import { GraphQLError, getNamedType, type GraphQLResolveInfo } from 'graphql'
 import {
   getGloballyExtendedTypes,
-  isEmptyObject,
   isObject,
   isRegisteredPolymorphicAbstractType,
   normalizeFieldConfig,
@@ -11,8 +10,7 @@ import {
   type ValidGraphqlType,
 } from 'graphql-gene'
 import {
-  lookahead,
-  lookDeeper,
+  lookDeeperAndThrow,
   type UntilHandlerDetails,
   type NextHandlerDetails,
   type NextFragmentHandlerDetails,
@@ -33,36 +31,19 @@ import { isMarkedAsAssociation } from './associationMap'
 import { markGeneHydrationInclude } from './includePostProcess'
 import { getAttributeByModelName } from './polymorphic'
 import { isModelStatic, isSafeArray } from './guards'
+import {
+  createChildFrame,
+  createIncludeCollector,
+  createScratchFrame,
+  getOccurrenceFrame,
+  isBoundTargetOccurrence,
+  rememberOccurrenceFrame,
+  setFindOptionsHookContext,
+  type CollectorFrame,
+} from './includeCollector'
 
 export * from './polymorphic'
 export { markFieldAsAssociation, isMarkedAsAssociation } from './associationMap'
-
-/**
- * Frames the current Sequelize include object when traversing synthetic wrapper facets so
- * lookahead state stays distinct from ORM include shapes.
- */
-const GENE_ASSOCIATION_INCLUDE_FRAME_KEY = '__geneAssociationIncludeFrame'
-
-function unwrapAssociationIncludeFrame(state: unknown): DefaultResolverIncludeOptions {
-  if (
-    isObject(state) &&
-    GENE_ASSOCIATION_INCLUDE_FRAME_KEY in state &&
-    isObject((state as Record<string, unknown>)[GENE_ASSOCIATION_INCLUDE_FRAME_KEY])
-  ) {
-    return (state as Record<string, DefaultResolverIncludeOptions>)[
-      GENE_ASSOCIATION_INCLUDE_FRAME_KEY
-    ]
-  }
-  return state as DefaultResolverIncludeOptions
-}
-
-function frameAssociationInclude(
-  include: DefaultResolverIncludeOptions
-): DefaultResolverIncludeOptions {
-  return {
-    [GENE_ASSOCIATION_INCLUDE_FRAME_KEY]: include,
-  } as unknown as DefaultResolverIncludeOptions
-}
 
 const QUERY_TYPE = 'Query'
 const MUTATION_TYPE = 'Mutation'
@@ -94,134 +75,174 @@ function getFieldConfig(sourceType: string, field: string) {
   if (field in fieldConfigs) return normalizeFieldConfig(fieldConfigs[field])
 }
 
-function handleUntilFindOptions(options: UntilHandlerDetails<DefaultResolverIncludeOptions>) {
-  const rootState = unwrapAssociationIncludeFrame(options.state)
-  const { sourceType, type, field } = options
-  const typeConfig = getTypeConfig(type)
-  const fieldConfig = getFieldConfig(sourceType, field)
-
-  if (
-    getGeneAssociationListWrapperMeta(sourceType) &&
-    field === GENE_ASSOCIATION_LIST_ITEMS_FIELD
-  ) {
-    if (!typeConfig?.findOptions && !fieldConfig?.findOptions) return false
-
-    return {
-      afterAllSelections() {
-        typeConfig?.findOptions?.(Object.assign(options, { findOptions: rootState }))
-        fieldConfig?.findOptions?.(Object.assign(options, { findOptions: rootState }))
-      },
-    }
+type IncludeHook = (
+  details: UntilHandlerDetails<DefaultResolverIncludeOptions> & {
+    findOptions: DefaultResolverIncludeOptions
   }
+) => void
 
-  if (typeConfig?.findOptions || fieldConfig?.findOptions) {
-    return {
-      afterAllSelections() {
-        if (typeConfig?.findOptions) {
-          rootState.include = rootState.include || []
-          const possibleState = rootState.include?.find(opt => opt.association === field)
-          const nestedState = possibleState || markGeneHydrationInclude({ association: field })
-          if (!possibleState) rootState.include.push(nestedState)
+const isIncludeHook = (hook: unknown): hook is IncludeHook => typeof hook === 'function'
 
-          typeConfig?.findOptions?.(Object.assign(options, { findOptions: nestedState }))
-        }
-        fieldConfig?.findOptions?.(Object.assign(options, { findOptions: rootState }))
-      },
-    }
-  }
-  return false
+function isItemsFacet(sourceType: string, field: string) {
+  return (
+    !!getGeneAssociationListWrapperMeta(sourceType) && field === GENE_ASSOCIATION_LIST_ITEMS_FIELD
+  )
 }
 
-function handleNextIncludeOptions(details: NextHandlerDetails<DefaultResolverIncludeOptions>) {
+function collectFindOptionsHooks(details: UntilHandlerDetails<CollectorFrame>) {
+  const { sourceType, type, field } = details
+  return {
+    typeHooks: [getTypeConfig(type)?.findOptions].filter(isIncludeHook),
+    fieldHooks: [getFieldConfig(sourceType, field)?.findOptions].filter(isIncludeHook),
+  }
+}
+
+function getTypeHookFrame(
+  details: UntilHandlerDetails<CollectorFrame>,
+  parent: CollectorFrame,
+  occurrence: CollectorFrame | undefined
+): CollectorFrame {
+  const { sourceType, type, field } = details
+  if (isItemsFacet(sourceType, field)) return parent
+  if (occurrence && (occurrence.association || occurrence === occurrence.collector.root)) {
+    return occurrence
+  }
+  if (isMarkedAsAssociation(sourceType, field)) {
+    parent.include.include = parent.include.include || []
+    const existing = parent.include.include.find(opt => opt.association === field)
+    const include = existing || markGeneHydrationInclude({ association: field })
+    if (!existing) parent.include.include.push(include)
+    return createChildFrame(parent, { type, field, include, association: field })
+  }
+  return createChildFrame(parent, { type, field, include: {}, isScratch: true })
+}
+
+function runFindOptionsHook(
+  hook: IncludeHook,
+  details: UntilHandlerDetails<CollectorFrame>,
+  frame: CollectorFrame,
+  ancestryStart: CollectorFrame
+) {
+  setFindOptionsHookContext(details, {
+    frame,
+    ancestryStart,
+    label: `${details.sourceType}.${details.field}`,
+  })
+  const hookDetails = details as unknown as UntilHandlerDetails<DefaultResolverIncludeOptions>
+  hook(Object.assign(hookDetails, { state: frame.include, findOptions: frame.include }))
+}
+
+function handleUntilFindOptions(details: UntilHandlerDetails<CollectorFrame>) {
+  const { typeHooks, fieldHooks } = collectFindOptionsHooks(details)
+  if (!typeHooks.length && !fieldHooks.length) return false
+
+  return {
+    afterAllSelections() {
+      const parent = details.state
+      const occurrence = getOccurrenceFrame(details)
+      const typeFrame = getTypeHookFrame(details, parent, occurrence)
+      const ancestryStart = occurrence ?? parent
+
+      typeHooks.forEach(hook => runFindOptionsHook(hook, details, typeFrame, ancestryStart))
+      fieldHooks.forEach(hook => runFindOptionsHook(hook, details, parent, ancestryStart))
+      details.state = parent
+    },
+  }
+}
+
+function resolveNextFrame(details: NextHandlerDetails<CollectorFrame>): CollectorFrame {
   const {
-    state: rawState,
+    state: parent,
     sourceType,
     field,
+    type,
     args,
     isList,
     nextSelectionSet,
     info,
     fieldDef,
   } = details
-  const state = unwrapAssociationIncludeFrame(rawState)
 
-  if (
-    getGeneAssociationListWrapperMeta(sourceType) &&
-    field === GENE_ASSOCIATION_LIST_ITEMS_FIELD
-  ) {
-    return frameAssociationInclude(state)
+  if (isBoundTargetOccurrence(details)) return parent.collector.root
+  if (isItemsFacet(sourceType, field)) {
+    return createChildFrame(parent, { type, field, include: parent.include })
   }
-
-  if (!isMarkedAsAssociation(sourceType, field)) return {}
-
-  const namedReturn = getNamedType(fieldDef.type)
+  if (!isMarkedAsAssociation(sourceType, field)) {
+    return createChildFrame(parent, { type, field, include: {}, isScratch: true })
+  }
 
   if (isAssociationListWrapperOutputType(fieldDef.type)) {
+    const namedReturn = getNamedType(fieldDef.type)
     const { hasItems } = scanAssociationWrapperFacets(info, namedReturn.name, nextSelectionSet)
-    if (!hasItems) return {}
+    if (!hasItems) return createChildFrame(parent, { type, field, include: {}, isScratch: true })
 
-    state.include = state.include || []
-    let hydrationInclude = state.include.find(opt => opt.association === field)
+    parent.include.include = parent.include.include || []
+    let hydrationInclude = parent.include.include.find(opt => opt.association === field)
     if (!hydrationInclude) {
       hydrationInclude = markGeneHydrationInclude({ association: field })
-      state.include.push(hydrationInclude)
+      parent.include.include.push(hydrationInclude)
     }
-
-    return hydrationInclude
+    return createChildFrame(parent, { type, field, include: hydrationInclude, association: field })
   }
 
-  const include = getFieldIncludeOptions({
-    association: field,
-    args,
-    isList,
-  })
+  const include = getFieldIncludeOptions({ association: field, args, isList })
+  parent.include.include = parent.include.include || []
+  parent.include.include.push(include)
+  return createChildFrame(parent, { type, field, include, association: field })
+}
 
-  state.include = state.include || []
-  state.include.push(include)
-
-  return include
+function handleNextIncludeOptions(details: NextHandlerDetails<CollectorFrame>): CollectorFrame {
+  const frame = resolveNextFrame(details)
+  rememberOccurrenceFrame(details, frame)
+  return frame
 }
 
 function handleNextFragmentIncludeOptions(
-  details: NextFragmentHandlerDetails<DefaultResolverIncludeOptions>
-) {
-  const { type, sourceType } = details
+  details: NextFragmentHandlerDetails<CollectorFrame>
+): CollectorFrame {
+  const { type, sourceType, state: parent } = details
 
   // Spreading a fragment on a concrete type stays on the same object, so its fields have to keep
-  // filling the state they were spread into. Handing back a new one would send every include
-  // found inside the fragment to an object nothing ever reads.
-  if (!isRegisteredPolymorphicAbstractType(sourceType)) return details.state
+  // filling the state they were spread into.
+  if (!isRegisteredPolymorphicAbstractType(sourceType)) return parent
 
-  const state = unwrapAssociationIncludeFrame(details.state)
-  const include: DefaultResolverIncludeOptions = { association: getAttributeByModelName(type) }
-
-  state.include = state.include || []
-  state.include.push(include)
-
-  return include
+  const association = getAttributeByModelName(type)
+  const include: DefaultResolverIncludeOptions = { association }
+  parent.include.include = parent.include.include || []
+  parent.include.include.push(include)
+  return createChildFrame(parent, { type, field: `... on ${type}`, include, association })
 }
 
-function resolveIncludeOptionsFromLookahead(
-  includeOptions: DefaultResolverIncludeOptions
-): Required<Pick<DefaultResolverIncludeOptions, 'include'>> | undefined {
-  const resolved = unwrapAssociationIncludeFrame(includeOptions)
-  return isEmptyObject(resolved) || !resolved.include?.length
-    ? undefined
-    : (resolved as Required<Pick<DefaultResolverIncludeOptions, 'include'>>)
+function resolveCollectedInclude(collector: ReturnType<typeof createIncludeCollector>) {
+  const resolved = collector.root.include
+  return resolved.include?.length
+    ? (resolved as Required<Pick<DefaultResolverIncludeOptions, 'include'>>)
+    : undefined
+}
+
+function getResolverSelectionSet(info: GraphQLResolveInfo) {
+  return info.fieldNodes.find(node => node.name.value === info.fieldName)?.selectionSet
 }
 
 export function getQueryInclude(info: GraphQLResolveInfo) {
-  const includeOptions: DefaultResolverIncludeOptions = {}
+  const selectionSet = getResolverSelectionSet(info)
+  if (!selectionSet) return undefined
 
-  lookahead({
+  const rootType = getNamedType(info.returnType).name
+  const collector = createIncludeCollector(rootType, rootType)
+
+  // `lookaheadAndThrow` delegates to swallowing `lookDeeper` in graphql-lookahead 1.4.0,
+  // so include collection calls `lookDeeperAndThrow` directly.
+  lookDeeperAndThrow({
     info,
-    state: includeOptions,
+    selectionSet,
+    state: collector.root,
+    type: rootType,
     until: handleUntilFindOptions,
     next: handleNextIncludeOptions,
     nextFragment: handleNextFragmentIncludeOptions,
   })
-
-  return resolveIncludeOptionsFromLookahead(includeOptions)
+  return resolveCollectedInclude(collector)
 }
 
 export function getQueryIncludeOf(
@@ -231,43 +252,77 @@ export function getQueryIncludeOf(
     | ((details: UntilHandlerDetails<DefaultResolverIncludeOptions>) => boolean),
   options: { depth?: number; lookFromOperationRoot?: boolean } = {}
 ) {
-  const includeOptions: DefaultResolverIncludeOptions = {}
+  const targetType = typeof target === 'string' ? target : undefined
   const isMatchingTarget: Exclude<typeof target, string> =
     typeof target === 'string' ? ({ type }) => type === target : target
+  const collector = createIncludeCollector(targetType ?? '', targetType)
 
-  const until = (details: UntilHandlerDetails<DefaultResolverIncludeOptions>) => {
-    if (!isMatchingTarget(details)) return false
+  const until = (details: UntilHandlerDetails<CollectorFrame>) => {
+    if (!matchesTarget(details, isMatchingTarget)) return false
 
     const { type, nextSelectionSet } = details
     if (!nextSelectionSet) return false
 
-    lookDeeper({
+    collector.root.type = type
+    collector.targetType = collector.targetType ?? type
+    lookDeeperAndThrow({
       info,
-      state: includeOptions,
+      state: collector.root,
       type,
       until: handleUntilFindOptions,
       selectionSet: nextSelectionSet,
-
       next: handleNextIncludeOptions,
       nextFragment: handleNextFragmentIncludeOptions,
     })
     return true
   }
 
-  const lookDeeperOptions = { info, depth: options.depth, until }
+  const scanType = options.lookFromOperationRoot
+    ? info.operation.operation === 'mutation'
+      ? MUTATION_TYPE
+      : QUERY_TYPE
+    : getNamedType(info.returnType).name
+  const scanState = createScratchFrame(collector, scanType)
 
   if (options.lookFromOperationRoot) {
-    lookDeeper({
-      ...lookDeeperOptions,
-      state: {},
-      type: info.operation.operation === 'mutation' ? MUTATION_TYPE : QUERY_TYPE,
+    lookDeeperAndThrow({
+      info,
+      depth: options.depth,
+      until,
+      state: scanState,
+      type: scanType,
       selectionSet: info.operation.selectionSet,
     })
   } else {
-    lookahead(lookDeeperOptions)
+    const selectionSet = getResolverSelectionSet(info)
+    if (selectionSet) {
+      lookDeeperAndThrow({
+        info,
+        depth: options.depth,
+        until,
+        state: scanState,
+        type: scanType,
+        selectionSet,
+      })
+    }
   }
 
-  return resolveIncludeOptionsFromLookahead(includeOptions)
+  return resolveCollectedInclude(collector)
+}
+
+/** Function targets keep receiving the plain include as `details.state`. */
+function matchesTarget(
+  details: UntilHandlerDetails<CollectorFrame>,
+  isMatchingTarget: (details: UntilHandlerDetails<DefaultResolverIncludeOptions>) => boolean
+) {
+  const frame = details.state
+  const publicDetails = details as unknown as UntilHandlerDetails<DefaultResolverIncludeOptions>
+  publicDetails.state = frame.include
+  try {
+    return isMatchingTarget(publicDetails)
+  } finally {
+    details.state = frame
+  }
 }
 
 export function getFieldFindOptions(options: {
