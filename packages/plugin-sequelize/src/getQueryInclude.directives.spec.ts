@@ -64,7 +64,7 @@ afterAll(() => {
   extended.geneConfig = snapshot.geneConfig as typeof extended.geneConfig
 })
 
-async function capture(source: string) {
+async function captureInfo(source: string) {
   let info: GraphQLResolveInfo | undefined
   const field = schema.getQueryType()!.getFields().dirProject
   field.resolve = (_parent, _args, _ctx, resolverInfo) => {
@@ -79,7 +79,7 @@ async function capture(source: string) {
 describe('directive findOptions during include collection', () => {
   it('runs hooks in type, type directive, field, field directive order on the right frames', async () => {
     calls.length = 0
-    const info = await capture(`query { dirProject { owner { id } } }`)
+    const info = await captureInfo(`query { dirProject { owner { id } } }`)
     const includeOptions = getQueryInclude(info)!
     const ownerInclude = includeOptions.include!.find(include => include.association === 'owner')
 
@@ -96,7 +96,7 @@ describe('directive findOptions during include collection', () => {
 
   it('runs once per selected occurrence, including fragments and aliases', async () => {
     calls.length = 0
-    const info = await capture(
+    const info = await captureInfo(
       `query { dirProject { a: owner { id } ...F } } fragment F on ${PROJECT} { b: owner { id } }`
     )
     getQueryInclude(info)
@@ -114,7 +114,7 @@ describe('directive findOptions during include collection', () => {
     }
     calls.length = 0
     try {
-      const info = await capture(
+      const info = await captureInfo(
         `query { dirProject { a: owner { id } ...F } } fragment F on ${PROJECT} { b: owner { id } }`
       )
       const include = getQueryInclude(info)!.include!.filter(row => row.association === 'owner')

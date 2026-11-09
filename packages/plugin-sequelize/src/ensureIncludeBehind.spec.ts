@@ -12,9 +12,9 @@ import { getGloballyExtendedTypes } from 'graphql-gene'
 import { ensureInclude, ensureIncludeBehind, getQueryInclude, getQueryIncludeOf } from './utils'
 import { markFieldAsAssociation } from './utils/associationMap'
 
-const VIEWER = 'BhViewer'
-const PROJECT = 'BhProject'
-const PERMISSION = 'BhPermission'
+const VIEWER = 'BehindViewer'
+const PROJECT = 'BehindProject'
+const PERMISSION = 'BehindPermission'
 
 markFieldAsAssociation(VIEWER, 'permissions')
 markFieldAsAssociation(VIEWER, 'friends')
@@ -99,7 +99,7 @@ afterAll(() => {
   extended.geneConfig = snapshot.geneConfig as typeof extended.geneConfig
 })
 
-async function capture(
+async function captureInfo(
   source: string,
   fieldName: string,
   operation: 'query' | 'mutation' = 'query'
@@ -120,9 +120,9 @@ async function capture(
 const ofViewer = (info: GraphQLResolveInfo) =>
   getQueryIncludeOf(info, VIEWER, { lookFromOperationRoot: true })
 
-describe('ensureIncludeBehind', () => {
+describe('ensureIncludeBehind and getQueryIncludeOf', () => {
   it('creates a virtual root when the target is not selected', async () => {
-    const info = await capture(`query { flatProtected }`, 'flatProtected')
+    const info = await captureInfo(`query { flatProtected }`, 'flatProtected')
     expect(ofViewer(info)?.include).toEqual([
       expect.objectContaining({
         association: 'permissions',
@@ -139,7 +139,7 @@ describe('ensureIncludeBehind', () => {
       },
     } as never
     try {
-      const info = await capture(
+      const info = await captureInfo(
         `query { viewer { id permissions { id } } project { id } }`,
         'viewer'
       )
@@ -161,7 +161,7 @@ describe('ensureIncludeBehind', () => {
   })
 
   it("attaches 'nearest' to a nested same-type ancestor", async () => {
-    const info = await capture(`query { viewer { friends { id } } }`, 'viewer')
+    const info = await captureInfo(`query { viewer { friends { id } } }`, 'viewer')
     const include = ofViewer(info)!.include!
     const friends = include.find(row => row.association === 'friends')!
     expect(friends.include).toEqual([expect.objectContaining({ association: 'settings' })])
@@ -169,7 +169,7 @@ describe('ensureIncludeBehind', () => {
   })
 
   it('ignores root-anchored dependencies when the collector targets another type', async () => {
-    const info = await capture(`query { project { id owner { id } } }`, 'project')
+    const info = await captureInfo(`query { project { id owner { id } } }`, 'project')
     expect(getQueryInclude(info)!.include).toEqual([
       expect.objectContaining({
         association: 'owner',
@@ -179,7 +179,7 @@ describe('ensureIncludeBehind', () => {
   })
 
   it('merges every selection of the target into one include', async () => {
-    const info = await capture(
+    const info = await captureInfo(
       `query { a: viewer { permissions { id } } b: viewer { friends { id } } }`,
       'viewer'
     )
@@ -188,7 +188,7 @@ describe('ensureIncludeBehind', () => {
   })
 
   it('merges equal selections of one association instead of repeating them', async () => {
-    const info = await capture(
+    const info = await captureInfo(
       `query { a: viewer { permissions(limit: 1) { id } } b: viewer { permissions(limit: 1) { id } } }`,
       'viewer'
     )
@@ -197,7 +197,7 @@ describe('ensureIncludeBehind', () => {
   })
 
   it('throws when selections of the target ask for different rows of one association', async () => {
-    const info = await capture(
+    const info = await captureInfo(
       `query { a: viewer { permissions(limit: 1) { id } } b: viewer { permissions(limit: 2) { id } } }`,
       'viewer'
     )
@@ -205,14 +205,14 @@ describe('ensureIncludeBehind', () => {
   })
 
   it('does not merge a target selected inside another target selection', async () => {
-    const info = await capture(`query { viewer { friends { id } } }`, 'viewer')
+    const info = await captureInfo(`query { viewer { friends { id } } }`, 'viewer')
     const friends = ofViewer(info)!.include!.find(row => row.association === 'friends')!
     expect(friends.include).toEqual([expect.objectContaining({ association: 'settings' })])
   })
 
   it('collects the same includes through aliases and fragments', async () => {
-    const plain = await capture(`query { flatProtected viewer { id } }`, 'viewer')
-    const aliased = await capture(
+    const plain = await captureInfo(`query { flatProtected viewer { id } }`, 'viewer')
+    const aliased = await captureInfo(
       `query { x: flatProtected ...V } fragment V on Query { me: viewer { id } }`,
       'viewer'
     )
@@ -239,13 +239,13 @@ describe('ensureIncludeBehind', () => {
   ])(
     'throws when a filtered selection shares an association with a dependency (%s)',
     async (_label, source) => {
-      const info = await capture(source, 'viewer')
+      const info = await captureInfo(source, 'viewer')
       expect(() => ofViewer(info)).toThrow(/"permissions" is already included/)
     }
   )
 
   it('only binds a target selected within the requested depth', async () => {
-    const info = await capture(`query { project { owner { id } } }`, 'project')
+    const info = await captureInfo(`query { project { owner { id } } }`, 'project')
     const ofViewerAtDepth = (depth: number) =>
       getQueryIncludeOf(info, VIEWER, { lookFromOperationRoot: true, depth })
 
@@ -256,7 +256,7 @@ describe('ensureIncludeBehind', () => {
   })
 
   it('collects dependencies from mutations', async () => {
-    const info = await capture(`mutation { updateProject { id } }`, 'updateProject', 'mutation')
+    const info = await captureInfo(`mutation { updateProject { id } }`, 'updateProject', 'mutation')
     expect(ofViewer(info)?.include).toEqual([
       expect.objectContaining({
         association: 'permissions',
@@ -266,7 +266,7 @@ describe('ensureIncludeBehind', () => {
   })
 
   it('keeps a root dependency when a function target is selected after the hook', async () => {
-    const info = await capture(`query { project { id } viewer { id } }`, 'viewer')
+    const info = await captureInfo(`query { project { id } viewer { id } }`, 'viewer')
     const include = getQueryIncludeOf(info, details => details.type === VIEWER, {
       lookFromOperationRoot: true,
     })?.include
@@ -289,13 +289,13 @@ describe('ensureIncludeBehind', () => {
         returnType: 'Int',
         resolver: () => 1,
         findOptions: (details: object) => {
-          ensureIncludeBehind(details, 'permissions', 'BhViewr', { at: 'root' })
+          ensureIncludeBehind(details, 'permissions', 'BehindViewr', { at: 'root' })
         },
       },
     } as never
     try {
-      const info = await capture(`query { project { id } }`, 'project')
-      expect(() => ofViewer(info)).toThrow(/BhProject\.id.*"BhViewr"/s)
+      const info = await captureInfo(`query { project { id } }`, 'project')
+      expect(() => ofViewer(info)).toThrow(/BehindProject\.id.*"BehindViewr"/s)
     } finally {
       extended.config[PROJECT as never] = previous
     }

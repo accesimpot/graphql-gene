@@ -630,6 +630,29 @@ type Query {
 <br>
 
 
+#### Example: depending on a record loaded elsewhere in the operation
+
+A directive can depend on a record that another field loads, such as the viewer. `ensureIncludeBehind` adds the path under that record's include, so the record is loaded once with everything it needs:
+
+```ts
+import { ensureIncludeBehind } from '@graphql-gene/plugin-sequelize'
+
+export const rolesDirective = defineDirective(() => ({
+  name: 'roles',
+  handler() {},
+  findOptions(details) {
+    // Adds `permissions.roles` to the `Viewer` load, even if the client did not select it
+    ensureIncludeBehind(details, 'permissions.roles', 'Viewer', { at: 'root' })
+  },
+}))
+```
+
+The field that reads `context.viewer` should cache the in-flight load, because top-level fields resolve concurrently.
+
+<br>
+<br>
+
+
 ## Available plugins
 
 - [`@graphql-gene/plugin-sequelize`](https://github.com/accesimpot/graphql-gene/tree/main/packages/plugin-sequelize#readme) for [Sequelize](https://sequelize.org)
