@@ -15,6 +15,7 @@ import {
   getGloballyExtendedTypes,
   getReturnTypeName,
   parseGetterConfig,
+  getFieldDirectiveConfigs,
 } from './utils'
 import type { GenePlugin, AnyObject, GraphqlTypes, TypeDefLines } from './types'
 
@@ -136,23 +137,12 @@ function defineResolvers<SchemaTypes extends AnyObject>(options: {
       }
       if (!options.isAddingDirectives) return
 
-      const directiveConfigs: GeneConfig<Record<string, unknown> | undefined>['directives'] = []
-
-      // Type-level directives
-      if (geneConfig?.directives) {
-        directiveConfigs.push(...parseGetterConfig(geneConfig.directives))
-      }
-      if (geneConfig?.aliases && returnTypeName in geneConfig.aliases) {
-        const aliasGeneConfig = geneConfig.aliases[returnTypeName as 'Query']
-        if (aliasGeneConfig?.directives) {
-          directiveConfigs.push(...parseGetterConfig(aliasGeneConfig.directives))
-        }
-      }
-
-      // Field-level directives
-      if (normalizedConfig?.directives) {
-        directiveConfigs.push(...parseGetterConfig(normalizedConfig.directives))
-      }
+      const { typeDirectives, fieldDirectives } = getFieldDirectiveConfigs({
+        type,
+        parentType,
+        field,
+      })
+      const directiveConfigs = [...typeDirectives, ...fieldDirectives]
 
       if (directiveConfigs.length) {
         // Reverse the order so that the first directive you defined will be executed first

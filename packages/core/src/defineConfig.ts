@@ -327,11 +327,17 @@ export type GeneDirectiveConfig<
       name: string
       args?: TDirectiveArgs
       handler: GeneDirectiveHandler<TSource, TContext, TArgs>
+      /**
+       * Runs during include collection for every selected field this directive is attached to,
+       * like a field-level (or type-level) `findOptions`.
+       */
+      findOptions?: FindOptionsHandler<object>
     }
   : {
       name: string
       args: TDirectiveArgs
       handler: GeneDirectiveHandler<TSource, TContext, TArgs>
+      findOptions?: FindOptionsHandler<object>
     }
 
 export type GeneDirectiveHandler<
