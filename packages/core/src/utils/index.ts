@@ -22,7 +22,6 @@ import {
 import type { GeneContext } from 'graphql-gene/context'
 import type { AnyObject, FieldLines, GraphQLVarType, TypeDefLines, TypeOrFunction } from '../types'
 import type { GeneConfig, GeneDirectiveConfig, GeneTypeConfig } from '../defineConfig'
-
 import { getGloballyExtendedTypes } from './extend'
 
 export * from './extend'
@@ -349,7 +348,7 @@ export function createTypeDefLines(
 }
 
 /** Directives wrapping `parentType.field` at runtime, in the order `resolvers.ts` applies them. */
-export function getFieldDirectiveConfigs(options: {
+export function getDirectiveConfigsOfField(options: {
   type: string
   parentType: string
   field: string

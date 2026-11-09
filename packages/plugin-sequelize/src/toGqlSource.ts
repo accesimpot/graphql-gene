@@ -52,7 +52,9 @@ type AssociationKeys<M> = {
 type AssociationName<M> = Extract<AssociationKeys<M>, string>
 
 /** First segment is a checked association name; deeper segments are not checked. */
-export type AssociationPathOf<M> = AssociationName<M> | `${AssociationName<M>}.${string}`
+export type AssociationPathOf<M> = [AssociationName<M>] extends [never]
+  ? string
+  : AssociationName<M> | `${AssociationName<M>}.${string}`
 
 /** Column and association keys declared on the Sequelize model (mixins and internals omitted). */
 type GqlSourceModelKey<M> = AttributeKeys<M> | AssociationKeys<M>

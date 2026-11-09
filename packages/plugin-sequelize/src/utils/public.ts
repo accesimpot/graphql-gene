@@ -1,6 +1,6 @@
 import { GraphQLError, getNamedType, type GraphQLResolveInfo } from 'graphql'
 import {
-  getFieldDirectiveConfigs,
+  getDirectiveConfigsOfField,
   getGloballyExtendedTypes,
   isObject,
   isRegisteredPolymorphicAbstractType,
@@ -91,7 +91,7 @@ function isItemsFacet(sourceType: string, field: string) {
 
 function collectFindOptionsHooks(details: UntilHandlerDetails<CollectorFrame>) {
   const { sourceType, type, field } = details
-  const { typeDirectives, fieldDirectives } = getFieldDirectiveConfigs({
+  const { typeDirectives, fieldDirectives } = getDirectiveConfigsOfField({
     type,
     parentType: sourceType,
     field,

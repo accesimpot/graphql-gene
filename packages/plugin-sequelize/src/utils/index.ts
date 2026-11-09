@@ -1,5 +1,11 @@
 export * from './public'
-export * from './includePostProcess'
+export {
+  GENE_HYDRATION_INCLUDE_KEY,
+  isGeneHydrationInclude,
+  markGeneHydrationInclude,
+  shallowGeneHydrationIncludes,
+  stripAssociationListWrapperIncludes,
+} from './includePostProcess'
 export {
   ensureInclude,
   ensureIncludeBehind,

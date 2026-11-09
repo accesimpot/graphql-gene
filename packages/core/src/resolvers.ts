@@ -15,7 +15,7 @@ import {
   getGloballyExtendedTypes,
   getReturnTypeName,
   parseGetterConfig,
-  getFieldDirectiveConfigs,
+  getDirectiveConfigsOfField,
 } from './utils'
 import type { GenePlugin, AnyObject, GraphqlTypes, TypeDefLines } from './types'
 
@@ -137,7 +137,7 @@ function defineResolvers<SchemaTypes extends AnyObject>(options: {
       }
       if (!options.isAddingDirectives) return
 
-      const { typeDirectives, fieldDirectives } = getFieldDirectiveConfigs({
+      const { typeDirectives, fieldDirectives } = getDirectiveConfigsOfField({
         type,
         parentType,
         field,
