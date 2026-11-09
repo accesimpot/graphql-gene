@@ -50,6 +50,7 @@ const viewerType: GraphQLObjectType = new GraphQLObjectType({
       args: { limit: { type: GraphQLInt } },
     },
     friends: { type: new GraphQLList(viewerType) },
+    account: { type: viewerType },
   }),
 })
 const projectType = new GraphQLObjectType({
@@ -178,6 +179,20 @@ describe('ensureIncludeBehind and getQueryIncludeOf', () => {
     expect(permissions).toEqual([
       expect.objectContaining({ include: [expect.objectContaining({ association: 'roles' })] }),
     ])
+  })
+
+  it("loads the resolved field's own selection when it is the target", async () => {
+    const info = await captureInfo(`query { viewer { id permissions { id } } }`, 'viewer')
+    const include = getQueryIncludeOf(info, VIEWER)?.include ?? []
+
+    expect(include.map(row => row.association).sort()).toEqual(['permissions', 'settings'])
+  })
+
+  it('does not move a nearest dependency onto an outer record this collector does not load', async () => {
+    const info = await captureInfo(`query { viewer { account { id } } }`, 'viewer')
+    const include = ofViewer(info)?.include ?? []
+
+    expect(include.some(row => row.association === 'settings')).toBe(false)
   })
 
   it("attaches 'nearest' to a nested same-type ancestor", async () => {

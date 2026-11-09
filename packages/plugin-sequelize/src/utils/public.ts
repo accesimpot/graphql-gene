@@ -336,7 +336,17 @@ export function getQueryIncludeOf(
     : getNamedType(info.returnType).name
   if (!scanType) return undefined
 
-  const scanState = createScratchFrame(collector, scanType)
+  // The resolved field is not a selection inside its own subtree. When it is the target, its
+  // frame has to be the occurrence, or top-level associations are discarded as scratch writes.
+  const withinRootDepth = options.depth == null || options.depth > 0
+  const bindScanRoot = withinRootDepth && targetType === scanType
+  if (bindScanRoot) {
+    collector.isBound = true
+    collector.root.type = scanType
+  }
+  const scanState = bindScanRoot
+    ? collector.createOccurrenceFrame()
+    : createScratchFrame(collector, scanType)
   const traversal = {
     info,
     state: scanState,

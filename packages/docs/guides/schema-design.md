@@ -98,7 +98,7 @@ If a mutation changes an entity of type `Foo`, the payload should include `Foo` 
 
 **Why:** Clients can update in-memory cache by `id` without issuing a second query. This matches common GraphQL client guidance and prevents “fire a mutation, then refetch everything” workflows.
 
-In custom mutation resolvers, reuse the selection set when reloading the model: use `getQueryInclude` from the current field’s `info`, or `getQueryIncludeOf(info, 'Order', { … })` when the modified instance appears under a different GraphQL type in the response tree. The [README example](../../../README.md#example-user-authentication-directive) shows `getQueryIncludeOf` for `AuthenticatedUser` with `lookFromOperationRoot: true` when the directive runs on a field that is not itself that type. The dev playground includes mutation examples that return the updated entity with nested selections respected.
+In custom mutation resolvers, reuse the selection set when reloading the model: use `getQueryInclude` from the current field’s `info`, or `getQueryIncludeOf(info, 'Order')`, which loads that field’s own selection when the field returns `Order`. Pass `{ lookFromOperationRoot: true }` when the `Order` appears under a different GraphQL type in the response tree. The [README example](../../../README.md#example-user-authentication-directive) shows `getQueryIncludeOf` for `AuthenticatedUser` with `lookFromOperationRoot: true` when the directive runs on a field that is not itself that type. The dev playground includes mutation examples that return the updated entity with nested selections respected.
 
 ---
 

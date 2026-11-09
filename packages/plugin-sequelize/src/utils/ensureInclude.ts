@@ -221,7 +221,10 @@ function findAnchorFrame(
   if (at === 'root') return rootMatches ? collector.root : unboundRoot()
 
   for (let frame: CollectorFrame | undefined = context.ancestryStart; frame; frame = frame.parent) {
-    if (frame.type === ancestorType) return frame.isScratch ? undefined : frame
+    if (frame.type === ancestorType) {
+      // This record is selected but not loaded here, so the dependency is not moved to an outer one.
+      return frame.isScratch ? undefined : frame
+    }
   }
   return rootMatches ? collector.root : unboundRoot()
 }
