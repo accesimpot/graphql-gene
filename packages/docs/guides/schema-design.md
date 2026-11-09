@@ -110,6 +110,50 @@ For example, a `categories` field might resolve from `groupCategories → catego
 
 See `ProductGroup` in `packages/dev-playground/src/models/ProductGroup/ProductGroup.model.ts`.
 
+Instead of editing `state.include` by hand, `ensureInclude` adds a dot-separated association path to the include the hook received. It reuses what the query already includes and keeps the association when list-wrapper includes are trimmed:
+
+```ts
+import { ensureInclude } from '@graphql-gene/plugin-sequelize'
+
+extendTypes({
+  Order: {
+    itemTotalQuantity: {
+      returnType: 'Int!',
+      findOptions(details) {
+        ensureInclude(details, 'items')
+      },
+      resolver: ({ source }) => source.items?.items?.reduce((sum, item) => sum + item.quantity, 0),
+    },
+  },
+})
+```
+
+It throws when the association is already included with `where`, `limit` or `offset`, because a filtered include cannot stand in for all the rows. Hooks run whenever includes are collected, so they should only edit the include they receive.
+
+### Dependencies on an ancestor record
+
+A field or directive can also depend on a record loaded elsewhere in the operation, such as a viewer loaded once per request. `ensureIncludeBehind(details, path, ancestorType, options)` adds the path under an include of that GraphQL type:
+
+- `at: 'nearest'` (default): the closest selected ancestor of `ancestorType`, otherwise the record `getQueryIncludeOf(info, ancestorType)` loads.
+- `at: 'root'`: only the record `getQueryIncludeOf(info, ancestorType)` loads, even when the operation does not select that type.
+
+It returns `undefined` and does nothing when the current collection does not load `ancestorType`.
+
+```ts
+// In a directive, so that `viewer.permissions.roles` is loaded even if the client did not select it
+findOptions(details) {
+  ensureIncludeBehind(details, 'permissions.roles', 'Viewer', { at: 'root' })
+},
+
+// In the loader shared by every protected field
+context.viewer ??= await Viewer.findOne({
+  where: { id: viewerId },
+  ...getQueryIncludeOf(info, 'Viewer', { lookFromOperationRoot: true }),
+})
+```
+
+With `lookFromOperationRoot`, hooks across the whole operation contribute before the first load. Only the first selection of the target type is loaded; later ones, such as aliases, are not merged. See [Directives](./directives.md#findoptions-during-include-collection) for when each hook runs.
+
 ---
 
 ## Prefer stable `id` on object types

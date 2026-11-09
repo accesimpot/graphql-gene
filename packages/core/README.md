@@ -446,6 +446,7 @@ type GeneDirectiveConfig<
   name: string
   args?: TDirectiveArgs
   handler: GeneDirectiveHandler<TSource, TContext, TArgs>
+  findOptions?: FindOptionsHandler<object>
 }
 
 type GeneDirectiveHandler<TSource, TContext, TArgs, TResult = unknown> = (options: {

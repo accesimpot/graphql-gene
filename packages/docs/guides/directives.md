@@ -52,14 +52,14 @@ In short: **empty `name` means “run the handler, omit `@DirectiveName` from th
 
 ## `findOptions` during include collection
 
-`findOptions` is optional. The Sequelize plugin calls it while collecting includes, once per selected occurrence of a field the directive is attached to (aliases and fragments included). The same directive attached on both the type and the field runs twice.
+`findOptions` is optional. The Sequelize plugin calls it while collecting includes, once per selected occurrence of each field the directive applies to: the fields it is declared on, and for a type-level directive every field returning that type (aliases and fragments included). A directive declared on both the type and the field runs twice.
 
-For each occurrence, after that field's sibling selection set has been traversed:
+For each occurrence, once the selection set containing the field has been traversed:
 
-1. Returned-type `findOptions`, then returned-type directives (`geneConfig.directives`, then `aliases`), on that field's own include.
+1. Returned-type `findOptions`, then returned-type directives (`geneConfig.directives`, then `aliases`), on that field's own include. Fields that are not associations get a throwaway include.
 2. Field `findOptions`, then field directives, on the parent include.
 
-Hooks are not deduplicated. Includes they request are. From a hook, `ensureInclude` adds associations on the include the hook received, and `ensureIncludeBehind` adds them on an ancestor include. See the plugin README.
+Hooks are not deduplicated. Includes they request are. Use `ensureInclude` and `ensureIncludeBehind` from a hook, see [Computed and virtual fields](./schema-design.md#computed-and-virtual-fields-declare-dependencies-with-findoptions).
 
 ## See also
 
