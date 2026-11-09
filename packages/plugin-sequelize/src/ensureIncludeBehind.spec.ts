@@ -12,6 +12,14 @@ import { getGloballyExtendedTypes } from 'graphql-gene'
 import { ensureInclude, ensureIncludeBehind, getQueryInclude, getQueryIncludeOf } from './utils'
 import { markFieldAsAssociation } from './utils/associationMap'
 
+// Type-level only. The GraphQL schema built below does not register `BehindViewr`.
+declare module 'graphql-gene/schema' {
+  export interface GeneSchema {
+    BehindViewer: object
+    BehindViewr: object
+  }
+}
+
 const VIEWER = 'BehindViewer'
 const PROJECT = 'BehindProject'
 const PERMISSION = 'BehindPermission'

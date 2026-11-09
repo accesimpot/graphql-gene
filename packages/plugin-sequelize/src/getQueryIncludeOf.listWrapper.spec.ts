@@ -9,6 +9,12 @@ import {
 } from 'graphql'
 import { getGloballyExtendedTypes } from 'graphql-gene'
 import { ensureInclude, getQueryIncludeOf } from './utils'
+
+declare module 'graphql-gene/schema' {
+  export interface GeneSchema {
+    WrapperTargetItem: object
+  }
+}
 import { markFieldAsAssociation } from './utils/associationMap'
 import {
   getGeneAssociationListWrapperTypeName,

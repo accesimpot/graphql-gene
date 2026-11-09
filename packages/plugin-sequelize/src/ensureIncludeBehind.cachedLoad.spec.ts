@@ -9,6 +9,12 @@ import {
 import { getGloballyExtendedTypes } from 'graphql-gene'
 import { ensureIncludeBehind, getQueryIncludeOf } from './utils'
 
+declare module 'graphql-gene/schema' {
+  export interface GeneSchema {
+    E2eViewer: object
+  }
+}
+
 const VIEWER = 'E2eViewer'
 const PROJECT = 'E2eProject'
 
