@@ -23,6 +23,7 @@ type GeneDirectiveConfig<
   name: string
   args?: TDirectiveArgs
   handler: GeneDirectiveHandler<TSource, TContext, TArgs>
+  findOptions?: FindOptionsHandler<object>
 }
 
 type GeneDirectiveHandler<TSource, TContext, TArgs, TResult = unknown> = (options: {
@@ -48,6 +49,17 @@ Gene collects directive definitions and `@name` decorations when generating the 
 This is useful when you need resolver-side behavior only—especially on GraphQL constructs where exposing a custom directive in SDL would be awkward (for example some **`interface`**-only shapes: SDL directives apply to object types and fields, not to interfaces in the same way as `type`, so naming the directive can produce invalid or confusing output while the runtime hook remains valid).
 
 In short: **empty `name` means “run the handler, omit `@DirectiveName` from the generated schema string.”**
+
+## `findOptions` during include collection
+
+`findOptions` is optional. The Sequelize plugin calls it while collecting includes, once per selected occurrence of a field the directive is attached to (aliases and fragments included). The same directive attached on both the type and the field runs twice.
+
+For each occurrence, after that field's sibling selection set has been traversed:
+
+1. Returned-type `findOptions`, then returned-type directives (`geneConfig.directives`, then `aliases`), on that field's own include.
+2. Field `findOptions`, then field directives, on the parent include.
+
+Hooks are not deduplicated. Includes they request are. From a hook, `ensureInclude` adds associations on the include the hook received, and `ensureIncludeBehind` adds them on an ancestor include. See the plugin README.
 
 ## See also
 
