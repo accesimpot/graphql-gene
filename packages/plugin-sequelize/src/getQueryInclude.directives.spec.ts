@@ -120,8 +120,10 @@ describe('directive findOptions during include collection', () => {
       const include = getQueryInclude(info)!.include!.filter(row => row.association === 'owner')
       expect(calls.filter(call => call.label === 'fieldDir')).toHaveLength(2)
       expect(include).toHaveLength(2)
-      expect(include[0].include).toEqual([expect.objectContaining({ association: 'profile' })])
-      expect(include[1].include).toBeUndefined()
+      expect(include.map(row => row.include)).toEqual([
+        [expect.objectContaining({ association: 'profile' })],
+        [expect.objectContaining({ association: 'profile' })],
+      ])
     } finally {
       fieldDirectives[0].findOptions = previous
     }

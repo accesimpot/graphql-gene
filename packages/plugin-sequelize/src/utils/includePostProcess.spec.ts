@@ -7,6 +7,7 @@ import {
   stripAssociationListWrapperIncludes,
 } from './includePostProcess'
 import { ensureIncludePath } from './ensureInclude'
+import type { DefaultResolverIncludeOptions } from '../types'
 import { registerGeneAssociationListWrapper } from './associationListRegistry'
 import { markFieldAsAssociation } from './associationMap'
 
@@ -91,5 +92,49 @@ describe('shallowGeneHydrationIncludes', () => {
         include: [expect.objectContaining({ association: 'group' })],
       }),
     ])
+  })
+})
+
+describe('ensured includes through wrapper post-processing', () => {
+  const orderModel = {
+    name: 'Order',
+    associations: { items: { target: { name: 'OrderItem' } } },
+  } as never
+
+  const postProcess = (root: { include?: DefaultResolverIncludeOptions[] }) => {
+    stripAssociationListWrapperIncludes(orderModel, root.include)
+    shallowGeneHydrationIncludes(root.include)
+  }
+
+  it('keeps a manually pushed wrapper include that a later hook ensures', () => {
+    registerGeneAssociationListWrapper('OrderItemsGeneAssociationListResult', {
+      parentGraphqlType: 'Order',
+      associationField: 'items',
+      targetGraphqlType: 'OrderItem',
+    })
+    const root: { include?: DefaultResolverIncludeOptions[] } = {
+      include: [{ association: 'items', include: [{ association: 'fromClient' }] }],
+    }
+    ensureIncludePath(root, 'items.product', {}, 'Order.itemTotalQuantity')
+
+    postProcess(root)
+
+    expect(root.include).toEqual([
+      expect.objectContaining({
+        association: 'items',
+        include: [expect.objectContaining({ association: 'product' })],
+      }),
+    ])
+  })
+
+  it('still drops a wrapper include that was ensured with hydrate: false', () => {
+    const root: { include?: DefaultResolverIncludeOptions[] } = {
+      include: [{ association: 'items' }],
+    }
+    ensureIncludePath(root, 'items', { hydrate: false }, 'Order.itemTotalQuantity')
+
+    postProcess(root)
+
+    expect(root.include).toEqual([])
   })
 })

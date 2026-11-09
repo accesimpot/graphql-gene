@@ -1,10 +1,11 @@
-import type { GraphqlTypes } from 'graphql-gene'
+import type { GraphqlTypes, ValidGraphqlType } from 'graphql-gene'
 import type { DefaultResolverIncludeOptions } from '../types'
 import type { AssociationPathOf } from '../toGqlSource'
 import {
   getFindOptionsHookContext,
   type CollectorFrame,
   type FindOptionsHookContext,
+  type IncludeCollector,
 } from './includeCollector'
 import {
   isGeneEnsuredInclude,
@@ -17,8 +18,8 @@ const ERROR_PREFIX = '[graphql-gene]'
 export type EnsureIncludeOptions = {
   /** Default `true`: keep list-wrapper associations on parent fetches. */
   hydrate?: boolean
-  /** Sequelize INNER JOIN on the leaf only. Never reset to `false` once requested. */
-  required?: boolean
+  /** Sequelize INNER JOIN on the leaf only. Omit it to leave `required` unchanged. */
+  required?: true
 }
 
 function hasRowFilter(include: DefaultResolverIncludeOptions) {
@@ -61,26 +62,44 @@ export function ensureIncludePath(
     throw new Error(`${ERROR_PREFIX} Invalid include path "${path}" in ${label}.`)
   }
 
-  let parent = root
-  segments.forEach((segment, index) => {
-    parent.include = parent.include || []
-    const existing = parent.include.find(include => include.association === segment)
+  return applyPath(root, segments, 0, options, path, label)
+}
 
-    if (existing && hasRowFilter(existing)) {
-      throw createRowFilterConflictError(segment, path, label)
-    }
-    const include = existing || { association: segment }
-    if (!existing) {
-      parent.include.push(include)
-      if (options.hydrate !== false) markGeneHydrationInclude(include)
-    }
+/**
+ * The same association can be selected more than once (aliases, fragments). Each of those includes
+ * is loaded separately, so the path has to be added to every one of them.
+ */
+function applyPath(
+  parent: DefaultResolverIncludeOptions,
+  segments: string[],
+  index: number,
+  options: EnsureIncludeOptions,
+  path: string,
+  label: string
+): DefaultResolverIncludeOptions {
+  const segment = segments[index]
+  const isLeaf = index === segments.length - 1
+  parent.include = parent.include || []
+  const matches = parent.include.filter(include => include.association === segment)
+
+  if (matches.some(hasRowFilter)) throw createRowFilterConflictError(segment, path, label)
+
+  if (!matches.length) {
+    const created = { association: segment }
+    parent.include.push(created)
+    if (options.hydrate !== false) markGeneHydrationInclude(created)
+    matches.push(created)
+  }
+
+  let firstLeaf: DefaultResolverIncludeOptions | undefined
+  for (const include of matches) {
     // Every segment is marked so hydration shallowing keeps the whole path.
-    markGeneEnsuredInclude(include)
-
-    if (index === segments.length - 1 && options.required) include.required = true
-    parent = include
-  })
-  return parent
+    markGeneEnsuredInclude(include, options.hydrate !== false)
+    const leaf = isLeaf ? include : applyPath(include, segments, index + 1, options, path, label)
+    if (isLeaf && options.required) include.required = true
+    firstLeaf ??= leaf
+  }
+  return firstLeaf!
 }
 
 function requireFindOptionsHookContext(details: object, helper: string): FindOptionsHookContext {
@@ -111,34 +130,75 @@ export type EnsureIncludeBehindOptions = EnsureIncludeOptions & {
   at?: 'nearest' | 'root'
 }
 
+const UNBOUND_TARGET = Symbol('unboundIncludeTarget')
+
+/**
+ * Not finding an ancestor is a valid no-op when another collector owns the dependency, but a type
+ * that does not exist can never be found and would silently drop the dependency.
+ */
+function assertAncestorTypeExists(context: FindOptionsHookContext, ancestorType: string) {
+  if (!context.schema || context.schema.getType(ancestorType)) return
+
+  const ancestry: string[] = []
+  for (let frame: CollectorFrame | undefined = context.ancestryStart; frame; frame = frame.parent) {
+    ancestry.push(frame.type || '(unbound target)')
+  }
+  const { targetType } = context.frame.collector
+  throw new Error(
+    `${ERROR_PREFIX} ensureIncludeBehind in ${context.label}: ancestor type "${ancestorType}" ` +
+      `is not in the schema (collector target: ${targetType ?? 'unbound'}, ` +
+      `ancestry: ${ancestry.join(' < ')}).`
+  )
+}
+
 function findAnchorFrame(
   context: FindOptionsHookContext,
   ancestorType: string,
   at: 'nearest' | 'root'
-): CollectorFrame | undefined {
+): CollectorFrame | typeof UNBOUND_TARGET | undefined {
   const { collector } = context.frame
   const rootMatches = collector.targetType === ancestorType
+  const targetStillUnknown = !collector.isBound && collector.targetType == null
+  const unboundRoot = () => (targetStillUnknown ? UNBOUND_TARGET : undefined)
 
-  if (at === 'root') return rootMatches ? collector.root : undefined
+  if (at === 'root') return rootMatches ? collector.root : unboundRoot()
 
   for (let frame: CollectorFrame | undefined = context.ancestryStart; frame; frame = frame.parent) {
     if (frame.type === ancestorType) return frame.isScratch ? undefined : frame
   }
-  return rootMatches ? collector.root : undefined
+  return rootMatches ? collector.root : unboundRoot()
+}
+
+export function flushPendingRootIncludes(collector: IncludeCollector) {
+  const pending = collector.pendingRootIncludes.splice(0)
+  for (const item of pending) {
+    if (collector.targetType !== item.ancestorType) continue
+    ensureIncludePath(collector.root.include, item.path, item.options, item.label)
+  }
 }
 
 /**
  * Ensures `path` under an ancestor include of `ancestorType`. Returns `undefined` when the active
  * collector does not load that ancestor (another collector owns the dependency).
  */
-export function ensureIncludeBehind<TType extends string>(
+export function ensureIncludeBehind<TType extends ValidGraphqlType>(
   details: object,
   path: TType extends keyof GraphqlTypes ? AssociationPathOf<GraphqlTypes[TType]> : string,
   ancestorType: TType,
   options: EnsureIncludeBehindOptions = {}
 ): DefaultResolverIncludeOptions | undefined {
   const context = requireFindOptionsHookContext(details, 'ensureIncludeBehind')
+  assertAncestorTypeExists(context, ancestorType)
   const anchor = findAnchorFrame(context, ancestorType, options.at ?? 'nearest')
+  if (anchor === UNBOUND_TARGET) {
+    context.frame.collector.pendingRootIncludes.push({
+      ancestorType,
+      path,
+      options,
+      label: context.label,
+    })
+    return undefined
+  }
   if (!anchor) return undefined
   return ensureIncludePath(anchor.include, path, options, context.label)
 }

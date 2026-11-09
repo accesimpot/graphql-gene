@@ -54,14 +54,25 @@ export function markGeneHydrationInclude(
  */
 export const GENE_ENSURED_INCLUDE_KEY = '__geneEnsuredInclude'
 
+const ENSURED_WITH_HYDRATION = 'hydrate'
+
 export function isGeneEnsuredInclude(include: DefaultResolverIncludeOptions | undefined): boolean {
-  return !!include && Reflect.get(include, GENE_ENSURED_INCLUDE_KEY) === true
+  return !!include && !!Reflect.get(include, GENE_ENSURED_INCLUDE_KEY)
 }
 
+/** Whether the ensuring hook asked to keep this row on parent fetches (`hydrate` is not `false`). */
+function isEnsuredWithHydration(include: DefaultResolverIncludeOptions) {
+  return Reflect.get(include, GENE_ENSURED_INCLUDE_KEY) === ENSURED_WITH_HYDRATION
+}
+
+/** A hydration request is never withdrawn by a later `hydrate: false`. */
 export function markGeneEnsuredInclude(
-  include: DefaultResolverIncludeOptions
+  include: DefaultResolverIncludeOptions,
+  hydrate: boolean
 ): DefaultResolverIncludeOptions {
-  Reflect.set(include, GENE_ENSURED_INCLUDE_KEY, true)
+  if (!isEnsuredWithHydration(include)) {
+    Reflect.set(include, GENE_ENSURED_INCLUDE_KEY, hydrate ? ENSURED_WITH_HYDRATION : true)
+  }
   return include
 }
 
@@ -111,8 +122,14 @@ export function stripAssociationListWrapperIncludes(
       isGeneAssociationListWrapperAssociation(parentGraphqlType, associationName) &&
       !isGeneHydrationInclude(inc)
     ) {
-      includes.splice(i, 1)
-      continue
+      // A row reused by `ensureInclude` was not created as a hydration include, so it is upgraded
+      // here, where the association is known to be a wrapper.
+      if (isEnsuredWithHydration(inc)) {
+        markGeneHydrationInclude(inc)
+      } else {
+        includes.splice(i, 1)
+        continue
+      }
     }
 
     const assoc = associationName ? parentModel.associations?.[associationName] : undefined

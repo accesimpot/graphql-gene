@@ -1,3 +1,4 @@
+import type { GraphQLSchema } from 'graphql'
 import type { DefaultResolverIncludeOptions } from '../types'
 
 export type CollectorFrame = {
@@ -20,6 +21,15 @@ export type FindOptionsHookContext = {
   /** Innermost frame of the selected occurrence; ancestry walks start here. */
   ancestryStart: CollectorFrame
   label: string
+  /** Lets helpers reject type names that do not exist, which would otherwise under-load silently. */
+  schema?: GraphQLSchema
+}
+
+export type PendingRootInclude = {
+  ancestorType: string
+  path: string
+  options: { hydrate?: boolean; required?: true }
+  label: string
 }
 
 export class IncludeCollector {
@@ -27,6 +37,11 @@ export class IncludeCollector {
   /** GraphQL type loaded with `root.include`. Unknown for unbound function targets. */
   targetType?: string
   isBound = false
+  /**
+   * `ensureIncludeBehind` calls made before a function target has bound. Replayed once `targetType`
+   * is known, because those hooks run as soon as their own subtree finishes.
+   */
+  readonly pendingRootIncludes: PendingRootInclude[] = []
 
   constructor(rootType: string, targetType?: string, include: DefaultResolverIncludeOptions = {}) {
     this.targetType = targetType
@@ -92,8 +107,9 @@ export const isBoundTargetOccurrence = (details: object) => boundTargetOccurrenc
  */
 export function createRootHookContext(
   type: string,
-  include: DefaultResolverIncludeOptions
+  include: DefaultResolverIncludeOptions,
+  schema?: GraphQLSchema
 ): FindOptionsHookContext {
   const { root } = new IncludeCollector(type, type, include)
-  return { frame: root, ancestryStart: root, label: `${type}.findOptions` }
+  return { frame: root, ancestryStart: root, label: `${type}.findOptions`, schema }
 }

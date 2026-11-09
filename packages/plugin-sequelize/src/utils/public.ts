@@ -1,4 +1,10 @@
-import { GraphQLError, getNamedType, type GraphQLResolveInfo } from 'graphql'
+import {
+  GraphQLError,
+  Kind,
+  getNamedType,
+  type GraphQLResolveInfo,
+  type SelectionSetNode,
+} from 'graphql'
 import {
   getDirectiveConfigsOfField,
   getGloballyExtendedTypes,
@@ -33,7 +39,7 @@ import { isMarkedAsAssociation } from './associationMap'
 import { markGeneHydrationInclude } from './includePostProcess'
 import { getAttributeByModelName } from './polymorphic'
 import { isModelStatic, isSafeArray } from './guards'
-import { assertNoEnsuredRowFilterConflict } from './ensureInclude'
+import { assertNoEnsuredRowFilterConflict, flushPendingRootIncludes } from './ensureInclude'
 import {
   IncludeCollector,
   createChildFrame,
@@ -131,6 +137,7 @@ function runFindOptionsHook(
     frame,
     ancestryStart,
     label: `${details.sourceType}.${details.field}`,
+    schema: details.info.schema,
   })
   hook(Object.assign(details, { state: frame.include, findOptions: frame.include }))
 }
@@ -229,8 +236,17 @@ function resolveCollectedInclude(collector: IncludeCollector) {
     : undefined
 }
 
-function getResolverSelectionSet(info: GraphQLResolveInfo) {
-  return info.fieldNodes.find(node => node.name.value === info.fieldName)?.selectionSet
+function getResolverSelectionSet(info: GraphQLResolveInfo): SelectionSetNode | undefined {
+  const selectionSets = info.fieldNodes
+    .filter(node => node.name.value === info.fieldName)
+    .flatMap(node => (node.selectionSet ? [node.selectionSet] : []))
+  if (selectionSets.length <= 1) return selectionSets[0]
+
+  // Duplicate response fields are one resolver call, so every field node contributes selections.
+  return {
+    kind: Kind.SELECTION_SET,
+    selections: selectionSets.flatMap(selectionSet => [...selectionSet.selections]),
+  }
 }
 
 export function getQueryInclude(info: GraphQLResolveInfo) {
@@ -305,6 +321,7 @@ export function getQueryIncludeOf(
     if (selectionSet) lookDeeperAndThrow({ ...traversal, type: scanType, selectionSet })
   }
 
+  flushPendingRootIncludes(collector)
   return resolveCollectedInclude(collector)
 }
 

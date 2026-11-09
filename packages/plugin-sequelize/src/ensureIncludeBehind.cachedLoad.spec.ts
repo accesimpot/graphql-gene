@@ -21,21 +21,27 @@ const requiresViewerIncludes = (path: string) => ({
   },
 })
 
-const loadViewer = vi.fn((findOptions: { include?: unknown[] } | undefined) => ({ findOptions }))
-let viewerCache: ReturnType<typeof loadViewer> | undefined
+const loadViewer = vi.fn(async (findOptions: { include?: unknown[] } | undefined) => {
+  await new Promise(resolve => setTimeout(resolve, 10))
+  return { findOptions }
+})
+let viewerPromise: ReturnType<typeof loadViewer> | undefined
 
+/**
+ * Top-level fields resolve concurrently, so the in-flight promise is cached: a cache filled only
+ * after the load finishes would be empty for every field that resolves in the meantime.
+ */
 function getViewer(info: GraphQLResolveInfo) {
-  viewerCache =
-    viewerCache ?? loadViewer(getQueryIncludeOf(info, VIEWER, { lookFromOperationRoot: true }))
-  return viewerCache
+  viewerPromise ??= loadViewer(getQueryIncludeOf(info, VIEWER, { lookFromOperationRoot: true }))
+  return viewerPromise
 }
 
 const projectType = new GraphQLObjectType({ name: PROJECT, fields: { id: { type: GraphQLInt } } })
 const viewerType = new GraphQLObjectType({ name: VIEWER, fields: { id: { type: GraphQLInt } } })
 const protectedField = {
   type: projectType,
-  resolve: (_parent: unknown, _args: unknown, _ctx: unknown, info: GraphQLResolveInfo) => {
-    getViewer(info)
+  resolve: async (_parent: unknown, _args: unknown, _ctx: unknown, info: GraphQLResolveInfo) => {
+    await getViewer(info)
     return { id: 1 }
   },
 }
@@ -45,7 +51,7 @@ const schema = new GraphQLSchema({
     fields: {
       viewer: {
         type: viewerType,
-        resolve: (_parent, _args, _ctx, info) => getViewer(info) && { id: 1 },
+        resolve: async (_parent, _args, _ctx, info) => (await getViewer(info)) && { id: 1 },
       },
       firstProtectedField: protectedField,
       secondProtectedField: protectedField,
@@ -76,7 +82,7 @@ afterAll(() => {
 })
 beforeEach(() => {
   loadViewer.mockClear()
-  viewerCache = undefined
+  viewerPromise = undefined
 })
 
 const bothTrees = [

@@ -30,6 +30,17 @@ describe('ensureIncludePath', () => {
     expect(leaf).toBe(root.include![0].include![0])
   })
 
+  it('ensures the path on every include of the same association', () => {
+    const root: DefaultResolverIncludeOptions = {
+      include: [{ association: 'owner' }, { association: 'owner' }],
+    }
+    ensureIncludePath(root, 'owner.profile', {}, 'Query.test')
+    expect(root.include?.map(include => include.include)).toEqual([
+      [expect.objectContaining({ association: 'profile' })],
+      [expect.objectContaining({ association: 'profile' })],
+    ])
+  })
+
   it('is idempotent', () => {
     const root: DefaultResolverIncludeOptions = {}
     const first = ensureIncludePath(root, 'permissions.roles', {}, 'Query.test')

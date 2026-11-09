@@ -94,6 +94,13 @@ describe('collector frames', () => {
     ])
   })
 
+  it('merges every field node of the resolved field', async () => {
+    const info = await captureInfo(`query { collectorMe { id } collectorMe { profile { id } } }`)
+    expect(getQueryInclude(info)?.include).toEqual([
+      expect.objectContaining({ association: 'profile', include: [{ association: 'avatar' }] }),
+    ])
+  })
+
   it('does not invent an include for a non-association object field', async () => {
     const info = await captureInfo(`query { collectorMe { settings { id } } }`)
     expect(getQueryInclude(info)).toBeUndefined()

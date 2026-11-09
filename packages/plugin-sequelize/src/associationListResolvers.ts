@@ -36,7 +36,8 @@ import type { DefaultResolverIncludeOptions } from './types'
 
 function applyGeneConfigRootFindOptions(
   ModelClass: ModelStatic<Model>,
-  findOptionsRoot: DefaultResolverIncludeOptions
+  findOptionsRoot: DefaultResolverIncludeOptions,
+  schema: GraphQLSchema
 ) {
   const geneCfg =
     getGloballyExtendedTypes().geneConfig[
@@ -49,7 +50,10 @@ function applyGeneConfigRootFindOptions(
   if (typeof hook !== 'function') return
 
   const details = { findOptions: findOptionsRoot, state: findOptionsRoot }
-  setFindOptionsHookContext(details, createRootHookContext(ModelClass.name, findOptionsRoot))
+  setFindOptionsHookContext(
+    details,
+    createRootHookContext(ModelClass.name, findOptionsRoot, schema)
+  )
   hook(details)
 }
 
@@ -313,7 +317,8 @@ async function ensureAssociationItemsFacetLoaded(
   const mergedFind: DefaultResolverIncludeOptions = { ...(nestedInclude || {}) }
   applyGeneConfigRootFindOptions(
     targetModelFromAssociation(modelParent, associationField),
-    mergedFind
+    mergedFind,
+    info.schema
   )
 
   const mergedInclude = [...(columnOpts.include || []), ...(mergedFind.include || [])]

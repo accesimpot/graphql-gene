@@ -243,6 +243,42 @@ describe('ensureIncludeBehind', () => {
     ])
   })
 
+  it('keeps a root dependency when a function target is selected after the hook', async () => {
+    const info = await capture(`query { project { id } viewer { id } }`, 'viewer')
+    const include = getQueryIncludeOf(info, details => details.type === VIEWER, {
+      lookFromOperationRoot: true,
+    })?.include
+
+    expect(include).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          association: 'permissions',
+          include: [expect.objectContaining({ association: 'roles' })],
+        }),
+        expect.objectContaining({ association: 'settings' }),
+      ])
+    )
+  })
+
+  it('throws when the ancestor type is not in the schema', async () => {
+    const previous = extended.config[PROJECT as never]
+    extended.config[PROJECT as never] = {
+      id: {
+        returnType: 'Int',
+        resolver: () => 1,
+        findOptions: (details: object) => {
+          ensureIncludeBehind(details, 'permissions', 'BhViewr', { at: 'root' })
+        },
+      },
+    } as never
+    try {
+      const info = await capture(`query { project { id } }`, 'project')
+      expect(() => ofViewer(info)).toThrow(/BhProject\.id.*"BhViewr"/s)
+    } finally {
+      extended.config[PROJECT as never] = previous
+    }
+  })
+
   it('throws outside a findOptions hook', () => {
     expect(() => ensureIncludeBehind({}, 'permissions', VIEWER)).toThrow(
       /must be called from a findOptions hook/

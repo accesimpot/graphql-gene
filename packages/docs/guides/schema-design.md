@@ -145,11 +145,13 @@ findOptions(details) {
   ensureIncludeBehind(details, 'permissions.roles', 'Viewer', { at: 'root' })
 },
 
-// In the loader shared by every protected field
-context.viewer ??= await Viewer.findOne({
+// In the loader shared by every protected field. Cache the promise: top-level fields resolve
+// concurrently, so a cache filled after `await` would still be empty for the others.
+context.viewerPromise ??= Viewer.findOne({
   where: { id: viewerId },
   ...getQueryIncludeOf(info, 'Viewer', { lookFromOperationRoot: true }),
 })
+const viewer = await context.viewerPromise
 ```
 
 With `lookFromOperationRoot`, hooks across the whole operation contribute before the first load. Only the first selection of the target type is loaded; later ones, such as aliases, are not merged. See [Directives](./directives.md#findoptions-during-include-collection) for when each hook runs.
