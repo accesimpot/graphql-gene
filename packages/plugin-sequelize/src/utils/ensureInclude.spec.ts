@@ -8,7 +8,11 @@ import {
 } from 'graphql'
 import { getGloballyExtendedTypes } from 'graphql-gene'
 import { ensureInclude, ensureIncludePath } from './ensureInclude'
-import { isGeneEnsuredInclude, isGeneHydrationInclude } from './includePostProcess'
+import {
+  isGeneEnsuredInclude,
+  isGeneHydrationInclude,
+  markGeneHydrationInclude,
+} from './includePostProcess'
 import { getQueryInclude } from './public'
 import { markFieldAsAssociation } from './associationMap'
 import type { DefaultResolverIncludeOptions } from '../types'
@@ -56,6 +60,14 @@ describe('ensureIncludePath', () => {
     expect(isGeneEnsuredInclude(leaf)).toBe(true)
     expect(isGeneHydrationInclude(root.include![0])).toBe(false)
     expect(isGeneHydrationInclude(leaf)).toBe(false)
+  })
+
+  it('keeps an existing hydration mark when a reused leaf is ensured with hydrate: false', () => {
+    const items = markGeneHydrationInclude({ association: 'items' })
+    const root: DefaultResolverIncludeOptions = { include: [items] }
+    ensureIncludePath(root, 'items', { hydrate: false }, 'Query.test')
+    expect(isGeneHydrationInclude(items)).toBe(true)
+    expect(isGeneEnsuredInclude(items)).toBe(true)
   })
 
   it('applies required to the leaf only and never resets it', () => {

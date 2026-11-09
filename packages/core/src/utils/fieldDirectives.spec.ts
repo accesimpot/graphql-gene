@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from 'vitest'
-import { getFieldDirectiveConfigs, getGloballyExtendedTypes } from './index'
+import { getDirectiveConfigsOfField, getGloballyExtendedTypes } from './index'
 
 const extended = getGloballyExtendedTypes()
 const snapshot = { config: { ...extended.config }, geneConfig: { ...extended.geneConfig } }
@@ -11,7 +11,7 @@ afterAll(() => {
 
 const directive = (name: string) => ({ name, handler: () => {} })
 
-describe('getFieldDirectiveConfigs', () => {
+describe('getDirectiveConfigsOfField', () => {
   it('returns type, alias, then field directives in declaration order', () => {
     extended.geneConfig['DirProject' as never] = {
       directives: [directive('typeA'), directive('typeB')],
@@ -25,7 +25,7 @@ describe('getFieldDirectiveConfigs', () => {
       },
     } as never
 
-    const result = getFieldDirectiveConfigs({
+    const result = getDirectiveConfigsOfField({
       type: 'DirProject',
       parentType: 'DirQuery',
       field: 'project',
@@ -34,9 +34,26 @@ describe('getFieldDirectiveConfigs', () => {
     expect(result.fieldDirectives.map(d => d.name)).toEqual(['field'])
   })
 
+  it('resolves field directives declared as a getter', () => {
+    extended.config['DirQuery' as never] = {
+      lazy: {
+        returnType: 'Int',
+        resolver: () => 1,
+        directives: () => [directive('lazyField')],
+      },
+    } as never
+
+    const result = getDirectiveConfigsOfField({
+      type: 'Int',
+      parentType: 'DirQuery',
+      field: 'lazy',
+    })
+    expect(result.fieldDirectives.map(d => d.name)).toEqual(['lazyField'])
+  })
+
   it('returns empty lists for unconfigured fields', () => {
     expect(
-      getFieldDirectiveConfigs({ type: 'Nope', parentType: 'NopeParent', field: 'x' })
+      getDirectiveConfigsOfField({ type: 'Nope', parentType: 'NopeParent', field: 'x' })
     ).toEqual({ typeDirectives: [], fieldDirectives: [] })
   })
 })

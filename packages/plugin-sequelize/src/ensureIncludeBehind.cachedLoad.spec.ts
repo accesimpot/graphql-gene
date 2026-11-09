@@ -21,7 +21,7 @@ const requiresViewerIncludes = (path: string) => ({
   },
 })
 
-const loadViewer = vi.fn((findOptions: unknown) => ({ findOptions }))
+const loadViewer = vi.fn((findOptions: { include?: unknown[] } | undefined) => ({ findOptions }))
 let viewerCache: ReturnType<typeof loadViewer> | undefined
 
 function getViewer(info: GraphQLResolveInfo) {
@@ -106,9 +106,9 @@ describe('single cached viewer load', () => {
       expect(result.errors).toBeUndefined()
       expect(loadViewer).toHaveBeenCalledTimes(1)
 
-      const { include } = loadViewer.mock.calls[0][0] as { include: unknown[] }
-      expect(include).toHaveLength(2)
-      expect(include).toEqual(expect.arrayContaining(bothTrees))
+      const [findOptions] = loadViewer.mock.calls[0]
+      expect(findOptions?.include).toHaveLength(2)
+      expect(findOptions?.include).toEqual(expect.arrayContaining(bothTrees))
     })
   }
 })
