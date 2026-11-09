@@ -40,6 +40,7 @@ class OrderItem extends Model {
 
   static readonly geneConfig = defineGraphqlGeneConfig(OrderItem, {
     findOptions({ findOptions }) {
+      // Merges `where` onto an include that queries may already filter, which `ensureInclude` rejects.
       findOptions.include = findOptions.include || []
 
       const possibleProductOptions = findOptions.include.find(

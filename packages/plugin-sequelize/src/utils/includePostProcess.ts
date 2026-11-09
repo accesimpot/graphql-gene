@@ -48,6 +48,23 @@ export function markGeneHydrationInclude(
   return include
 }
 
+/**
+ * Marks include rows created by `ensureInclude` / `ensureIncludeBehind`. They declare data a hook
+ * needs on the parent fetch, so {@link shallowGeneHydrationIncludes} keeps them.
+ */
+export const GENE_ENSURED_INCLUDE_KEY = '__geneEnsuredInclude'
+
+export function isGeneEnsuredInclude(include: DefaultResolverIncludeOptions | undefined): boolean {
+  return !!include && Reflect.get(include, GENE_ENSURED_INCLUDE_KEY) === true
+}
+
+export function markGeneEnsuredInclude(
+  include: DefaultResolverIncludeOptions
+): DefaultResolverIncludeOptions {
+  Reflect.set(include, GENE_ENSURED_INCLUDE_KEY, true)
+  return include
+}
+
 /** Parent-fetch hydration only needs the association rows; facet resolvers own nested includes. */
 export function shallowGeneHydrationIncludes(
   includes: DefaultResolverIncludeOptions[] | undefined
@@ -56,7 +73,13 @@ export function shallowGeneHydrationIncludes(
 
   for (const inc of includes) {
     if (isGeneHydrationInclude(inc)) {
-      delete inc.include
+      const ensured = inc.include?.filter(isGeneEnsuredInclude)
+      if (ensured?.length) {
+        inc.include = ensured
+        shallowGeneHydrationIncludes(ensured)
+      } else {
+        delete inc.include
+      }
       continue
     }
 
