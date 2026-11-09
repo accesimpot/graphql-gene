@@ -1,4 +1,4 @@
-import type { GraphqlTypes, ValidGraphqlType } from 'graphql-gene'
+import { isObject, type GraphqlTypes, type ValidGraphqlType } from 'graphql-gene'
 import type { DefaultResolverIncludeOptions } from '../types'
 import type { AssociationPathOf } from '../toGqlSource'
 import {
@@ -49,6 +49,62 @@ export function assertNoEnsuredRowFilterConflict(
   ) {
     throw createRowFilterConflictError(association, association, label)
   }
+}
+
+/** Structural equality that also sees symbol keys, which Sequelize operators (`Op.and`) use. */
+function isSameValue(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true
+  if (!isObject(a) || !isObject(b) || Object.getPrototypeOf(a) !== Object.getPrototypeOf(b)) {
+    return false
+  }
+  if (a instanceof Date) return b instanceof Date && a.getTime() === b.getTime()
+
+  const keys = Reflect.ownKeys(a)
+  return (
+    keys.length === Reflect.ownKeys(b).length &&
+    keys.every(key => Reflect.has(b, key) && isSameValue(Reflect.get(a, key), Reflect.get(b, key)))
+  )
+}
+
+function pickRowFilter({ where, limit, offset, order }: DefaultResolverIncludeOptions) {
+  return { where, limit, offset, order }
+}
+
+/**
+ * Adds the include of a selected association. Selections made by different occurrences of the
+ * target share one load: equal ones are merged, different ones would be combined by Sequelize into
+ * rows that match neither selection, so they throw.
+ */
+export function addSelectedInclude(
+  parent: CollectorFrame,
+  association: string,
+  include: DefaultResolverIncludeOptions,
+  label: string
+): DefaultResolverIncludeOptions {
+  parent.include.include = parent.include.include || []
+  const siblings = parent.include.include
+  assertNoEnsuredRowFilterConflict(siblings, association, include, label)
+
+  const { collector, occurrence } = parent
+  if (occurrence !== undefined) {
+    const others = siblings.filter(
+      sibling =>
+        sibling.association === association &&
+        collector.includeOccurrences.get(sibling) !== undefined &&
+        collector.includeOccurrences.get(sibling) !== occurrence
+    )
+    if (others.some(other => !isSameValue(pickRowFilter(other), pickRowFilter(include)))) {
+      throw new Error(
+        `${ERROR_PREFIX} "${association}" is selected with different arguments in several ` +
+          `selections of ${collector.targetType}, which share one load (${label}).`
+      )
+    }
+    if (others[0]) return others[0]
+    collector.includeOccurrences.set(include, occurrence)
+  }
+
+  siblings.push(include)
+  return include
 }
 
 export function ensureIncludePath(

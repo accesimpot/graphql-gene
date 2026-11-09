@@ -178,14 +178,36 @@ describe('ensureIncludeBehind', () => {
     ])
   })
 
-  it('keeps the first matching target and does not merge later ones', async () => {
+  it('merges every selection of the target into one include', async () => {
     const info = await capture(
       `query { a: viewer { permissions { id } } b: viewer { friends { id } } }`,
       'viewer'
     )
     const include = ofViewer(info)!.include!
-    expect(include.some(row => row.association === 'permissions')).toBe(true)
-    expect(include.some(row => row.association === 'friends')).toBe(false)
+    expect(include.map(row => row.association).sort()).toEqual(['friends', 'permissions'])
+  })
+
+  it('merges equal selections of one association instead of repeating them', async () => {
+    const info = await capture(
+      `query { a: viewer { permissions(limit: 1) { id } } b: viewer { permissions(limit: 1) { id } } }`,
+      'viewer'
+    )
+    const permissions = ofViewer(info)!.include!.filter(row => row.association === 'permissions')
+    expect(permissions).toEqual([expect.objectContaining({ limit: 1 })])
+  })
+
+  it('throws when selections of the target ask for different rows of one association', async () => {
+    const info = await capture(
+      `query { a: viewer { permissions(limit: 1) { id } } b: viewer { permissions(limit: 2) { id } } }`,
+      'viewer'
+    )
+    expect(() => ofViewer(info)).toThrow(/"permissions" is selected with different arguments/)
+  })
+
+  it('does not merge a target selected inside another target selection', async () => {
+    const info = await capture(`query { viewer { friends { id } } }`, 'viewer')
+    const friends = ofViewer(info)!.include!.find(row => row.association === 'friends')!
+    expect(friends.include).toEqual([expect.objectContaining({ association: 'settings' })])
   })
 
   it('collects the same includes through aliases and fragments', async () => {

@@ -7,7 +7,9 @@ import {
   type GraphQLResolveInfo,
 } from 'graphql'
 import { getGloballyExtendedTypes } from 'graphql-gene'
-import { ensureInclude, ensureIncludePath } from './ensureInclude'
+import { Op } from 'sequelize'
+import { addSelectedInclude, ensureInclude, ensureIncludePath } from './ensureInclude'
+import { IncludeCollector, type CollectorFrame } from './includeCollector'
 import {
   isGeneEnsuredInclude,
   isGeneHydrationInclude,
@@ -165,5 +167,44 @@ describe('ensureInclude', () => {
     } finally {
       extended.config[PARENT as never] = previous
     }
+  })
+})
+
+describe('addSelectedInclude', () => {
+  const addFrom = (frames: CollectorFrame[], where: object) =>
+    frames.map(frame =>
+      addSelectedInclude(frame, 'orders', { association: 'orders', where }, 'Viewer.orders')
+    )
+
+  const setup = () => {
+    const collector = new IncludeCollector('Viewer', 'Viewer')
+    const first = collector.createOccurrenceFrame()
+    const second = collector.createOccurrenceFrame()
+    return { first, second }
+  }
+
+  it('merges selections of two occurrences whose operator filters are equal', () => {
+    const { first, second } = setup()
+    const [a] = addFrom([first], { [Op.and]: [{ status: 'open' }] })
+    const [b] = addFrom([second], { [Op.and]: [{ status: 'open' }] })
+
+    expect(b).toBe(a)
+    expect(first.include.include).toHaveLength(1)
+  })
+
+  it('throws when the operator filters of two occurrences differ', () => {
+    const { first, second } = setup()
+    addFrom([first], { [Op.and]: [{ status: 'open' }] })
+
+    expect(() => addFrom([second], { [Op.and]: [{ status: 'closed' }] })).toThrow(
+      /"orders" is selected with different arguments/
+    )
+  })
+
+  it('keeps repeated selections of one occurrence separate', () => {
+    const { first } = setup()
+    addFrom([first, first], { status: 'open' })
+
+    expect(first.include.include).toHaveLength(2)
   })
 })

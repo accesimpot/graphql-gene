@@ -154,7 +154,7 @@ context.viewerPromise ??= Viewer.findOne({
 const viewer = await context.viewerPromise
 ```
 
-With `lookFromOperationRoot`, hooks across the whole operation contribute before the first load. Only the first selection of the target type is loaded; later ones, such as aliases, are not merged. See [Directives](./directives.md#findoptions-during-include-collection) for when each hook runs.
+With `lookFromOperationRoot`, hooks across the whole operation contribute before the first load. Every selection of the target type, such as aliases, is merged into the one load; selections of the same association with different arguments throw, because one load cannot return both. Selections nested inside another selection of the target are other records and are not merged. See [Directives](./directives.md#findoptions-during-include-collection) for when each hook runs.
 
 ---
 

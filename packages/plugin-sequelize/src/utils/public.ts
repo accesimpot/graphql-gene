@@ -39,14 +39,14 @@ import { isMarkedAsAssociation } from './associationMap'
 import { markGeneHydrationInclude } from './includePostProcess'
 import { getAttributeByModelName } from './polymorphic'
 import { isModelStatic, isSafeArray } from './guards'
-import { assertNoEnsuredRowFilterConflict, flushPendingRootIncludes } from './ensureInclude'
+import { addSelectedInclude, flushPendingRootIncludes } from './ensureInclude'
 import {
   IncludeCollector,
   createChildFrame,
   createScratchFrame,
+  bindOccurrenceFrame,
+  getBoundOccurrenceFrame,
   getOccurrenceFrame,
-  isBoundTargetOccurrence,
-  markBoundTargetOccurrence,
   rememberOccurrenceFrame,
   setFindOptionsHookContext,
   type CollectorFrame,
@@ -176,7 +176,8 @@ function resolveNextFrame(details: NextHandlerDetails<CollectorFrame>): Collecto
     fieldDef,
   } = details
 
-  if (isBoundTargetOccurrence(details)) return parent.collector.root
+  const boundOccurrence = getBoundOccurrenceFrame(details)
+  if (boundOccurrence) return boundOccurrence
 
   if (isItemsFacet(sourceType, field)) {
     return createChildFrame(parent, { type, include: parent.include })
@@ -200,10 +201,12 @@ function resolveNextFrame(details: NextHandlerDetails<CollectorFrame>): Collecto
     return createChildFrame(parent, { type, include: hydrationInclude, association: field })
   }
 
-  const include = getFieldIncludeOptions({ association: field, args, isList })
-  parent.include.include = parent.include.include || []
-  assertNoEnsuredRowFilterConflict(parent.include.include, field, include, `${sourceType}.${field}`)
-  parent.include.include.push(include)
+  const include = addSelectedInclude(
+    parent,
+    field,
+    getFieldIncludeOptions({ association: field, args, isList }),
+    `${sourceType}.${field}`
+  )
   return createChildFrame(parent, { type, include, association: field })
 }
 
@@ -282,20 +285,24 @@ export function getQueryIncludeOf(
     typeof target === 'string' ? ({ type }) => type === target : target
   const collector = new IncludeCollector(targetType ?? '', targetType)
 
-  // Only the first selection matching the target is bound; the whole operation is still scanned
-  // so hooks outside of it can declare dependencies on it.
+  // Every selection matching the target is merged into one include. Selections nested in a bound
+  // one are other records, and the whole operation is still scanned so hooks outside of it can
+  // declare dependencies on it.
   const until = (details: UntilHandlerDetails<CollectorFrame>) => {
     const withinDepth = options.depth == null || details.state.depth < options.depth
     if (
-      !collector.isBound &&
+      details.state.occurrence === undefined &&
       details.nextSelectionSet &&
       withinDepth &&
+      (!collector.isBound || details.type === collector.targetType) &&
       matchesTarget(details, isMatchingTarget)
     ) {
-      collector.isBound = true
-      collector.root.type = details.type
-      collector.targetType ??= details.type
-      markBoundTargetOccurrence(details)
+      if (!collector.isBound) {
+        collector.isBound = true
+        collector.root.type = details.type
+        collector.targetType ??= details.type
+      }
+      bindOccurrenceFrame(details, collector.createOccurrenceFrame())
     }
     return handleUntilFindOptions(details)
   }

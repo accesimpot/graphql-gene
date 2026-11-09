@@ -13,6 +13,8 @@ export type CollectorFrame = {
   /** Number of selection levels between the scan start and this frame. */
   depth: number
   parent?: CollectorFrame
+  /** Set on a selection of the bound target and inherited below it. */
+  occurrence?: number
 }
 
 export type FindOptionsHookContext = {
@@ -37,6 +39,9 @@ export class IncludeCollector {
   /** GraphQL type loaded with `root.include`. Unknown for unbound function targets. */
   targetType?: string
   isBound = false
+  /** Which target occurrence added each include, to tell merged selections from repeated ones. */
+  readonly includeOccurrences = new WeakMap<DefaultResolverIncludeOptions, number>()
+  private occurrenceCount = 0
   /**
    * `ensureIncludeBehind` calls made before a function target has bound. Replayed once `targetType`
    * is known, because those hooks run as soon as their own subtree finishes.
@@ -51,6 +56,18 @@ export class IncludeCollector {
       include,
       isScratch: false,
       depth: 0,
+    }
+  }
+
+  /** Frame of one selection of the target. Every one writes into the shared `root.include`. */
+  createOccurrenceFrame(): CollectorFrame {
+    return {
+      collector: this,
+      type: this.root.type,
+      include: this.root.include,
+      isScratch: false,
+      depth: 0,
+      occurrence: ++this.occurrenceCount,
     }
   }
 }
@@ -76,6 +93,7 @@ export function createChildFrame(
     isScratch: options.isScratch ?? parent.isScratch,
     depth: parent.depth + 1,
     parent,
+    occurrence: parent.occurrence,
   }
 }
 
@@ -85,7 +103,7 @@ export function createChildFrame(
  */
 const hookContexts = new WeakMap<object, FindOptionsHookContext>()
 const occurrenceFrames = new WeakMap<object, CollectorFrame>()
-const boundTargetOccurrences = new WeakSet<object>()
+const boundOccurrenceFrames = new WeakMap<object, CollectorFrame>()
 
 export const setFindOptionsHookContext = (details: object, context: FindOptionsHookContext) =>
   hookContexts.set(details, context)
@@ -97,9 +115,10 @@ export const rememberOccurrenceFrame = (details: object, frame: CollectorFrame) 
 
 export const getOccurrenceFrame = (details: object) => occurrenceFrames.get(details)
 
-export const markBoundTargetOccurrence = (details: object) => boundTargetOccurrences.add(details)
+export const bindOccurrenceFrame = (details: object, frame: CollectorFrame) =>
+  boundOccurrenceFrames.set(details, frame)
 
-export const isBoundTargetOccurrence = (details: object) => boundTargetOccurrences.has(details)
+export const getBoundOccurrenceFrame = (details: object) => boundOccurrenceFrames.get(details)
 
 /**
  * Context for hooks that run outside a collection (e.g. a type's `findOptions` applied to an
