@@ -40,6 +40,7 @@ class OrderItem extends Model {
 
   static readonly geneConfig = defineGraphqlGeneConfig(OrderItem, {
     findOptions({ findOptions }) {
+      // The product include may already be filtered by the query, so `where` is merged into it.
       findOptions.include = findOptions.include || []
 
       const possibleProductOptions = findOptions.include.find(

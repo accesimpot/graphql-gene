@@ -98,7 +98,7 @@ If a mutation changes an entity of type `Foo`, the payload should include `Foo` 
 
 **Why:** Clients can update in-memory cache by `id` without issuing a second query. This matches common GraphQL client guidance and prevents “fire a mutation, then refetch everything” workflows.
 
-In custom mutation resolvers, reuse the selection set when reloading the model: use `getQueryInclude` from the current field’s `info`, or `getQueryIncludeOf(info, 'Order', { … })` when the modified instance appears under a different GraphQL type in the response tree. The [README example](../../../README.md#example-user-authentication-directive) shows `getQueryIncludeOf` for `AuthenticatedUser` with `lookFromOperationRoot: true` when the directive runs on a field that is not itself that type. The dev playground includes mutation examples that return the updated entity with nested selections respected.
+In custom mutation resolvers, reuse the selection set when reloading the model: use `getQueryInclude` from the current field’s `info`, or `getQueryIncludeOf(info, 'Order')`, which loads that field’s own selection when the field returns `Order`. Pass `{ lookFromOperationRoot: true }` when the `Order` appears under a different GraphQL type in the response tree. The [README example](../../../README.md#example-user-authentication-directive) shows `getQueryIncludeOf` for `AuthenticatedUser` with `lookFromOperationRoot: true` when the directive runs on a field that is not itself that type. The dev playground includes mutation examples that return the updated entity with nested selections respected.
 
 ---
 
@@ -109,6 +109,52 @@ If a field does not map 1:1 to a column but is computed from **sibling associati
 For example, a `categories` field might resolve from `groupCategories → category`, so `findOptions` pushes `groupCategories` and `category` into `state.include`. That way the resolver always has the rows it needs, and you do not rely on eager-loading elsewhere.
 
 See `ProductGroup` in `packages/dev-playground/src/models/ProductGroup/ProductGroup.model.ts`.
+
+Instead of editing `state.include` by hand, `ensureInclude` adds a dot-separated association path to the include the hook received. It reuses what the query already includes and keeps the association when list-wrapper includes are trimmed:
+
+```ts
+import { ensureInclude } from '@graphql-gene/plugin-sequelize'
+
+extendTypes({
+  Order: {
+    itemTotalQuantity: {
+      returnType: 'Int!',
+      findOptions(details) {
+        ensureInclude(details, 'items')
+      },
+      resolver: ({ source }) => source.items?.items?.reduce((sum, item) => sum + item.quantity, 0),
+    },
+  },
+})
+```
+
+It throws when the association is already included with `where`, `limit` or `offset`, because a filtered include cannot stand in for all the rows. Hooks run whenever includes are collected, so they should only edit the include they receive.
+
+### Dependencies on an ancestor record
+
+A field or directive can also depend on a record loaded elsewhere in the operation, such as a viewer loaded once per request. `ensureIncludeBehind(details, path, ancestorType, options)` adds the path under an include of that GraphQL type:
+
+- `at: 'nearest'` (default): the closest selected ancestor of `ancestorType`. When none is selected, the record `getQueryIncludeOf(info, ancestorType)` loads. When the closest one is not loaded by the current collection (for example it is reached through a field that is not an association), nothing is added.
+- `at: 'root'`: only the record `getQueryIncludeOf(info, ancestorType)` loads, even when the operation does not select that type.
+
+It returns `undefined` and does nothing when the current collection does not load `ancestorType`.
+
+```ts
+// In a directive, so that `viewer.permissions.roles` is loaded even if the client did not select it
+findOptions(details) {
+  ensureIncludeBehind(details, 'permissions.roles', 'Viewer', { at: 'root' })
+},
+
+// In the loader shared by every protected field. Cache the promise: top-level fields resolve
+// concurrently, so a cache filled after `await` would still be empty for the others.
+context.viewerPromise ??= Viewer.findOne({
+  where: { id: viewerId },
+  ...getQueryIncludeOf(info, 'Viewer', { lookFromOperationRoot: true, mergeOccurrences: true }),
+})
+const viewer = await context.viewerPromise
+```
+
+With `lookFromOperationRoot`, hooks across the whole operation contribute before the first load. By default only the first selection of the target type is loaded. `mergeOccurrences: true` merges every selection, such as aliases, into the one load, which suits a record loaded once per operation like the viewer; selections of the same association with different arguments then throw, because one load cannot return both. Leave it off for types an operation can select as different records, such as orders returned by two mutations. Selections nested inside another selection of the target are other records and are never merged. See [Directives](./directives.md#findoptions-during-include-collection) for when each hook runs.
 
 ---
 

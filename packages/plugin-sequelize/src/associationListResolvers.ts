@@ -18,6 +18,7 @@ import {
 } from 'graphql-gene'
 import { getFieldIncludeOptions, getQueryInclude } from './utils/public'
 import { stripAssociationListWrapperIncludes } from './utils/includePostProcess'
+import { createRootHookContext, setFindOptionsHookContext } from './utils/includeCollector'
 import { resolvePolymorphicHubLoadedRows } from './utils/polymorphic'
 import { getGeneAssociationListWrapperMeta } from './utils/associationListRegistry'
 import {
@@ -35,7 +36,8 @@ import type { DefaultResolverIncludeOptions } from './types'
 
 function applyGeneConfigRootFindOptions(
   ModelClass: ModelStatic<Model>,
-  findOptionsRoot: DefaultResolverIncludeOptions
+  findOptionsRoot: DefaultResolverIncludeOptions,
+  schema: GraphQLSchema
 ) {
   const geneCfg =
     getGloballyExtendedTypes().geneConfig[
@@ -47,10 +49,12 @@ function applyGeneConfigRootFindOptions(
       : undefined
   if (typeof hook !== 'function') return
 
-  hook({
-    findOptions: findOptionsRoot,
-    state: findOptionsRoot,
-  })
+  const details = { findOptions: findOptionsRoot, state: findOptionsRoot }
+  setFindOptionsHookContext(
+    details,
+    createRootHookContext(ModelClass.name, findOptionsRoot, schema)
+  )
+  hook(details)
 }
 
 export type GeneAssociationListWeakPayload = {
@@ -313,7 +317,8 @@ async function ensureAssociationItemsFacetLoaded(
   const mergedFind: DefaultResolverIncludeOptions = { ...(nestedInclude || {}) }
   applyGeneConfigRootFindOptions(
     targetModelFromAssociation(modelParent, associationField),
-    mergedFind
+    mergedFind,
+    info.schema
   )
 
   const mergedInclude = [...(columnOpts.include || []), ...(mergedFind.include || [])]

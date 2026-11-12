@@ -315,6 +315,10 @@ export type GeneDirective<
   ? (args?: TDirectiveArgs) => GeneDirectiveConfig<TDirectiveArgs, TSource, TContext, TArgs>
   : (args: TDirectiveArgs) => GeneDirectiveConfig<TDirectiveArgs, TSource, TContext, TArgs>
 
+/**
+ * Runs `findOptions` during include collection for every selected field the directive applies to,
+ * like a field-level (or type-level) `findOptions`.
+ */
 export type GeneDirectiveConfig<
   TDirectiveArgs =
     | Record<string, string | number | boolean | string[] | number[] | boolean[] | null>
@@ -327,11 +331,13 @@ export type GeneDirectiveConfig<
       name: string
       args?: TDirectiveArgs
       handler: GeneDirectiveHandler<TSource, TContext, TArgs>
+      findOptions?: FindOptionsHandler<object>
     }
   : {
       name: string
       args: TDirectiveArgs
       handler: GeneDirectiveHandler<TSource, TContext, TArgs>
+      findOptions?: FindOptionsHandler<object>
     }
 
 export type GeneDirectiveHandler<

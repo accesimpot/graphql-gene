@@ -48,6 +48,34 @@ export function markGeneHydrationInclude(
   return include
 }
 
+/**
+ * Marks include rows created by `ensureInclude` / `ensureIncludeBehind`. They declare data a hook
+ * needs on the parent fetch, so {@link shallowGeneHydrationIncludes} keeps them.
+ */
+export const GENE_ENSURED_INCLUDE_KEY = '__geneEnsuredInclude'
+
+const ENSURED_WITH_HYDRATION = 'hydrate'
+
+export function isGeneEnsuredInclude(include: DefaultResolverIncludeOptions | undefined): boolean {
+  return !!include && !!Reflect.get(include, GENE_ENSURED_INCLUDE_KEY)
+}
+
+/** Whether the ensuring hook asked to keep this row on parent fetches (`hydrate` is not `false`). */
+function isEnsuredWithHydration(include: DefaultResolverIncludeOptions) {
+  return Reflect.get(include, GENE_ENSURED_INCLUDE_KEY) === ENSURED_WITH_HYDRATION
+}
+
+/** A hydration request is never withdrawn by a later `hydrate: false`. */
+export function markGeneEnsuredInclude(
+  include: DefaultResolverIncludeOptions,
+  hydrate: boolean
+): DefaultResolverIncludeOptions {
+  if (!isEnsuredWithHydration(include)) {
+    Reflect.set(include, GENE_ENSURED_INCLUDE_KEY, hydrate ? ENSURED_WITH_HYDRATION : true)
+  }
+  return include
+}
+
 /** Parent-fetch hydration only needs the association rows; facet resolvers own nested includes. */
 export function shallowGeneHydrationIncludes(
   includes: DefaultResolverIncludeOptions[] | undefined
@@ -56,7 +84,13 @@ export function shallowGeneHydrationIncludes(
 
   for (const inc of includes) {
     if (isGeneHydrationInclude(inc)) {
-      delete inc.include
+      const ensured = inc.include?.filter(isGeneEnsuredInclude)
+      if (ensured?.length) {
+        inc.include = ensured
+        shallowGeneHydrationIncludes(ensured)
+      } else {
+        delete inc.include
+      }
       continue
     }
 
@@ -88,8 +122,14 @@ export function stripAssociationListWrapperIncludes(
       isGeneAssociationListWrapperAssociation(parentGraphqlType, associationName) &&
       !isGeneHydrationInclude(inc)
     ) {
-      includes.splice(i, 1)
-      continue
+      // A row reused by `ensureInclude` was not created as a hydration include, so it is upgraded
+      // here, where the association is known to be a wrapper.
+      if (isEnsuredWithHydration(inc)) {
+        markGeneHydrationInclude(inc)
+      } else {
+        includes.splice(i, 1)
+        continue
+      }
     }
 
     const assoc = associationName ? parentModel.associations?.[associationName] : undefined

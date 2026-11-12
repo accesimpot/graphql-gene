@@ -446,6 +446,7 @@ type GeneDirectiveConfig<
   name: string
   args?: TDirectiveArgs
   handler: GeneDirectiveHandler<TSource, TContext, TArgs>
+  findOptions?: FindOptionsHandler<object>
 }
 
 type GeneDirectiveHandler<TSource, TContext, TArgs, TResult = unknown> = (options: {
@@ -479,6 +480,7 @@ export enum ADMIN_ROLES {
 declare module 'graphql-gene/context' {
   export interface GeneContext {
     authenticatedUser?: User | null
+    authenticatedUserPromise?: Promise<User | null>
   }
 }
 
@@ -526,7 +528,13 @@ export const userAuthDirective = defineDirective<{
     const { id, email } = getJwtTokenPayload(token) || {}
     if (!id && !email) return throwUnauthorized()
 
-    const user = await User.findOne({ where: { id, email }, ...includeOptions })
+    // Top-level fields resolve concurrently, so the in-flight lookup is cached. Assigning the user
+    // after `await` alone would leave it unset for the fields that resolve in the meantime.
+    context.authenticatedUserPromise ??= User.findOne({
+      where: { id, email },
+      ...includeOptions,
+    })
+    const user = await context.authenticatedUserPromise
     context.authenticatedUser = user
 
     if (!user || !isAuthorized(user)) throwUnauthorized()
@@ -617,6 +625,29 @@ type Query {
 ```
 
 <img width="804" alt="image" src="https://github.com/user-attachments/assets/3862b733-24b0-4e09-bf79-92645d097e73">
+
+<br>
+<br>
+
+
+#### Example: depending on a record loaded elsewhere in the operation
+
+A directive can depend on a record that another field loads, such as the viewer. `ensureIncludeBehind` adds the path under that record's include, so the record is loaded once with everything it needs:
+
+```ts
+import { ensureIncludeBehind } from '@graphql-gene/plugin-sequelize'
+
+export const rolesDirective = defineDirective(() => ({
+  name: 'roles',
+  handler() {},
+  findOptions(details) {
+    // Adds `permissions.roles` to the `Viewer` load, even if the client did not select it
+    ensureIncludeBehind(details, 'permissions.roles', 'Viewer', { at: 'root' })
+  },
+}))
+```
+
+The field that reads `context.viewer` should cache the in-flight load, because top-level fields resolve concurrently.
 
 <br>
 <br>
