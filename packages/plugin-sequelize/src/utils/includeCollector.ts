@@ -98,6 +98,14 @@ export function createChildFrame(
 }
 
 /**
+ * Narrows `parent` to the type of a fragment condition. The rows, include, depth and scratch state
+ * are the parent's, so only ancestry lookups see the concrete `type`.
+ */
+export function createTypeRefinementFrame(parent: CollectorFrame, type: string): CollectorFrame {
+  return { ...parent, type, parent }
+}
+
+/**
  * graphql-lookahead passes the same details object to `until`, `next` and `afterAllSelections`
  * for one selection, and hooks hand it back to `ensureInclude`, so it keys the per-selection data.
  */

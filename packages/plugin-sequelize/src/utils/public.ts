@@ -44,6 +44,7 @@ import {
   IncludeCollector,
   createChildFrame,
   createScratchFrame,
+  createTypeRefinementFrame,
   bindOccurrenceFrame,
   getBoundOccurrenceFrame,
   getOccurrenceFrame,
@@ -233,9 +234,13 @@ function handleNextFragmentIncludeOptions(
 ): CollectorFrame {
   const { type, sourceType, state: parent } = details
 
-  // Spreading a fragment on a concrete type stays on the same object, so its fields have to keep
-  // filling the state they were spread into.
-  if (!isRegisteredPolymorphicAbstractType(sourceType)) return parent
+  // A fragment on a type that is not a registered polymorphic one stays on the same object, so its
+  // fields have to keep filling the state they were spread into. When the condition names another
+  // type (e.g. `... on Human` under an interface), that type is added to the ancestry so
+  // `ensureIncludeBehind` can find it.
+  if (!isRegisteredPolymorphicAbstractType(sourceType)) {
+    return type === sourceType ? parent : createTypeRefinementFrame(parent, type)
+  }
 
   const association = getAttributeByModelName(type)
   const include: DefaultResolverIncludeOptions = { association }

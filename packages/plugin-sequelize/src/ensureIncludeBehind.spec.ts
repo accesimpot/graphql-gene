@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   getNamedType,
   GraphQLInt,
+  GraphQLInterfaceType,
   GraphQLList,
   GraphQLObjectType,
   GraphQLSchema,
@@ -17,12 +18,15 @@ declare module 'graphql-gene/schema' {
   export interface GeneSchema {
     BehindViewer: object
     BehindViewr: object
+    BehindHuman: object
   }
 }
 
 const VIEWER = 'BehindViewer'
 const PROJECT = 'BehindProject'
 const PERMISSION = 'BehindPermission'
+const ACTOR = 'BehindActor'
+const HUMAN = 'BehindHuman'
 
 markFieldAsAssociation(VIEWER, 'permissions')
 markFieldAsAssociation(VIEWER, 'friends')
@@ -57,12 +61,27 @@ const projectType = new GraphQLObjectType({
   name: PROJECT,
   fields: { id: { type: GraphQLInt }, owner: { type: viewerType } },
 })
+// An interface that is not registered with `@Polymorphic`, so fragments on it are not tracked as
+// polymorphic includes.
+const actorType = new GraphQLInterfaceType({
+  name: ACTOR,
+  fields: { id: { type: GraphQLInt } },
+  resolveType: () => HUMAN,
+})
+const humanType = new GraphQLObjectType({
+  name: HUMAN,
+  interfaces: [actorType],
+  fields: { id: { type: GraphQLInt } },
+})
 const schema = new GraphQLSchema({
+  types: [humanType],
   query: new GraphQLObjectType({
     name: 'Query',
     fields: {
       viewer: { type: viewerType, resolve: () => ({}) },
       project: { type: projectType, resolve: () => ({}) },
+      actor: { type: actorType, resolve: () => ({}) },
+      human: { type: humanType, resolve: () => ({}) },
       flatProtected: { type: GraphQLInt, resolve: () => 1 },
     },
   }),
@@ -99,6 +118,22 @@ beforeAll(() => {
       returnType: 'Int',
       resolver: () => 1,
       directives: [needsViewer('settings', 'nearest')],
+    },
+  } as never
+  extended.config[HUMAN as never] = {
+    id: {
+      returnType: 'Int',
+      resolver: () => 1,
+      directives: [
+        {
+          name: 'needsHuman',
+          args: {},
+          handler: () => {},
+          findOptions: (details: object) => {
+            ensureIncludeBehind(details, 'settings', HUMAN)
+          },
+        },
+      ],
     },
   } as never
 })
@@ -348,6 +383,28 @@ describe('ensureIncludeBehind and getQueryIncludeOf', () => {
     } finally {
       extended.config[PROJECT as never] = previous
     }
+  })
+
+  describe('typed fragments on an interface that is not registered as polymorphic', () => {
+    const settings = [expect.objectContaining({ association: 'settings' })]
+
+    it('finds the concrete type when the field already returns it', async () => {
+      const info = await captureInfo(`query { human { ... on ${HUMAN} { id } } }`, 'human')
+      expect(getQueryInclude(info)?.include).toEqual(settings)
+    })
+
+    it('finds the concrete type through an inline fragment', async () => {
+      const info = await captureInfo(`query { actor { ... on ${HUMAN} { id } } }`, 'actor')
+      expect(getQueryInclude(info)?.include).toEqual(settings)
+    })
+
+    it('finds the concrete type through a named fragment', async () => {
+      const info = await captureInfo(
+        `query { actor { ...H } } fragment H on ${HUMAN} { id }`,
+        'actor'
+      )
+      expect(getQueryInclude(info)?.include).toEqual(settings)
+    })
   })
 
   it('throws outside a findOptions hook', () => {
