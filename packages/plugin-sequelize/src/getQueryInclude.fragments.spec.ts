@@ -74,6 +74,12 @@ describe('getQueryInclude with fragments', () => {
 })
 
 describe('getQueryIncludeOf with fragments', () => {
+  it('includes associations of the resolved field when that field is the target', async () => {
+    const info = await captureInfo(selections.inline)
+
+    expect(getQueryIncludeOf(info, USER_TYPE)?.include).toEqual(expectedInclude)
+  })
+
   for (const [label, source] of Object.entries(selections)) {
     it(`includes an association selected through ${label}`, async () => {
       const info = await captureInfo(source)

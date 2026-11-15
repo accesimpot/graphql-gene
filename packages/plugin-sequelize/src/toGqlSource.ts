@@ -49,6 +49,13 @@ type AssociationKeys<M> = {
   [K in keyof ModelProto<M>]: IsModelAssociationValue<ModelProto<M>[K]> extends true ? K : never
 }[keyof ModelProto<M>]
 
+type AssociationName<M> = Extract<AssociationKeys<M>, string>
+
+/** First segment is a checked association name; deeper segments are not checked. */
+export type AssociationPathOf<M> = [AssociationName<M>] extends [never]
+  ? string
+  : AssociationName<M> | `${AssociationName<M>}.${string}`
+
 /** Column and association keys declared on the Sequelize model (mixins and internals omitted). */
 type GqlSourceModelKey<M> = AttributeKeys<M> | AssociationKeys<M>
 

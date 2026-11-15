@@ -21,7 +21,8 @@ import {
 } from 'graphql'
 import type { GeneContext } from 'graphql-gene/context'
 import type { AnyObject, FieldLines, GraphQLVarType, TypeDefLines, TypeOrFunction } from '../types'
-import type { GeneConfig, GeneTypeConfig } from '../defineConfig'
+import type { GeneConfig, GeneDirectiveConfig, GeneTypeConfig } from '../defineConfig'
+import { getGloballyExtendedTypes } from './extend'
 
 export * from './extend'
 export * from './polymorphicAbstractRegistry'
@@ -344,4 +345,35 @@ export function createTypeDefLines(
 ) {
   typeDefLines[varName] = { ...getDefaultTypeDefLinesObject(), ...typeDefLines[varName] }
   typeDefLines[varName].varType = varType
+}
+
+/** Directives wrapping `parentType.field` at runtime, in the order `resolvers.ts` applies them. */
+export function getDirectiveConfigsOfField(options: {
+  type: string
+  parentType: string
+  field: string
+}): { typeDirectives: GeneDirectiveConfig[]; fieldDirectives: GeneDirectiveConfig[] } {
+  const extendedTypes = getGloballyExtendedTypes()
+  const geneConfig = extendedTypes.geneConfig[options.type as keyof typeof extendedTypes.geneConfig]
+
+  const typeDirectives: GeneDirectiveConfig[] = []
+  if (geneConfig?.directives) typeDirectives.push(...parseGetterConfig(geneConfig.directives))
+
+  const aliasConfig =
+    geneConfig?.aliases && options.type in geneConfig.aliases
+      ? geneConfig.aliases[options.type as 'Query']
+      : undefined
+  if (aliasConfig?.directives) typeDirectives.push(...parseGetterConfig(aliasConfig.directives))
+
+  const fieldDirectives: GeneDirectiveConfig[] = []
+  const fieldConfigs = extendedTypes.config[options.parentType as keyof typeof extendedTypes.config]
+  if (fieldConfigs && !isArrayFieldConfig(fieldConfigs)) {
+    const rawConfig = (fieldConfigs as Record<string, Parameters<typeof normalizeFieldConfig>[0]>)[
+      options.field
+    ]
+    const directives = rawConfig ? normalizeFieldConfig(rawConfig).directives : undefined
+    if (directives) fieldDirectives.push(...parseGetterConfig(directives))
+  }
+
+  return { typeDirectives, fieldDirectives }
 }

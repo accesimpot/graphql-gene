@@ -1,6 +1,8 @@
 import type { ExecutionResult } from 'graphql'
 import { createYoga } from 'graphql-yoga'
 import { buildHTTPExecutor, type HTTPExecutorOptions } from '@graphql-tools/executor-http'
+import { getGloballyExtendedTypes } from 'graphql-gene'
+import { ensureInclude } from '@graphql-gene/plugin-sequelize'
 import { sequelize } from '../models/sequelize'
 import { useMetaPlugin } from '../plugins/useMetaPlugin'
 import { schema } from '../server/schema'
@@ -429,6 +431,29 @@ describe('integration', () => {
       const order = result.data?.order as { itemTotalQuantity?: number; items?: unknown }
       expect(order?.items).toBeUndefined()
       expect(order?.itemTotalQuantity).toBe(expectedTotal)
+    })
+
+    it('lets a type findOptions use ensureInclude when its rows are loaded as an association list', async () => {
+      const extended = getGloballyExtendedTypes()
+      const previousConfig = extended.geneConfig.OrderItem
+      const ensured: unknown[] = []
+      extended.geneConfig.OrderItem = {
+        findOptions(details: object) {
+          ensured.push(ensureInclude(details, 'product').association)
+        },
+      }
+
+      try {
+        const result = await execute({
+          document: getFixtureQuery('queries/orderAssociationListWrapper.gql'),
+          variables: { id: '397', notesLimit: 10 },
+        })
+
+        expect(result.errors).toBeUndefined()
+        expect(ensured).toContain('product')
+      } finally {
+        extended.geneConfig.OrderItem = previousConfig
+      }
     })
   })
 
