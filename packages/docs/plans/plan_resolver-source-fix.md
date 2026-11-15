@@ -1,6 +1,6 @@
 ## Implementation prompt: v2 resolver source typing, runtime hydration, default order, and order-enum fix
 
-You are working in the **graphql-gene** monorepo (`packages/core`, `packages/plugin-sequelize`, `packages/dev-playground`). Target: graphql-gene v2 beta. Implement the changes below with tests. Read `PLAN_V2.md` and existing association-list code (`associationListResolvers.ts`, `associationListRegistry.ts`, `populateTypeDefs.ts`, `includePostProcess.ts`, `utils/public.ts`) before starting.
+You are working in the **graphql-gene** monorepo (`packages/core`, `packages/plugin-sequelize`, `packages/dev-playground`). Target: graphql-gene v2 beta. Implement the changes below with tests. Read [`PLAN_V2.md`](./PLAN_V2.md) and existing association-list code (`associationListResolvers.ts`, `associationListRegistry.ts`, `populateTypeDefs.ts`, `includePostProcess.ts`, `utils/public.ts`) before starting.
 
 ---
 
