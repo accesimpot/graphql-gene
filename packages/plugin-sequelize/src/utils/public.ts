@@ -95,7 +95,7 @@ function getFieldConfig(sourceType: string, field: string) {
   if (field in fieldConfigs) return normalizeFieldConfig(fieldConfigs[field])
 }
 
-function makeHandleUntilFindOptions(context: GeneContext) {
+function makeHandleUntilFindOptions(context: GeneContext | undefined) {
   return function handleUntilFindOptions(
     options: UntilHandlerDetails<DefaultResolverIncludeOptions>
   ) {
@@ -149,10 +149,6 @@ function makeHandleUntilFindOptions(context: GeneContext) {
 export type GetQueryIncludeOptions = {
   /** GraphQL resolver context forwarded to `findOptions` hooks. */
   context?: GeneContext
-}
-
-function resolveFindOptionsContext(options?: GetQueryIncludeOptions): GeneContext {
-  return options?.context ?? {}
 }
 
 function handleNextIncludeOptions(details: NextHandlerDetails<DefaultResolverIncludeOptions>) {
@@ -235,7 +231,7 @@ function resolveIncludeOptionsFromLookahead(
 
 export function getQueryInclude(info: GraphQLResolveInfo, options?: GetQueryIncludeOptions) {
   const includeOptions: DefaultResolverIncludeOptions = {}
-  const until = makeHandleUntilFindOptions(resolveFindOptionsContext(options))
+  const until = makeHandleUntilFindOptions(options?.context)
 
   lookahead({
     info,
@@ -256,7 +252,7 @@ export function getQueryIncludeOf(
   options: { depth?: number; lookFromOperationRoot?: boolean } & GetQueryIncludeOptions = {}
 ) {
   const includeOptions: DefaultResolverIncludeOptions = {}
-  const untilFindOptions = makeHandleUntilFindOptions(resolveFindOptionsContext(options))
+  const untilFindOptions = makeHandleUntilFindOptions(options.context)
   const isMatchingTarget: Exclude<typeof target, string> =
     typeof target === 'string' ? ({ type }) => type === target : target
 

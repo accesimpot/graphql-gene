@@ -124,8 +124,11 @@ export type ModelClassByPluginModel<M, TFallback = never> = {
 export type FindOptionsHandler<TState> = (
   details: UntilHandlerDetails<TState> & {
     findOptions: UntilHandlerDetails<TState>['state']
-    /** GraphQL resolver context (HTTP headers, auth, etc.). */
-    context: GeneContext
+    /**
+     * GraphQL resolver context (HTTP headers, auth, etc.).
+     * `undefined` when the caller of `getQueryInclude` / `getQueryIncludeOf` omitted it.
+     */
+    context: GeneContext | undefined
   }
 ) => void
 

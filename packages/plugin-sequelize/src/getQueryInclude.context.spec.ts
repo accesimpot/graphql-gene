@@ -97,7 +97,7 @@ describe('getQueryInclude context for findOptions', () => {
     expect(received).toEqual([context])
   })
 
-  it('defaults context to an empty object when omitted', async () => {
+  it('leaves context undefined when omitted', async () => {
     const received: unknown[] = []
 
     getGloballyExtendedTypes().config[ORDER_TYPE] = {
@@ -113,7 +113,7 @@ describe('getQueryInclude context for findOptions', () => {
     const info = await captureInfo(`query { order(id: "1") { itemTotalQuantity } }`)
     getQueryInclude(info)
 
-    expect(received).toEqual([{}])
+    expect(received).toEqual([undefined])
   })
 
   it('forwards context through getQueryIncludeOf', async () => {
