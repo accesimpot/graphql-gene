@@ -221,6 +221,7 @@ export const userAuthDirective = defineDirective<{ roles: string[] }>(args => ({
   async handler({ context, info /* … */ }) {
     const includeOptions = getQueryIncludeOf(info, 'AuthenticatedUser', {
       lookFromOperationRoot: true,
+      context,
     })
     // User.findOne({ …includeOptions })
   },

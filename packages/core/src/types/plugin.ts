@@ -92,6 +92,7 @@ export type GenePlugin<M = any> = {
     modelKey: ModelKey
     config: GeneTypeConfig<TSource, TContext, TArgDefs>
     args: GeneDefaultResolverArgs<M>
+    context: TContext
     info: GraphQLResolveInfo
   }): Promise<GraphqlToTypescript<ModelKey>>
 

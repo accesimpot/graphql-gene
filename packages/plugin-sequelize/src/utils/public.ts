@@ -10,6 +10,7 @@ import {
   SKIP_ARG_DEFAULT,
   type ValidGraphqlType,
 } from 'graphql-gene'
+import type { GeneContext } from 'graphql-gene/context'
 import {
   lookahead,
   lookDeeper,
@@ -94,42 +95,60 @@ function getFieldConfig(sourceType: string, field: string) {
   if (field in fieldConfigs) return normalizeFieldConfig(fieldConfigs[field])
 }
 
-function handleUntilFindOptions(options: UntilHandlerDetails<DefaultResolverIncludeOptions>) {
-  const rootState = unwrapAssociationIncludeFrame(options.state)
-  const { sourceType, type, field } = options
-  const typeConfig = getTypeConfig(type)
-  const fieldConfig = getFieldConfig(sourceType, field)
-
-  if (
-    getGeneAssociationListWrapperMeta(sourceType) &&
-    field === GENE_ASSOCIATION_LIST_ITEMS_FIELD
+function makeHandleUntilFindOptions(context: GeneContext | undefined) {
+  return function handleUntilFindOptions(
+    options: UntilHandlerDetails<DefaultResolverIncludeOptions>
   ) {
-    if (!typeConfig?.findOptions && !fieldConfig?.findOptions) return false
+    const rootState = unwrapAssociationIncludeFrame(options.state)
+    const { sourceType, type, field } = options
+    const typeConfig = getTypeConfig(type)
+    const fieldConfig = getFieldConfig(sourceType, field)
+    const detailsWithContext = { ...options, context }
 
-    return {
-      afterAllSelections() {
-        typeConfig?.findOptions?.(Object.assign(options, { findOptions: rootState }))
-        fieldConfig?.findOptions?.(Object.assign(options, { findOptions: rootState }))
-      },
+    if (
+      getGeneAssociationListWrapperMeta(sourceType) &&
+      field === GENE_ASSOCIATION_LIST_ITEMS_FIELD
+    ) {
+      if (!typeConfig?.findOptions && !fieldConfig?.findOptions) return false
+
+      return {
+        afterAllSelections() {
+          typeConfig?.findOptions?.(
+            Object.assign(detailsWithContext, { findOptions: rootState })
+          )
+          fieldConfig?.findOptions?.(
+            Object.assign(detailsWithContext, { findOptions: rootState })
+          )
+        },
+      }
     }
-  }
 
-  if (typeConfig?.findOptions || fieldConfig?.findOptions) {
-    return {
-      afterAllSelections() {
-        if (typeConfig?.findOptions) {
-          rootState.include = rootState.include || []
-          const possibleState = rootState.include?.find(opt => opt.association === field)
-          const nestedState = possibleState || markGeneHydrationInclude({ association: field })
-          if (!possibleState) rootState.include.push(nestedState)
+    if (typeConfig?.findOptions || fieldConfig?.findOptions) {
+      return {
+        afterAllSelections() {
+          if (typeConfig?.findOptions) {
+            rootState.include = rootState.include || []
+            const possibleState = rootState.include?.find(opt => opt.association === field)
+            const nestedState = possibleState || markGeneHydrationInclude({ association: field })
+            if (!possibleState) rootState.include.push(nestedState)
 
-          typeConfig?.findOptions?.(Object.assign(options, { findOptions: nestedState }))
-        }
-        fieldConfig?.findOptions?.(Object.assign(options, { findOptions: rootState }))
-      },
+            typeConfig?.findOptions?.(
+              Object.assign(detailsWithContext, { findOptions: nestedState })
+            )
+          }
+          fieldConfig?.findOptions?.(
+            Object.assign(detailsWithContext, { findOptions: rootState })
+          )
+        },
+      }
     }
+    return false
   }
-  return false
+}
+
+export type GetQueryIncludeOptions = {
+  /** GraphQL resolver context forwarded to `findOptions` hooks. */
+  context?: GeneContext
 }
 
 function handleNextIncludeOptions(details: NextHandlerDetails<DefaultResolverIncludeOptions>) {
@@ -210,13 +229,14 @@ function resolveIncludeOptionsFromLookahead(
     : (resolved as Required<Pick<DefaultResolverIncludeOptions, 'include'>>)
 }
 
-export function getQueryInclude(info: GraphQLResolveInfo) {
+export function getQueryInclude(info: GraphQLResolveInfo, options?: GetQueryIncludeOptions) {
   const includeOptions: DefaultResolverIncludeOptions = {}
+  const until = makeHandleUntilFindOptions(options?.context)
 
   lookahead({
     info,
     state: includeOptions,
-    until: handleUntilFindOptions,
+    until,
     next: handleNextIncludeOptions,
     nextFragment: handleNextFragmentIncludeOptions,
   })
@@ -229,9 +249,10 @@ export function getQueryIncludeOf(
   target:
     | ValidGraphqlType
     | ((details: UntilHandlerDetails<DefaultResolverIncludeOptions>) => boolean),
-  options: { depth?: number; lookFromOperationRoot?: boolean } = {}
+  options: { depth?: number; lookFromOperationRoot?: boolean } & GetQueryIncludeOptions = {}
 ) {
   const includeOptions: DefaultResolverIncludeOptions = {}
+  const untilFindOptions = makeHandleUntilFindOptions(options.context)
   const isMatchingTarget: Exclude<typeof target, string> =
     typeof target === 'string' ? ({ type }) => type === target : target
 
@@ -245,7 +266,7 @@ export function getQueryIncludeOf(
       info,
       state: includeOptions,
       type,
-      until: handleUntilFindOptions,
+      until: untilFindOptions,
       selectionSet: nextSelectionSet,
 
       next: handleNextIncludeOptions,
