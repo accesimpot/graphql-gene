@@ -153,5 +153,24 @@ extendTypes({
       resolver: ({ source }) =>
         source.items?.items?.reduce((sum, item) => sum + (item.quantity ?? 0), 0) ?? 0,
     },
+
+    /**
+     * Typing regression guard: returning a HasMany `GeneAssociationList` item as a Sequelize
+     * model `returnType` must type-check without an assertion (e.g. `source.items?.items[0]` as
+     * `OrderItem`). Do not remove this field without replacing it with an equivalent type-level
+     * check — it catches `ToGqlSource` nested association items becoming incompatible with the
+     * related model instance type.
+     */
+    firstItem: {
+      returnType: 'OrderItem',
+
+      findOptions({ findOptions }) {
+        findOptions.include = findOptions.include || []
+        if (!findOptions.include.some(opt => opt.association === 'items')) {
+          findOptions.include.push(markGeneHydrationInclude({ association: 'items' }))
+        }
+      },
+      resolver: ({ source }) => source.items?.items[0] ?? null,
+    },
   },
 })

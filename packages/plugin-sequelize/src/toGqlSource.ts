@@ -6,15 +6,6 @@ type ModelProto<M> =
   M extends abstract new (...args: any) => infer I ? I : PrototypeOrNot<M>
 type ModelInstance<M> = ModelProto<M> & Model
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type DefaultGraphqlTypeName<M> = M extends abstract new (...args: any) => any
-  ? M extends { name: infer N extends string }
-    ? N
-    : string
-  : string
-
-type ToGqlSourceNested<E> = ToGqlSource<E, DefaultGraphqlTypeName<E>>
-
 type IsSequelizeModel<T> = T extends Model ? true : false
 
 /** Matches {@link getGeneAssociationListWrapperTypeName} at type level. */
@@ -52,15 +43,20 @@ type AssociationKeys<M> = {
 /** Column and association keys declared on the Sequelize model (mixins and internals omitted). */
 type GqlSourceModelKey<M> = AttributeKeys<M> | AssociationKeys<M>
 
+/**
+ * Association values on resolver `source` match runtime hydration: multi associations become
+ * {@link GeneAssociationList} of the related **model instances** (not recursively mapped
+ * `ToGqlSource`), and BelongsTo / HasOne stay as the related model. That way returning
+ * `source.items?.items[0]` from an `extendTypes` resolver with a Sequelize `returnType` type-checks
+ * without an assertion — nested rows are only wrapped again when they become a resolver `source`.
+ */
 type ToGqlSourceValueCore<V, TTypeName extends string> = [V] extends [readonly (infer E)[]]
   ? IsSequelizeModel<E> extends true
     ? IsGeneAssociationListWrapperField<TTypeName> extends true
-      ? GeneAssociationList<ToGqlSourceNested<E>>
-      : ToGqlSourceNested<E>[]
+      ? GeneAssociationList<E>
+      : E[]
     : V
-  : IsSequelizeModel<V> extends true
-    ? ToGqlSourceNested<V>
-    : V
+  : V
 
 type ToGqlSourceValue<V, TTypeName extends string> = null extends V
   ? undefined extends V
@@ -81,8 +77,8 @@ type ToGqlSourceField<
  *
  * Starts from Sequelize column + association fields (not GraphQL-only `extendTypes` outputs).
  * Multi associations exposed as `*GeneAssociationListResult` in GraphQL (HasMany and
- * BelongsToMany) are rewritten to {@link GeneAssociationList}; BelongsTo / HasOne become nested
- * `ToGqlSource`.
+ * BelongsToMany) are rewritten to {@link GeneAssociationList} of related model instances;
+ * BelongsTo / HasOne keep the related model instance type (same as runtime hydration).
  */
 export type ToGqlSource<M, TTypeName extends string = string> = {
   [K in GqlSourceModelKey<M> & string]: ToGqlSourceField<M, TTypeName, K>
