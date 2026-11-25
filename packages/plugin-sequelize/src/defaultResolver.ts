@@ -24,6 +24,7 @@ export async function defaultResolver<
   modelKey: ModelKey
   config: GeneTypeConfig<TSource, TContext, TArgDefs>
   args: GeneDefaultResolverArgs<M>
+  context: TContext
   info: GraphQLResolveInfo
 }) {
   const model = options.model as ModelStatic<SequelizeModel>
@@ -39,7 +40,9 @@ export async function defaultResolver<
       includes: [],
     },
   })
-  const includeOptions = getQueryInclude(options.info)
+  const includeOptions = getQueryInclude(options.info, {
+    context: options.context as GeneContext,
+  })
 
   const mergedInclude = [...(topLevelFindOptions.include ?? []), ...(includeOptions?.include ?? [])]
 

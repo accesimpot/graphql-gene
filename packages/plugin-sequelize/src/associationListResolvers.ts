@@ -16,6 +16,7 @@ import {
   SKIP_ARG_DEFAULT,
   type AnyObject,
 } from 'graphql-gene'
+import type { GeneContext } from 'graphql-gene/context'
 import { getFieldIncludeOptions, getQueryInclude } from './utils/public'
 import { stripAssociationListWrapperIncludes } from './utils/includePostProcess'
 import { resolvePolymorphicHubLoadedRows } from './utils/polymorphic'
@@ -35,7 +36,8 @@ import type { DefaultResolverIncludeOptions } from './types'
 
 function applyGeneConfigRootFindOptions(
   ModelClass: ModelStatic<Model>,
-  findOptionsRoot: DefaultResolverIncludeOptions
+  findOptionsRoot: DefaultResolverIncludeOptions,
+  context: GeneContext
 ) {
   const geneCfg =
     getGloballyExtendedTypes().geneConfig[
@@ -50,6 +52,7 @@ function applyGeneConfigRootFindOptions(
   hook({
     findOptions: findOptionsRoot,
     state: findOptionsRoot,
+    context,
   })
 }
 
@@ -284,7 +287,8 @@ function targetModelFromAssociation(parent: unknown, associationField: string): 
 async function ensureAssociationItemsFacetLoaded(
   wrapperRoot: unknown,
   _args: Record<string, unknown>,
-  info: GraphQLResolveInfo
+  info: GraphQLResolveInfo,
+  context: GeneContext
 ) {
   if (!isPlainRecord(wrapperRoot)) {
     throw new GraphQLError('Internal error resolving association list items.')
@@ -309,11 +313,12 @@ async function ensureAssociationItemsFacetLoaded(
     },
   })
 
-  const nestedInclude = getQueryInclude(info)
+  const nestedInclude = getQueryInclude(info, { context })
   const mergedFind: DefaultResolverIncludeOptions = { ...(nestedInclude || {}) }
   applyGeneConfigRootFindOptions(
     targetModelFromAssociation(modelParent, associationField),
-    mergedFind
+    mergedFind,
+    context
   )
 
   const mergedInclude = [...(columnOpts.include || []), ...(mergedFind.include || [])]
@@ -400,10 +405,10 @@ export function attachAssociationListWrapperResolvers(schema: GraphQLSchema, typ
       wrapperFields.items.resolve = async (
         wrapperRoot: unknown,
         args: Record<string, unknown>,
-        context: unknown,
+        context: GeneContext,
         info: GraphQLResolveInfo
       ) => {
-        await ensureAssociationItemsFacetLoaded(wrapperRoot, args, info)
+        await ensureAssociationItemsFacetLoaded(wrapperRoot, args, info, context)
 
         return previousItemsResolve(wrapperRoot, args, context, info)
       }

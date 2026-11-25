@@ -521,6 +521,8 @@ export const userAuthDirective = defineDirective<{
     const includeOptions = getQueryIncludeOf(info, 'AuthenticatedUser', {
       // Set to true if the directive is added to a field that is not of type "AuthenticatedUser"
       lookFromOperationRoot: true,
+      // Forward context so `findOptions` hooks can read headers / auth state
+      context,
     })
 
     const { id, email } = getJwtTokenPayload(token) || {}

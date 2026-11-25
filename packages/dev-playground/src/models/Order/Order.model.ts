@@ -92,7 +92,7 @@ extendTypes({
     updateOrderStatus: {
       args: { id: 'String!', status: 'OrderStatusEnum!', someOtherInput: 'SomeOtherInput' },
 
-      async resolver({ info, args }) {
+      async resolver({ info, args, context }) {
         let messageType: (typeof MessageTypeEnum)[number] = 'success'
         let text = 'Status updated successfully.'
         let order: Order | null = null
@@ -101,7 +101,10 @@ extendTypes({
           messageType = 'error'
           text = 'Status could not be updated.'
         } else {
-          const findOptions = getQueryIncludeOf(info, 'Order', { lookFromOperationRoot: true })
+          const findOptions = getQueryIncludeOf(info, 'Order', {
+            lookFromOperationRoot: true,
+            context,
+          })
           order = await Order.findOne({ ...findOptions, where: { id: args.id } })
 
           // Just pretend to update the status

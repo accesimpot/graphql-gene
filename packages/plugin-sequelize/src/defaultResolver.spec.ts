@@ -54,6 +54,7 @@ describe('defaultResolver', () => {
       modelKey: 'OrderItem',
       config: { returnType: '[OrderItem!]!' },
       args: { where: { product: { name: { eq: 'Fusion - Ocean Mist' } } } },
+      context: {},
       info: {} as GraphQLResolveInfo,
     })
 
@@ -87,6 +88,7 @@ describe('defaultResolver', () => {
       modelKey: 'OrderItem',
       config: { returnType: '[OrderItem!]!' },
       args: { where: { quantity: { eq: 3 } } },
+      context: {},
       info: {} as GraphQLResolveInfo,
     })
 
@@ -126,6 +128,7 @@ describe('defaultResolver', () => {
       modelKey: 'Order',
       config: { returnType: 'Order' },
       args: { where: { status: { eq: 'paid' } } },
+      context: {},
       info: {} as GraphQLResolveInfo,
     })
 
@@ -163,10 +166,37 @@ describe('defaultResolver', () => {
       modelKey: 'Order',
       config: { returnType: 'Order' },
       args: { where: { status: { eq: 'paid' } } },
+      context: {},
       info: {} as GraphQLResolveInfo,
     })
 
     const findOptions = findOne.mock.calls[0]?.[0] as { include: DefaultResolverIncludeOptions[] }
     expect(findOptions.include).toEqual([hydrationInclude])
+  })
+
+  it('forwards resolver context to getQueryInclude', async () => {
+    const { defaultResolver } = await import('./defaultResolver')
+
+    getFieldFindOptions.mockReturnValue({})
+    getQueryInclude.mockReturnValue(undefined)
+
+    const findOne = vi.fn().mockResolvedValue(null)
+    const model = {
+      name: 'Order',
+      associations: {},
+      findOne,
+    }
+    const context = { request: { headers: { get: () => 'Bearer token' } } }
+
+    await defaultResolver({
+      model,
+      modelKey: 'Order',
+      config: { returnType: 'Order' },
+      args: {},
+      context,
+      info: {} as GraphQLResolveInfo,
+    })
+
+    expect(getQueryInclude).toHaveBeenCalledWith({}, { context })
   })
 })

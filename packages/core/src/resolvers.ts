@@ -129,6 +129,7 @@ function defineResolvers<SchemaTypes extends AnyObject>(options: {
               modelKey: returnTypeName,
               config: normalizedConfig,
               args: args as GeneDefaultResolverArgs<typeof model>,
+              context,
               info,
             })
           }

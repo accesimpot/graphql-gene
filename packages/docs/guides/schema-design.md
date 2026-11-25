@@ -106,6 +106,8 @@ In custom mutation resolvers, reuse the selection set when reloading the model: 
 
 If a field does not map 1:1 to a column but is computed from **sibling associations** (or nested data on the same model instance), use the field’s `findOptions` hook to add the necessary `include`s whenever that field is requested.
 
+`findOptions` receives the same GraphQL `context` as resolvers (when callers pass it to `getQueryInclude` / `getQueryIncludeOf`, which the default resolver does). Use that to read HTTP headers or auth state when shaping Sequelize options.
+
 For example, a `categories` field might resolve from `groupCategories → category`, so `findOptions` pushes `groupCategories` and `category` into `state.include`. That way the resolver always has the rows it needs, and you do not rely on eager-loading elsewhere.
 
 See `ProductGroup` in `packages/dev-playground/src/models/ProductGroup/ProductGroup.model.ts`.
