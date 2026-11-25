@@ -95,8 +95,6 @@ declare module 'graphql-gene/schema' {
 }
 
 type ParentSource = ToGqlSource<typeof ToGqlSourceParent, 'ToGqlSourceParent'>
-type ChildSource = ToGqlSource<typeof ToGqlSourceChild, 'ToGqlSourceChild'>
-type TagSource = ToGqlSource<typeof ToGqlSourceTag, 'ToGqlSourceTag'>
 type BelongsToManyParentSource = ToGqlSource<
   typeof _ToGqlSourceBelongsToManyParent,
   'ToGqlSourceBelongsToManyParent'
@@ -112,33 +110,42 @@ type _scalarFields = Assert<
   Equal<Pick<ParentSource, 'id' | 'title'>, Pick<ToGqlSourceParent, 'id' | 'title'>>
 >
 type _hasManyField = Assert<
-  ParentSource['questions'] extends GeneAssociationList<ChildSource> | null ? true : false
+  ParentSource['questions'] extends GeneAssociationList<ToGqlSourceChild> | null ? true : false
 >
 type _belongsToField = Assert<
-  ParentSource['address'] extends ToGqlSource<typeof ToGqlSourceAddress> | null ? true : false
+  ParentSource['address'] extends ToGqlSourceAddress | null ? true : false
 >
 type _belongsToManyField = Assert<
-  BelongsToManyParentSource['tags'] extends GeneAssociationList<TagSource> ? true : false
+  BelongsToManyParentSource['tags'] extends GeneAssociationList<ToGqlSourceTag> ? true : false
 >
 type _mixinExcluded = Assert<'addTag' extends keyof ParentSource ? false : true>
 type _extendTypesSource = Assert<
   Equal<ResolveGqlSource<typeof ToGqlSourceParent, 'ToGqlSourceParent'>, ParentSource>
 >
+/** Returning a list-wrapper item must be assignable to the related Sequelize model (no assertion). */
+type _associationListItemReturnable = Assert<
+  ParentSource['questions'] extends GeneAssociationList<infer Item> | null
+    ? Item extends ToGqlSourceChild
+      ? true
+      : false
+    : false
+>
 
 describe('ToGqlSource', () => {
   it('exports GeneAssociationList-compatible HasMany and BelongsTo shapes', () => {
+    const childA = { id: 1, allocatedTimeInMin: 10 } as ToGqlSourceChild
+    const childB = { id: 2, allocatedTimeInMin: 20 } as ToGqlSourceChild
+    const address = { id: 3, city: 'Paris' } as ToGqlSourceAddress
+
     const parent: ParentSource = {
       id: 1,
       title: 'Exam',
       questions: {
         count: 2,
-        items: [
-          { id: 1, allocatedTimeInMin: 10 },
-          { id: 2, allocatedTimeInMin: 20 },
-        ],
+        items: [childA, childB],
       },
       addressId: 3,
-      address: { id: 3, city: 'Paris' },
+      address,
     }
 
     const totalDuration = parent.questions?.items.reduce(
@@ -151,11 +158,12 @@ describe('ToGqlSource', () => {
   })
 
   it('types BelongsToMany associations as GeneAssociationList wrappers', () => {
+    const tag = { id: 1, label: 'alpha' } as ToGqlSourceTag
     const parent: BelongsToManyParentSource = {
       id: 1,
       tags: {
         count: 1,
-        items: [{ id: 1, label: 'alpha' }],
+        items: [tag],
       },
     }
 
