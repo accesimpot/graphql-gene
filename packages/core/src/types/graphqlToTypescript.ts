@@ -1,4 +1,5 @@
 import type { UntilHandlerDetails } from 'graphql-lookahead'
+import type { GeneContext } from 'graphql-gene/context'
 import type { GenePluginSettings } from 'graphql-gene/plugin-settings'
 import type { GraphqlTypes } from './graphql'
 import type { NeverToUnknown, PossiblyUndefinedToPartial, ValueOf } from './typeUtils'
@@ -121,7 +122,11 @@ export type ModelClassByPluginModel<M, TFallback = never> = {
 }[keyof GenePluginSettings<M>]
 
 export type FindOptionsHandler<TState> = (
-  details: UntilHandlerDetails<TState> & { findOptions: UntilHandlerDetails<TState>['state'] }
+  details: UntilHandlerDetails<TState> & {
+    findOptions: UntilHandlerDetails<TState>['state']
+    /** GraphQL resolver context (HTTP headers, auth, etc.). */
+    context: GeneContext
+  }
 ) => void
 
 export type FindOptionsHandlerByType<
