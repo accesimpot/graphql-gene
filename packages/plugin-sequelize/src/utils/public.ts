@@ -246,6 +246,10 @@ function fieldsOfNamedType(type: GraphQLNamedType | undefined | null) {
  *
  * Only the lookahead input is trimmed, so computed fields can still register dependencies
  * via `findOptions` hooks on non-list selections.
+ *
+ * TODO: Replace the AST trim with `lookahead` / `lookDeeper` once `next` can return
+ * `{ state, descend: false }` to prune list-wrapper branches without a second walker.
+ * 👉 Draft PR: https://github.com/accesimpot/graphql-lookahead/pull/160
  */
 export function getQueryIncludeWithoutListSelections(info: GraphQLResolveInfo) {
   function trim(
