@@ -1,4 +1,10 @@
-import { GraphQLError, getNamedType, type GraphQLResolveInfo } from 'graphql'
+import {
+  GraphQLError,
+  getNamedType,
+  type GraphQLNamedType,
+  type GraphQLResolveInfo,
+  type SelectionSetNode,
+} from 'graphql'
 import {
   getGloballyExtendedTypes,
   isEmptyObject,
@@ -24,6 +30,7 @@ import { populateWhereOptions, type PopulateWhereOptionsContext } from './intern
 import {
   GENE_ASSOCIATION_LIST_ITEMS_FIELD,
   getGeneAssociationListWrapperMeta,
+  isGeneAssociationListWrapperAssociation,
 } from './associationListRegistry'
 import {
   isAssociationListWrapperOutputType,
@@ -222,6 +229,82 @@ export function getQueryInclude(info: GraphQLResolveInfo) {
   })
 
   return resolveIncludeOptionsFromLookahead(includeOptions)
+}
+
+function fieldsOfNamedType(type: GraphQLNamedType | undefined | null) {
+  return type && 'getFields' in type ? type.getFields() : undefined
+}
+
+/**
+ * Collect Sequelize includes from GraphQL selections while omitting Gene association-list
+ * wrappers (`{ count, items }`). Those wrappers stay for Gene's paginated association-list
+ * resolvers (default `limit: 10`).
+ *
+ * Selection-set counterpart of {@link stripAssociationListWrapperIncludes}, which
+ * post-processes include trees in `defaultResolver`. Use this for custom `findOptions` /
+ * singular lookups that merge lookahead includes before/without that strip path.
+ *
+ * Only the lookahead input is trimmed, so computed fields can still register dependencies
+ * via `findOptions` hooks on non-list selections.
+ *
+ * TODO: Replace the AST trim with `lookahead` / `lookDeeper` once `next` can return
+ * `{ state, descend: false }` to prune list-wrapper branches without a second walker.
+ * 👉 Draft PR: https://github.com/accesimpot/graphql-lookahead/pull/160
+ */
+export function getQueryIncludeWithoutListSelections(info: GraphQLResolveInfo) {
+  function trim(
+    selectionSet: SelectionSetNode,
+    parent: GraphQLNamedType | undefined | null
+  ): SelectionSetNode {
+    const fields = fieldsOfNamedType(parent)
+    const selections = selectionSet.selections.flatMap<SelectionSetNode['selections'][number]>(
+      selection => {
+        if (selection.kind === 'InlineFragment') {
+          const type = selection.typeCondition
+            ? info.schema.getType(selection.typeCondition.name.value)
+            : parent
+          return [{ ...selection, selectionSet: trim(selection.selectionSet, type) }]
+        }
+        if (selection.kind !== 'Field' || !selection.selectionSet) return [selection]
+
+        const field = fields?.[selection.name.value]
+        if (!parent || !field) return [selection]
+
+        if (isGeneAssociationListWrapperAssociation(parent.name, selection.name.value)) {
+          return []
+        }
+
+        return [
+          {
+            ...selection,
+            selectionSet: trim(selection.selectionSet, getNamedType(field.type)),
+          },
+        ]
+      }
+    )
+    return { ...selectionSet, selections }
+  }
+
+  return getQueryInclude({
+    ...info,
+    fieldNodes: info.fieldNodes.map(field =>
+      field.selectionSet
+        ? { ...field, selectionSet: trim(field.selectionSet, getNamedType(info.returnType)) }
+        : field
+    ),
+    fragments: Object.fromEntries(
+      Object.entries(info.fragments).map(([name, fragment]) => [
+        name,
+        {
+          ...fragment,
+          selectionSet: trim(
+            fragment.selectionSet,
+            info.schema.getType(fragment.typeCondition.name.value)
+          ),
+        },
+      ])
+    ),
+  })
 }
 
 export function getQueryIncludeOf(
