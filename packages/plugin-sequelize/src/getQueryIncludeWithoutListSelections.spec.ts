@@ -8,10 +8,7 @@ import {
   graphql,
   type GraphQLResolveInfo,
 } from 'graphql'
-import {
-  getQueryInclude,
-  getQueryIncludeWithoutListSelections,
-} from './utils/public'
+import { getQueryInclude, getQueryIncludeWithoutListSelections } from './utils/public'
 import {
   getGeneAssociationListWrapperTypeName,
   registerGeneAssociationListWrapper,
@@ -114,9 +111,7 @@ describe('getQueryIncludeWithoutListSelections', () => {
     )
 
     const includeOptions = getQueryIncludeWithoutListSelections(info)
-    expect(includeOptions?.include).toEqual([
-      expect.objectContaining({ association: 'profile' }),
-    ])
+    expect(includeOptions?.include).toEqual([expect.objectContaining({ association: 'profile' })])
     expect(includeOptions?.include?.some(inc => inc.association === 'roles')).toBe(false)
   })
 
@@ -147,10 +142,7 @@ describe('getQueryIncludeWithoutListSelections', () => {
     const rolesWrapperName = registerUserAssociations()
     const userType = buildUserSchema(rolesWrapperName, false)
 
-    const info = await captureInfo(
-      userType,
-      `query { user { id roles { items { id } } } }`
-    )
+    const info = await captureInfo(userType, `query { user { id roles { items { id } } } }`)
 
     expect(getQueryInclude(info)?.include).toEqual([
       expect.objectContaining({ association: 'roles' }),
